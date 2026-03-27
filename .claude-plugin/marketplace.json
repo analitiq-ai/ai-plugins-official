@@ -1,0 +1,27 @@
+{
+  "name": "analitiq-plugins-official",
+  "description": "Analitiq-managed official directory of Claude plugins for creating data integration connectors and pipelines",
+  "owner": {
+    "name": "Analitiq"
+  },
+  "plugins": [
+    {
+      "name": "analitiq-plugin-connector-builder",
+      "description": "Creates connectors and endpoints for the Analitiq skill registry with support for API, database, and storage integrations",
+      "author": {
+        "name": "Analitiq"
+      },
+      "source": "./analitiq-plugin-connector-builder",
+      "category": "development"
+    },
+    {
+      "name": "analitiq-plugin-dataflow",
+      "description": "AI-driven data integration pipelines using pre-defined connectors from the DIP registry",
+      "author": {
+        "name": "Analitiq"
+      },
+      "source": "./analitiq-plugin-dataflow",
+      "category": "development"
+    }
+  ]
+}
