@@ -1,10 +1,11 @@
 ---
 name: endpoint-spec
 description: >
-  Endpoint specification knowledge for creating API and database endpoint definitions.
+  Endpoint specification knowledge for creating API endpoint definitions.
   Contains the JSON Schema format, filter definitions, pagination types, and replication
   filter mapping used by the Analitiq platform. This skill should be loaded when creating
-  or modifying an endpoint definition (endpoints/*.json).
+  or modifying an API endpoint definition (endpoints/*.json). Database connectors do not
+  have pre-defined endpoints — their schemas are discovered at runtime.
 ---
 
 # Endpoint Specification
@@ -58,26 +59,6 @@ Read the full endpoint specification from `${CLAUDE_PLUGIN_ROOT}/skills/endpoint
   },
   "replication_filter_mapping": {
     "created_at": "since"
-  }
-}
-```
-
-## Quick Reference — Database Endpoint
-
-```json
-{
-  "connector_id": "uuid",
-  "endpoint_id": "uuid",
-  "endpoint": "public/table_name",
-  "method": "DATABASE",
-  "version": 1,
-  "endpoint_schema": {
-    "columns": [
-      { "name": "id", "type": "BIGINT", "nullable": false, "default": null, "autoincrement": false, "comment": null },
-      { "name": "name", "type": "VARCHAR(255)", "nullable": true, "default": null },
-      { "name": "_synced_at", "type": "TIMESTAMP", "nullable": true, "default": "now()" }
-    ],
-    "primary_keys": ["id"]
   }
 }
 ```

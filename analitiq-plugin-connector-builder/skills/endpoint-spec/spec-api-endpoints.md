@@ -1,6 +1,11 @@
 # API Connector Endpoints
 
-This document covers how connector endpoints are defined for API connectors (`connector_type: "api"`). For general connector structure see [spec-common-attributes.md](../connector-spec/spec-common-attributes.md). For database/file connector endpoints, use `method: "DATABASE"` and a column-based `endpoint_schema` — see the DB endpoint section below.
+This document covers how connector endpoints are defined for API connectors (`connector_type: "api"`). For general connector structure see [spec-common-attributes.md](../connector-spec/spec-common-attributes.md).
+
+> **The connector-builder plugin only creates endpoints for API connectors.** Database and other
+> connectors do not have pre-defined endpoints — their schema/table combinations are discovered
+> at runtime. A reference section for database endpoint format is included at the end for the
+> dataflow plugin's use.
 
 Each API connector has one or more **endpoints** — individual API paths that the pipeline runner can extract data from. Endpoints are saved as JSON files under the connector's `definition/endpoints/` directory.
 
@@ -237,7 +242,12 @@ Endpoint records are versioned. Only changes to `endpoint_schema` trigger a vers
 
 Version detection uses a SHA256 content hash (`_content_hash`) computed over the `endpoint_schema` field. The hash is canonicalized — dict keys are sorted and lists of dicts with a `name` key (e.g. columns) are sorted by name — so reordering fields does not trigger a false version bump.
 
-## DB Connector Endpoints
+## DB Connector Endpoints (Reference Only)
+
+> **Note:** The connector-builder plugin does NOT create database endpoints. Database connectors
+> do not have pre-defined endpoints — their schema/table combinations are deployment-specific and
+> discovered at runtime. This section is reference material for the dataflow plugin, which may
+> encounter database endpoint records when working with runtime-discovered schemas.
 
 Database connector endpoints (`method: "DATABASE"`) use the same table and API but with a different `endpoint_schema` structure:
 
