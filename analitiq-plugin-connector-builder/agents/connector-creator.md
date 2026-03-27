@@ -163,10 +163,10 @@ The README must include these fixed sections (already in the template — do NOT
 And these connector-specific sections (fill in from research):
 - **Prerequisites** — what the user needs before connecting (API key, OAuth app, admin access, etc.)
 - **Authentication** — plain-language explanation of how to authenticate, including step-by-step credential instructions
-- **Available Endpoints** — table with Endpoint, Method, and Description columns
+- **Available Endpoints** (API connectors only) — table with Endpoint, Method, and Description columns. Omit for database/other connectors.
 - **Limitations** — rate limits, data freshness, sandbox vs production differences
 
-Update this file when new endpoints are added by the endpoint-creator.
+Update this file when new endpoints are added by the endpoint-creator (API connectors only).
 
 ## CHANGELOG.md — Version History
 
@@ -179,10 +179,10 @@ Track changes to the connector and its endpoints. Use this template:
 
 ### Added
 - Initial connector definition with {auth_type} authentication
-- Endpoints: {list of initial endpoints}
+- Endpoints: {list of initial endpoints} ← API connectors only; omit this line for database/other
 ```
 
-Update this file when endpoints are added or the connector is modified.
+Update this file when endpoints are added (API connectors only) or the connector is modified.
 
 ## Output
 
@@ -197,7 +197,7 @@ connector-{slug}/
 ├── CHANGELOG.md            # Version history
 └── definition/             # Connector definition files (machine-consumed JSON)
     ├── connector.json      # The connector definition with auth details
-    ├── manifest.json       # Endpoint manifest (initially empty endpoints array)
+    ├── manifest.json       # Endpoint index
     └── endpoints/          # Directory for endpoint definitions (API only)
 ```
 
