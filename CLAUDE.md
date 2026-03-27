@@ -11,12 +11,13 @@ This is the official directory of Analitiq Claude Code plugins for building data
 ### `analitiq-plugin-connector-builder` (v1.2.0)
 Creates new connector and endpoint definitions for the Analitiq DIP registry. Connectors are published to the `analitiq-dip-registry` GitHub org as individual repos named `connector-{slug}`.
 
-**Agent chain:** `start` (skill) → `connector-creator` → `endpoint-creator`, with `api-researcher` invoked automatically for API-type connectors.
+**Agent chain:** `start` (skill) → `connector-creator` → `endpoint-creator` (API only) → validate (optional), with `api-researcher` invoked automatically for API-type connectors.
 
-- `start` interviews the user, checks for duplicates in the registry, then dispatches agents
+- `start` interviews the user, checks for duplicates in the registry, collects optional `ANALITIQ_API_KEY`, then dispatches agents
 - `connector-creator` builds `connector.json`, `manifest.json`, and repo scaffolding (CLAUDE.md, AGENTS.md, README.md, CHANGELOG.md)
-- `endpoint-creator` builds individual endpoint JSON files under `definition/endpoints/` and updates the manifest
+- `endpoint-creator` builds individual endpoint JSON files under `definition/endpoints/` and updates the manifest — **API connectors only** (database/other connectors do not have pre-defined endpoints)
 - `api-researcher` fetches auth details and endpoint schemas from official API docs (WebFetch → WebSearch → Playwright fallback)
+- If `ANALITIQ_API_KEY` is available, `start` validates all JSON against `https://rest.analitiq-dev.com/v1/validate/` and tags the repo as `validated` if compliant
 
 ### `analitiq-plugin-dataflow` (v2.0.0)
 Builds data integration pipelines using pre-defined connectors from the DIP registry (`analitiq-dip-registry` GitHub org). Does **not** create connectors — only downloads and wires them.
@@ -30,13 +31,14 @@ Builds data integration pipelines using pre-defined connectors from the DIP regi
 ## Key Concepts
 
 - **Connector:** Auth config + metadata for a system (API, database, S3/SFTP). Lives in `connector-{slug}/definition/connector.json`.
-- **Endpoint:** Schema definition for a single API resource or DB table. Lives in `definition/endpoints/{name}.json`.
+- **Endpoint:** Schema definition for a single API resource. Lives in `definition/endpoints/{name}.json`. **API connectors only** — database/other connectors do not have pre-defined endpoints (their schema/table combinations are deployment-specific and discovered at runtime).
 - **Manifest:** Index of all endpoints for a connector. Lives in `definition/manifest.json`. Version is bumped automatically by GitHub Actions on PR merge via labels (`version:minor`, `version:patch`, `version:major`) — never bump manually.
 - **Connection:** Runtime auth credentials for a connector instance. Secrets go to `.secrets/{connection_id}.json`.
 - **Pipeline:** Full integration definition bundling connectors, connections, endpoints, streams, and mappings.
 
 ## Connector Directory Structure (output of connector-builder)
 
+**API connectors** (with endpoints):
 ```
 connector-{slug}/
 ├── CLAUDE.md            # Agent reference (auth, endpoints, caveats)
@@ -46,7 +48,19 @@ connector-{slug}/
 └── definition/
     ├── connector.json   # Auth + connector config
     ├── manifest.json    # Endpoint index
-    └── endpoints/       # Individual endpoint JSON files
+    └── endpoints/       # Individual endpoint JSON files (API only)
+```
+
+**Database and other connectors** (no endpoints):
+```
+connector-{slug}/
+├── CLAUDE.md            # Agent reference (auth, caveats)
+├── AGENTS.md            # Identical to CLAUDE.md, for non-Claude agents
+├── README.md            # Human docs
+├── CHANGELOG.md         # Version history
+└── definition/
+    ├── connector.json   # Auth + connector config
+    └── manifest.json    # Connector manifest (empty endpoints)
 ```
 
 ## Supported Auth Types
