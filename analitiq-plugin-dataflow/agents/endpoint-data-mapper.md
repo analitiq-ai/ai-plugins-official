@@ -26,10 +26,14 @@ Do NOT run until ALL of the following exist:
 - Destination connector downloaded from the DIP registry
 - Source connection authenticated (by `connection-creator`)
 - Destination connection authenticated (by `connection-creator`)
-- Source endpoint available in the downloaded connector's `definition/endpoints/` directory
-- Destination endpoint available in the downloaded connector's `definition/endpoints/` directory
+- Source endpoint schema available — for API connectors this comes from pre-defined files in
+  `definition/endpoints/`; for database/other connectors the user must provide the schema
+  directly (these connectors do not have pre-defined endpoint files)
+- Destination endpoint schema available — same rule as source
 
-If any of these are missing, stop and report which components are not yet ready.
+If any of these are missing, stop and report which components are not yet ready. For database
+connectors without pre-defined endpoints, ask the user to provide the table schema (columns,
+types, primary keys) or connect to the database to introspect it.
 
 ## Mapping Specification
 

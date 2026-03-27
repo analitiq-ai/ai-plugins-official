@@ -86,8 +86,12 @@ ls analitiq-dip-registry/
 Once a connector is downloaded, report back:
 - Connector name and description
 - Auth type (from `AGENTS.md` or `definition/connector.json`)
-- Available endpoints (from `definition/endpoints/`)
+- Available endpoints (from `definition/endpoints/`, if the directory exists — API connectors only)
 - Any caveats or limitations
+
+> **Note:** Database and other connectors do not have a `definition/endpoints/` directory.
+> Their endpoints (schema/table combinations) are deployment-specific and discovered at runtime.
+> If the `endpoints/` directory does not exist, report that endpoints are not pre-defined.
 
 This information is used by the `start` agent to proceed with connection creation and pipeline assembly.
 

@@ -37,7 +37,8 @@ the right agents.
 2. Determine the connector type (API, database, other).
 3. **If API**: ask about specific endpoints the user wants to register and whether they have a documentation URL.
 4. **If database or other**: skip endpoint questions — these connectors do not have pre-defined endpoints.
-5. Summarize the requirements back to the user for confirmation.
+5. Check for `ANALITIQ_API_KEY` (see Validation section below) — env var first, then ask user.
+6. Summarize the requirements back to the user for confirmation.
 
 ## Requirements Output
 
@@ -112,8 +113,8 @@ documentation.
 ### Phase 3 — Validate (optional, requires ANALITIQ_API_KEY)
 
 If the user provided an `ANALITIQ_API_KEY` (see Validation section below), validate the created
-connector and endpoints against the Analitiq validation API. If all validations pass, tag the
-connector repo as "validated".
+connector and endpoints against the Analitiq validation API. If all validations pass, add the
+`validated` topic to the connector repo.
 
 ---
 
@@ -145,7 +146,7 @@ connector-{connector_name}/
 ├── CHANGELOG.md            # Version history
 └── definition/             # Connector definition files (machine-consumed JSON)
     ├── connector.json      # Authentication details and connector definition
-    └── manifest.json       # Connector manifest (no endpoints)
+    └── manifest.json       # Connector manifest (empty endpoints array)
 ```
 
 Database and other connectors do NOT have an `endpoints/` directory or endpoint JSON files.
@@ -205,8 +206,13 @@ curl -s -X POST "https://rest.analitiq-dev.com/v1/validate/endpoint" \
 
 **Responses:**
 - `200 {"valid": true}` — JSON is compliant
-- `422 {"valid": false, "errors": [...]}` — validation errors with field locations and messages
-- `400 {"valid": false, "message": "..."}` — bad request (malformed JSON, etc.)
+- `422` — validation errors (Pydantic format):
+  ```json
+  {"valid": false, "errors": [{"type": "missing", "loc": ["field_name"], "msg": "Field required"}]}
+  ```
+  Each error has `type` (error kind), `loc` (field path as array), and `msg` (human-readable message).
+  Use `loc` to find the field and `msg` to understand what to fix.
+- `400 {"valid": false, "message": "..."}` — bad request (malformed JSON, unknown schema type)
 
 ### Validation Workflow
 

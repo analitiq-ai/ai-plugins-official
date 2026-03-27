@@ -17,7 +17,7 @@ Creates new connector and endpoint definitions for the Analitiq DIP registry. Co
 - `connector-creator` builds `connector.json`, `manifest.json`, and repo scaffolding (CLAUDE.md, AGENTS.md, README.md, CHANGELOG.md)
 - `endpoint-creator` builds individual endpoint JSON files under `definition/endpoints/` and updates the manifest — **API connectors only** (database/other connectors do not have pre-defined endpoints)
 - `api-researcher` fetches auth details and endpoint schemas from official API docs (WebFetch → WebSearch → Playwright fallback)
-- If `ANALITIQ_API_KEY` is available, `start` validates all JSON against `https://rest.analitiq-dev.com/v1/validate/` and tags the repo as `validated` if compliant
+- If `ANALITIQ_API_KEY` is available, `start` validates all JSON against `https://rest.analitiq-dev.com/v1/validate/{connector|endpoint}` and adds the `validated` topic to the repo if compliant
 
 ### `analitiq-plugin-dataflow` (v2.0.0)
 Builds data integration pipelines using pre-defined connectors from the DIP registry (`analitiq-dip-registry` GitHub org). Does **not** create connectors — only downloads and wires them.
@@ -60,7 +60,7 @@ connector-{slug}/
 ├── CHANGELOG.md         # Version history
 └── definition/
     ├── connector.json   # Auth + connector config
-    └── manifest.json    # Connector manifest (empty endpoints)
+    └── manifest.json    # Connector manifest (empty endpoints array)
 ```
 
 ## Supported Auth Types

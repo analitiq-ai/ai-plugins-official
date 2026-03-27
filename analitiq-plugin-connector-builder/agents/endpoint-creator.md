@@ -60,10 +60,10 @@ Save each endpoint as an individual JSON file under the connector's `definition/
 connector-{slug}/definition/endpoints/{endpoint_name}.json
 ```
 
-Use a descriptive filename derived from the endpoint path. For example:
+Use a descriptive filename derived from the API endpoint path. For example:
 - `/v1/transfers` → `transfers.json`
 - `/v1/accounts/balances` → `accounts-balances.json`
-- `public/users` → `public-users.json`
+- `/v2/customers/orders` → `customers-orders.json`
 
 ### 2. Update the manifest
 
@@ -90,8 +90,8 @@ in the `endpoints` array:
 
 Each entry in the manifest `endpoints` array should have:
 - `endpoint_id`: The endpoint's UUID
-- `endpoint`: The API path or table path
-- `method`: HTTP method or `DATABASE`
+- `endpoint`: The API path (e.g., `/v1/transfers`)
+- `method`: HTTP method (e.g., `GET`, `POST`)
 - `version`: Endpoint version number
 - `file`: Relative path to the endpoint JSON file
 
