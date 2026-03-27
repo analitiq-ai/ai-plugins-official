@@ -45,7 +45,7 @@ Connectors are named `connector-{slug}`.
 
 Every API endpoint record has:
 - `connector_id`: UUID of the parent connector
-- `endpoint_id`: UUID (auto-generated, include `_v1` suffix)
+- `endpoint_id`: UUID (auto-generated)
 - `endpoint`: API path relative to base_url (e.g., `/v1/transfers`)
 - `method`: HTTP method (`GET`, `POST`, etc.)
 - `version`: Integer (starts at 1)
@@ -123,7 +123,7 @@ in the `endpoints` array:
   "connector_id": "<connector_id>",
   "connector_name": "<connector_name>",
   "slug": "<slug>",
-  "version": "1.1.0",
+  "version": "1.0.0",
   "endpoints": [
     {
       "endpoint_id": "<endpoint_id>",

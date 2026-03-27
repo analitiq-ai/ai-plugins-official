@@ -27,7 +27,7 @@ Every connector, regardless of type, has these root attributes:
 | `connector_name` | string | yes | Display name (e.g. "Xero", "PostgreSQL")                |
 | `connector_type` | string | yes | One of: `api`, `database`, `other`                      |
 | `slug` | string | yes | URL-safe identifier (e.g. "xero", "postgresql"). GSI key |
-| `connector_group_id` | string (UUID) | yes | Groups related connectors (e.g. all Google connerctors) |
+| `connector_group_id` | string (UUID) | yes | Groups related connectors (e.g. all Google connectors) |
 | `form_fields` | array | yes | Defines what the user sees when creating a connection   |
 | `auth` | object | yes | Authentication configuration (structure varies by type) |
 | `connector_descr` | string | no | Human-readable description of the connector             |
@@ -62,7 +62,7 @@ Additional root attributes for API connectors:
 | `base_url` | string | Base URL for API data requests (supports `${placeholder}`) |
 | `headers` | object | Headers sent with every API data request |
 | `timeout` | integer | Request timeout in seconds |
-| `rate_limit` | object | Rate limiting parameters (`max_requests`, `time_window_seconds`) |
+| `requests_per_second` | object | Rate limiting parameters (`max_requests`, `time_window_seconds`) |
 | `post_auth_steps` | array | Steps taken after authentication (optional) |
 
 `auth.type` values for API connectors: `api_key`, `basic_auth`, `oauth2_authorization_code`, `oauth2_client_credentials`, `jwt`.

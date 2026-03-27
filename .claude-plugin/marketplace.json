@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "analitiq-plugin-connector-builder",
-      "description": "Creates connectors and endpoints for the Analitiq skill registry with support for API, database, and storage integrations",
+      "description": "Creates connectors and endpoints for the Analitiq DIP registry with support for API, database, and storage integrations",
       "author": {
         "name": "Analitiq"
       },
