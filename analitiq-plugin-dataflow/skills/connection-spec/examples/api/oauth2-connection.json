@@ -6,6 +6,7 @@
   "org_id": "d7a11991-2795-49d1-a858-c7e58ee5ecc6",
   "status": "active",
   "connection_type": "oauth2",
+  "host": null,
   "parameters": {
     "tenant_id": "abc-123-def-456"
   }

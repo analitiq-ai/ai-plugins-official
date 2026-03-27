@@ -1,6 +1,6 @@
 # API Connector Endpoints
 
-This document covers how connector endpoints are defined for API connectors (`connector_type: "api"`). For general connector structure see [connectors.md](connectors.md). For database/file connector endpoints, the same DynamoDB table and API are used but with `method: "DATABASE"` and a column-based `endpoint_schema` — see the DB endpoint section below.
+This document covers how connector endpoints are defined for API connectors (`connector_type: "api"`). For general connector structure see [spec-common-attributes.md](../connector-spec/spec-common-attributes.md). For database/file connector endpoints, the same DynamoDB table and API are used but with `method: "DATABASE"` and a column-based `endpoint_schema` — see the DB endpoint section below.
 
 Each API connector has one or more **endpoints** — individual API paths that the pipeline runner can extract data from. Endpoints are stored in the `connectors_endpoints` DynamoDB table, scoped by `connector_id`.
 
@@ -60,7 +60,7 @@ When the API returns a single object per record:
       },
       "valueDate": {
         "type": "string",
-        "format": "datetime",
+        "format": "date-time",
         "description": "Date the transaction was imported"
       }
     },
@@ -86,7 +86,7 @@ When the API returns a list of records, the schema uses `type: "array"` with `it
         "id": { "type": "integer", "description": "Transfer ID" },
         "status": { "type": "string", "description": "Transfer status" },
         "rate": { "type": "number", "description": "Exchange rate value" },
-        "created": { "type": "string", "format": "datetime", "description": "When transfer was created" }
+        "created": { "type": "string", "format": "date-time", "description": "When transfer was created" }
       }
     }
   }
@@ -401,7 +401,7 @@ If an endpoint path contains no placeholders, note that explicitly (e.g. "No pla
       "properties": {
         "id": { "type": "integer", "description": "Transfer ID" },
         "status": { "type": "string", "description": "Transfer status" },
-        "created": { "type": "string", "format": "datetime", "description": "Timestamp when transfer was created" },
+        "created": { "type": "string", "format": "date-time", "description": "Timestamp when transfer was created" },
         "sourceCurrency": { "type": "string", "description": "Source currency code" },
         "targetCurrency": { "type": "string", "description": "Target currency code" },
         "sourceValue": { "type": "number", "description": "Amount in source currency" },

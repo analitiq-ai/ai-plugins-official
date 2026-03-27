@@ -16,7 +16,7 @@ Read the full endpoint specification from `${CLAUDE_PLUGIN_ROOT}/skills/endpoint
 ```json
 {
   "connector_id": "uuid",
-  "endpoint_id": "uuid_v1",
+  "endpoint_id": "uuid",
   "endpoint": "/v1/resource",
   "method": "GET",
   "version": 1,
@@ -30,7 +30,7 @@ Read the full endpoint specification from `${CLAUDE_PLUGIN_ROOT}/skills/endpoint
       "properties": {
         "id": { "type": "integer", "description": "Resource ID" },
         "name": { "type": "string", "description": "Resource name" },
-        "created_at": { "type": "string", "format": "datetime", "description": "Creation timestamp" }
+        "created_at": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
       }
     }
   },
@@ -67,7 +67,7 @@ Read the full endpoint specification from `${CLAUDE_PLUGIN_ROOT}/skills/endpoint
 ```json
 {
   "connector_id": "uuid",
-  "endpoint_id": "uuid_v1",
+  "endpoint_id": "uuid",
   "endpoint": "public/table_name",
   "method": "DATABASE",
   "version": 1,
@@ -93,9 +93,9 @@ Read the full endpoint specification from `${CLAUDE_PLUGIN_ROOT}/skills/endpoint
 
 ## Schema Field Types
 
-- `string` (with optional `format`: `datetime`, `date`, `time`, `email`, `uri`)
+- `string` (with optional `format`: `date-time`, `date`, `time`, `email`, `uri`)
 - `integer`
-- `number`
+- `number` (Note: valid in JSON Schema endpoint schemas; maps to `decimal` in the mapping type enum)
 - `boolean`
 - `object` (with nested `properties`)
 - `array` (with `items`)

@@ -7,7 +7,7 @@ API connectors (`connector_type: "api"`) have these additional root attributes:
 - `base_url` - the base URL for API data requests
 - `headers` - headers sent with every API data request (not sent to auth operation URLs)
 - `timeout` - the timeout for each request in seconds
-- `rate_limit` - a map of rate limiting parameters (see below)
+- `requests_per_second` - a map of rate limiting parameters (see below)
 - `post_auth_steps` - an array of steps to be taken after authentication (optional)
 - `api_doc_url` - URL to the API documentation for reference by AI agents (optional)
 
@@ -130,7 +130,7 @@ Root-level `headers` are only for API data requests — they are never sent to `
       }
    ],
    "timeout":30,
-   "rate_limit":{
+   "requests_per_second":{
       "max_requests":60,
       "time_window_seconds":60
    }
@@ -484,7 +484,7 @@ The name of the parameters in `${placeholders}` must match the attribute name sa
     }
   ],
   "timeout": 30,
-  "rate_limit": { "max_requests": 60, "time_window_seconds": 60 }
+  "requests_per_second": { "max_requests": 60, "time_window_seconds": 60 }
 }
 ```
 
@@ -506,7 +506,7 @@ The name of the parameters in `${placeholders}` must match the attribute name sa
     { "name": "api_key", "label": "API Key", "type": "password", "required": true }
   ],
   "timeout": 30,
-  "rate_limit": { "max_requests": 60, "time_window_seconds": 60 }
+  "requests_per_second": { "max_requests": 60, "time_window_seconds": 60 }
 }
 ```
 
@@ -524,7 +524,7 @@ The name of the parameters in `${placeholders}` must match the attribute name sa
     { "name": "api_key", "label": "API Key", "type": "password", "required": true }
   ],
   "timeout": 30,
-  "rate_limit": { "max_requests": 60, "time_window_seconds": 60 }
+  "requests_per_second": { "max_requests": 60, "time_window_seconds": 60 }
 }
 ```
 
@@ -552,7 +552,7 @@ The name of the parameters in `${placeholders}` must match the attribute name sa
     { "name": "client_secret", "label": "Client Secret", "type": "password", "required": true }
   ],
   "timeout": 30,
-  "rate_limit": { "max_requests": 30, "time_window_seconds": 1 }
+  "requests_per_second": { "max_requests": 30, "time_window_seconds": 1 }
 }
 ```
 
@@ -579,7 +579,7 @@ The name of the parameters in `${placeholders}` must match the attribute name sa
     { "name": "client_secret", "label": "Client Secret", "type": "password", "required": true }
   ],
   "timeout": 30,
-  "rate_limit": { "max_requests": 60, "time_window_seconds": 60 }
+  "requests_per_second": { "max_requests": 60, "time_window_seconds": 60 }
 }
 ```
 
@@ -615,7 +615,7 @@ The name of the parameters in `${placeholders}` must match the attribute name sa
     }
   ],
   "timeout": 30,
-  "rate_limit": { "max_requests": 60, "time_window_seconds": 60 }
+  "requests_per_second": { "max_requests": 60, "time_window_seconds": 60 }
 }
 ```
 
@@ -643,7 +643,7 @@ The name of the parameters in `${placeholders}` must match the attribute name sa
     { "name": "private_key", "label": "Private Key (.p8)", "type": "password", "required": true }
   ],
   "timeout": 30,
-  "rate_limit": { "max_requests": 60, "time_window_seconds": 60 }
+  "requests_per_second": { "max_requests": 60, "time_window_seconds": 60 }
 }
 ```
 
@@ -687,6 +687,6 @@ The name of the parameters in `${placeholders}` must match the attribute name sa
     }
   ],
   "timeout": 30,
-  "rate_limit": { "max_requests": 150, "time_window_seconds": 60 }
+  "requests_per_second": { "max_requests": 150, "time_window_seconds": 60 }
 }
 ```

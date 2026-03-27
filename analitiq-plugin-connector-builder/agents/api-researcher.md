@@ -138,7 +138,7 @@ Playwright is slower than WebFetch. Only use it when WebFetch fails.
   },
   "form_fields": [...],
   "post_auth_steps": [...],
-  "rate_limit": { "max_requests": 60, "time_window_seconds": 60 },
+  "requests_per_second": { "max_requests": 60, "time_window_seconds": 60 },
   "timeout": 30
 }
 ```
