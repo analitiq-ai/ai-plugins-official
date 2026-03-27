@@ -4,7 +4,7 @@ color: orange
 description: >
   REQUIRED step for creating connector JSON. You MUST use this agent to create any connector
   definition — never create connector JSON directly. Creates the connector directory structure
-  with connector.json, manifest.json, and endpoints/ directory.
+  with connector.json, manifest.json, and (for API connectors) an endpoints/ directory.
 
   <example>
   user: "Create a connector for the Shopify API"
