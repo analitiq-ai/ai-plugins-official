@@ -21,7 +21,7 @@ description: >
 
 Read from `${CLAUDE_PLUGIN_ROOT}/skills/connector-spec/examples/{type}/`:
 
-- **`examples/api/`**: `api-key-connector.json`, `basic-auth-connector.json`, `oauth2-authorization-code-connector.json`, `oauth2-client-credentials-connector.json`, `jwt-connector.json`
+- **`examples/api/`**: `api-key-connector.json`, `api-key-dynamic-host-connector.json`, `basic-auth-connector.json`, `credentials-post-auth-connector.json`, `jwt-connector.json`, `oauth2-authorization-code-connector.json`, `oauth2-client-credentials-connector.json`, `oauth2-client-credentials-body-connector.json`
 - **`examples/database/`**: `postgresql-connector.json`, `mysql-connector.json`
 - **`examples/other/`**: `s3-connector.json`, `sftp-connector.json`
 
