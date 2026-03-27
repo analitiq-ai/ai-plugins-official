@@ -131,7 +131,7 @@ connector-{connector_name}/
 ├── CHANGELOG.md            # Version history
 └── definition/             # Connector definition files (machine-consumed JSON)
     ├── connector.json      # Authentication details and connector definition
-    ├── manifest.json       # Manifest listing all registered endpoints
+    ├── manifest.json       # Endpoint index
     └── endpoints/          # Directory containing all endpoint JSON definitions
         ├── {endpoint_name}.json
         └── ...
