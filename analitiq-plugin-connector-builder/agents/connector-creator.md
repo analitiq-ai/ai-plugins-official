@@ -4,7 +4,7 @@ color: orange
 description: >
   REQUIRED step for creating connector JSON. You MUST use this agent to create any connector
   definition — never create connector JSON directly. Creates the connector directory structure
-  with connector.json, manifest.json, and endpoints/ directory.
+  with connector.json, manifest.json, and (for API connectors) an endpoints/ directory.
 
   <example>
   user: "Create a connector for the Shopify API"
@@ -55,9 +55,9 @@ for new connectors: `https://github.com/analitiq-dip-registry/connector-template
 6. **Create the connector directory structure**:
    - Create directory `connector-{slug}/`
    - Create subdirectory `connector-{slug}/definition/`
-   - Create subdirectory `connector-{slug}/definition/endpoints/`
+   - **API connectors only**: Create subdirectory `connector-{slug}/definition/endpoints/`
    - Save `connector.json` in `definition/` (authentication and connector definition)
-   - Create `manifest.json` in `definition/` with the initial structure (no endpoints yet):
+   - Create `manifest.json` in `definition/` with the initial structure:
      ```json
      {
        "connector_id": "<connector_id>",
@@ -69,6 +69,11 @@ for new connectors: `https://github.com/analitiq-dip-registry/connector-template
      ```
      Version starts at `1.0.0`. Do NOT manually bump the version — a GitHub Action bumps it
      automatically when a PR is merged, based on PR labels (`version:minor`, `version:patch`, `version:major`).
+
+     > **Database and other connectors** do NOT have pre-defined endpoints. Their "endpoints" are
+     > schema/table combinations specific to each deployment and discovered at runtime. The manifest
+     > `endpoints` array stays empty, and no `endpoints/` directory is created.
+
    - Create `CLAUDE.md` in the repo root — agent reference for Claude Code (see CLAUDE.md section below)
    - Create `AGENTS.md` in the repo root — identical copy of CLAUDE.md for other agent frameworks
    - Create `README.md` in the repo root — human-readable documentation (see README.md section below)
@@ -120,13 +125,16 @@ type: {api|database|other}
 {Document any steps required after authentication, such as tenant/org selection, server URL
 discovery, etc. If none, state "None required."}
 
-## Available Endpoints
+## Available Endpoints (API connectors only)
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | {path}   | {GET}  | {what it returns} |
 
-## Rate Limits
+> For database and other connectors, omit this section entirely. Their "endpoints" are schema/table
+> combinations specific to each deployment and are not pre-defined.
+
+## Rate Limits (API connectors only)
 
 - {max_requests} requests per {time_window_seconds} seconds
 
@@ -137,7 +145,7 @@ connector. For example: tenant-specific subdomains, non-standard pagination, req
 beyond auth, etc.}
 ```
 
-Update both CLAUDE.md and AGENTS.md when new endpoints are added by the endpoint-creator.
+Update both CLAUDE.md and AGENTS.md when new endpoints are added by the endpoint-creator (API connectors only).
 
 ## README.md — Human Documentation
 
@@ -155,10 +163,10 @@ The README must include these fixed sections (already in the template — do NOT
 And these connector-specific sections (fill in from research):
 - **Prerequisites** — what the user needs before connecting (API key, OAuth app, admin access, etc.)
 - **Authentication** — plain-language explanation of how to authenticate, including step-by-step credential instructions
-- **Available Endpoints** — table with Endpoint, Method, and Description columns
+- **Available Endpoints** (API connectors only) — table with Endpoint, Method, and Description columns. Omit for database/other connectors.
 - **Limitations** — rate limits, data freshness, sandbox vs production differences
 
-Update this file when new endpoints are added by the endpoint-creator.
+Update this file when new endpoints are added by the endpoint-creator (API connectors only).
 
 ## CHANGELOG.md — Version History
 
@@ -171,14 +179,16 @@ Track changes to the connector and its endpoints. Use this template:
 
 ### Added
 - Initial connector definition with {auth_type} authentication
-- Endpoints: {list of initial endpoints}
+- Endpoints: {list of initial endpoints} ← API connectors only; omit this line for database/other
 ```
 
-Update this file when endpoints are added or the connector is modified.
+Update this file when endpoints are added (API connectors only) or the connector is modified.
 
 ## Output
 
 Create the full connector directory structure:
+
+**API connectors:**
 ```
 connector-{slug}/
 ├── CLAUDE.md               # Agent reference for Claude Code (auth, endpoints, caveats)
@@ -187,6 +197,18 @@ connector-{slug}/
 ├── CHANGELOG.md            # Version history
 └── definition/             # Connector definition files (machine-consumed JSON)
     ├── connector.json      # The connector definition with auth details
-    ├── manifest.json       # Endpoint manifest (initially empty endpoints array)
-    └── endpoints/          # Directory for endpoint definitions
+    ├── manifest.json       # Endpoint index
+    └── endpoints/          # Directory for endpoint definitions (API only)
+```
+
+**Database and other connectors** (no `endpoints/` directory):
+```
+connector-{slug}/
+├── CLAUDE.md               # Agent reference for Claude Code (auth, caveats)
+├── AGENTS.md               # Agent reference for other frameworks (identical to CLAUDE.md)
+├── README.md               # Human documentation (setup instructions, credentials)
+├── CHANGELOG.md            # Version history
+└── definition/             # Connector definition files (machine-consumed JSON)
+    ├── connector.json      # The connector definition with auth details
+    └── manifest.json       # Connector manifest (empty endpoints array)
 ```
