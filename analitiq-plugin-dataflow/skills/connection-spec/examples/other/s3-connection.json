@@ -1,0 +1,15 @@
+{
+  "connection_id": "d1e2f3a4-b5c6-7890-abcd-ef1234567890",
+  "connection_name": "S3 Data Lake",
+  "connector_id": "f6a7b8c9-d0e1-2345-f012-456789012345",
+  "connector_name": "Amazon S3",
+  "org_id": "d7a11991-2795-49d1-a858-c7e58ee5ecc6",
+  "status": "active",
+  "parameters": {
+    "bucket": "my-data-lake",
+    "region": "eu-central-1",
+    "prefix": "exports/",
+    "access_key_id": "${access_key_id}",
+    "secret_access_key": "${secret_access_key}"
+  }
+}

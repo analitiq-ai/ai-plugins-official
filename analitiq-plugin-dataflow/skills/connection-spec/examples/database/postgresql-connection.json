@@ -1,0 +1,17 @@
+{
+  "connection_id": "a97f022f-5761-4d72-9f39-877280408af7",
+  "connection_name": "PG Connection",
+  "connector_id": "5d1d3d63-dc26-4e87-bab8-475be44afd32",
+  "connector_name": "PostgreSQL",
+  "org_id": "d7a11991-2795-49d1-a858-c7e58ee5ecc6",
+  "status": "active",
+  "host": "database-1.cp2em6mk83a2.eu-central-1.rds.amazonaws.com",
+  "parameters": {
+    "database": "postgres",
+    "password": "${password}",
+    "ssl_mode": "prefer",
+    "port": "5432",
+    "create_permissions": true,
+    "username": "postgres"
+  }
+}

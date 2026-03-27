@@ -1,0 +1,39 @@
+{
+  "connector_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+  "connector_name": "BambooHR",
+  "connector_type": "api",
+  "connector_descr": "HR management software",
+  "connector_group_id": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+  "slug": "bamboohr",
+  "base_url": "https://${company_domain}.bamboohr.com/api/gateway.php/${company_domain}/v1/",
+  "client_required": false,
+  "auth": {
+    "type": "basic_auth",
+    "username_field": "api_key",
+    "password_field": ""
+  },
+  "headers": {
+    "Accept": "application/json",
+    "Authorization": "Basic ${base64_credentials}"
+  },
+  "form_fields": [
+    {
+      "name": "company_domain",
+      "label": "Company Subdomain",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "api_key",
+      "label": "API Key",
+      "type": "password",
+      "required": true,
+      "secret": true
+    }
+  ],
+  "timeout": 30,
+  "requests_per_second": {
+    "max_requests": 60,
+    "time_window_seconds": 60
+  }
+}
