@@ -1,0 +1,5 @@
+*.DS_Store
+.claude/
+.idea/
+.secrets/
+node_modules/
