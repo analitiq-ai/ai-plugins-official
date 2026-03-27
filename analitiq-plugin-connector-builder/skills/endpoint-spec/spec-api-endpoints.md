@@ -1,22 +1,8 @@
 # API Connector Endpoints
 
-This document covers how connector endpoints are defined for API connectors (`connector_type: "api"`). For general connector structure see [spec-common-attributes.md](../connector-spec/spec-common-attributes.md). For database/file connector endpoints, the same DynamoDB table and API are used but with `method: "DATABASE"` and a column-based `endpoint_schema` — see the DB endpoint section below.
+This document covers how connector endpoints are defined for API connectors (`connector_type: "api"`). For general connector structure see [spec-common-attributes.md](../connector-spec/spec-common-attributes.md). For database/file connector endpoints, use `method: "DATABASE"` and a column-based `endpoint_schema` — see the DB endpoint section below.
 
-Each API connector has one or more **endpoints** — individual API paths that the pipeline runner can extract data from. Endpoints are stored in the `connectors_endpoints` DynamoDB table, scoped by `connector_id`.
-
-## DynamoDB Table: `connectors_endpoints`
-
-| Key | Format | Description |
-|-----|--------|-------------|
-| `pk` (partition) | `CONNECTOR#{connector_id}` | Groups all endpoints for a connector |
-| `sk` (sort) | `ENDPOINT#{endpoint_id}#V#{version:04d}` | Versioned endpoint record |
-
-### GSIs
-
-| GSI | PK | SK | Purpose |
-|-----|----|----|---------|
-| `gsi1_by_endpoint` | `ENDPOINT#{endpoint_id}` | — | Look up latest endpoint by ID (cross-connector) |
-| `gsi2_by_endpoint_name` | `CONNECTOR#{connector_id}` | `{endpoint_path}` | Look up endpoints by name within a connector |
+Each API connector has one or more **endpoints** — individual API paths that the pipeline runner can extract data from. Endpoints are saved as JSON files under the connector's `definition/endpoints/` directory.
 
 ## API Endpoint Record
 
@@ -250,85 +236,6 @@ This means: "the `created` field in each response record maps to the `createdDat
 Endpoint records are versioned. Only changes to `endpoint_schema` trigger a version bump. Changes to `filters`, `pagination`, `replication_filter_mapping`, or other attributes are applied in-place (PATCH) without creating a new version.
 
 Version detection uses a SHA256 content hash (`_content_hash`) computed over the `endpoint_schema` field. The hash is canonicalized — dict keys are sorted and lists of dicts with a `name` key (e.g. columns) are sorted by name — so reordering fields does not trigger a false version bump.
-
-## REST API
-
-Base path: `/connectors_endpoints`
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/{connector_id}` | List all endpoints (summary: `endpoint_id` + `endpoint` only) |
-| `GET` | `/{connector_id}/{endpoint_id}` | Get latest version |
-| `GET` | `/{connector_id}/{endpoint_id}?v=N` | Get specific version |
-| `GET` | `/{connector_id}/{endpoint_id_vN}` | Get specific version (versioned ID in path) |
-| `GET` | `/{connector_id}/{endpoint_id}?versions=true` | List all versions |
-| `POST` | `/{connector_id}` | Create new endpoint (returns `endpoint_id_v1`) |
-| `PUT` | `/{connector_id}/{endpoint_id}` | Save endpoint (version bump if schema changed) |
-| `PATCH` | `/{connector_id}/{endpoint_id}` | Patch attributes in-place (no version bump) |
-| `DELETE` | `/{connector_id}/{endpoint_id}` | Delete all versions |
-
-Write operations (`POST`, `PUT`, `PATCH`, `DELETE`) require `owner` or `maintainer` group membership.
-
-### POST — Create endpoint
-
-```json
-POST /connectors_endpoints/{connector_id}
-
-{
-  "endpoint": "/v1/transfers",
-  "method": "GET",
-  "endpoint_schema": { ... },
-  "filters": { ... },
-  "pagination": { ... },
-  "replication_filter_mapping": { ... }
-}
-```
-
-Response:
-```json
-{
-  "success": true,
-  "data": {
-    "endpoint_id": "5a4b9e21-441f-4bc7-9d5e-41917b4357e6_v1"
-  }
-}
-```
-
-### PUT — Save endpoint (version-aware)
-
-```json
-PUT /connectors_endpoints/{connector_id}/{endpoint_id}
-
-{
-  "endpoint": "/v1/transfers",
-  "method": "GET",
-  "endpoint_schema": { ... },
-  "filters": { ... },
-  "pagination": { ... }
-}
-```
-
-Response (schema changed):
-```json
-{
-  "success": true,
-  "data": {
-    "endpoint_id": "5a4b9e21-441f-4bc7-9d5e-41917b4357e6_v2",
-    "version_bump": true
-  }
-}
-```
-
-Response (no schema change):
-```json
-{
-  "success": true,
-  "data": {
-    "endpoint_id": "5a4b9e21-441f-4bc7-9d5e-41917b4357e6_v1",
-    "version_bump": false
-  }
-}
-```
 
 ## DB Connector Endpoints
 

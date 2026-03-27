@@ -173,7 +173,7 @@ Please provide:
 To connect to {connector_name}, I need your database credentials:
 
 - Host: (hostname or IP address)
-- Port: (default: {default_port from connector})
+- Port: (check the connector's form_fields for the default port value)
 - Database: (database name)
 - Username:
 - Password:
@@ -227,73 +227,7 @@ required directory. Do not use root or admin accounts.
 
 ## Step 3: Build the Connection JSON
 
-The connection JSON must conform to the `ConnectionConfig` Pydantic model:
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `connection_id` | string | yes | Generate a UUID |
-| `connection_name` | string | yes | User-facing name (min 1 char) |
-| `connector_id` | UUID string | yes | From the connector |
-| `connector_name` | string | no | Denormalized display name |
-| `org_id` | string | no | Use `d7a11991-2795-49d1-a858-c7e58ee5ecc6` for testing |
-| `status` | `"draft"` or `"active"` | yes | Default `"draft"`, set `"active"` after successful auth |
-| `connection_type` | `"oauth2"` or null | no | ONLY set for OAuth connections |
-| `host` | string or null | no | Base URL for APIs, hostname for DBs. MUST be null for OAuth connections |
-| `parameters` | dict | yes | Connector-specific params (see examples) |
-| `headers` | dict or null | no | HTTP headers for API connections |
-
-**Validation rule:** If `connection_type == "oauth2"`, then `host` MUST be null/omitted.
-
-### Parameters structure by type:
-
-**API (non-OAuth):**
-```json
-{
-  "parameters": {
-    "headers": {
-      "Authorization": "Bearer ${token}",
-      "Accept": "application/json",
-      "Content-Type": "application/json"
-    }
-  }
-}
-```
-
-**API (OAuth):**
-```json
-{
-  "parameters": {
-    "tenant_id": "selected-tenant-id"
-  }
-}
-```
-
-**Database:**
-```json
-{
-  "parameters": {
-    "database": "dbname",
-    "port": "5432",
-    "username": "user",
-    "password": "${password}",
-    "ssl_mode": "prefer",
-    "create_permissions": true
-  }
-}
-```
-
-**S3:**
-```json
-{
-  "parameters": {
-    "bucket": "bucket-name",
-    "region": "eu-central-1",
-    "prefix": "exports/",
-    "access_key_id": "${access_key_id}",
-    "secret_access_key": "${secret_access_key}"
-  }
-}
-```
+Refer to the loaded `connection-spec` skill for the full ConnectionConfig model fields, validation rules, and parameter structure examples.
 
 Use `${placeholder}` syntax for any secret values in the connection JSON. The actual values go in the secrets file.
 

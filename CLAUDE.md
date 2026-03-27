@@ -55,7 +55,7 @@ connector-{slug}/
 
 ## Mapping Type Enum
 
-The system uses a strict enum: `string | integer | decimal | boolean | date | datetime | object | array`. Common mistakes: use `decimal` not `number`/`float`, use `integer` not `int`, use `datetime` not `timestamp`.
+The system uses a strict enum: `string | integer | decimal | boolean | date | datetime | timestamp | object | array | json`. Note: `timestamp` is distinct from `datetime` — it maps to SQL `TIMESTAMP`/`DateTime` column types in database adapters. `json` is distinct from `object` — it represents a raw JSON blob/string rather than a typed structured object. Common mistakes: use `decimal` not `number`/`float`, use `integer` not `int`.
 
 ## Conventions
 
