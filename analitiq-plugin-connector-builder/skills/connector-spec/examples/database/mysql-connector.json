@@ -6,7 +6,6 @@
   "connector_group_id": "a1a1a1a1-b2b2-c3c3-d4d4-e5e5e5e5e5e5",
   "slug": "mysql",
   "driver": "mysql",
-  "default_port": 3306,
   "enable_ssh": true,
   "auth": {
     "type": "db",

@@ -12,9 +12,8 @@ Database connectors (`connector_type: "database"`) define connections to SQL and
 
 | Attribute | Type | Description |
 |---|---|---|
-| `default_port` | integer | Default port for the database (e.g. 5432 for PostgreSQL) |
+| `driver` | string | Database driver name (e.g. `"postgresql"`, `"mysql"`) |
 | `enable_ssh` | boolean | Whether to show SSH tunnel fields in the frontend form |
-| `enable_ssl` | boolean | Whether to show SSL connection fields in the frontend form |
 
 ### Auth Configuration
 
@@ -41,7 +40,7 @@ The test payload sent to the endpoint is a flat JSON object: `{ ...formValues, c
   "connector_type": "database",
   "slug": "postgresql",
   "connector_group_id": "uuid",
-  "default_port": 5432,
+  "driver": "postgresql",
   "enable_ssh": true,
   "auth": {
     "type": "db",

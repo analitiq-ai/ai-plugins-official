@@ -8,8 +8,6 @@ description: >
 
 # Pipeline Specification
 
-Read existing pipeline examples in the `pipelines/` directory for real-world format reference.
-
 ## Pipeline JSON Structure
 
 ```json
@@ -85,7 +83,7 @@ Read existing pipeline examples in the `pipelines/` directory for real-world for
 
 - Pipeline ID: `{uuid}_v{version}` (e.g., `abc123_v1`)
 - Stream ID: `{uuid}_v{version}`
-- Endpoint ID: `{uuid}_v{version}`
+- Endpoint ID in streams: `{uuid}_v{version}` (versioned reference)
 
 ## Cross-Reference Validation
 

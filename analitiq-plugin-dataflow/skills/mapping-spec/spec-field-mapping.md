@@ -20,14 +20,15 @@ When you add, remove, or change an assignment, you must update all three section
 
 The system uses a strict Pydantic enum for types. The only valid values are:
 
-string | integer | decimal | boolean | date | datetime | object | array
+string | integer | decimal | boolean | date | datetime | timestamp | object | array | json
+
+Note: `timestamp` is distinct from `datetime` — it maps to SQL TIMESTAMP/DateTime column types in database adapters. `json` is distinct from `object` — it represents a raw JSON blob/string rather than a typed structured object.
 
 Common mistakes:
 - number / float / double → use "decimal"
 - int → use "integer"
 - bool → use "boolean"
-- timestamp → use "datetime"
-- dict / json → use "object"
+- dict → use "object"
 - list → use "array"
 
 3. Understand Source vs Destination Semantics

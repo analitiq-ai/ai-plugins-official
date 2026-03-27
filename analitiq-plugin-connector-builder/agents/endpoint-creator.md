@@ -41,63 +41,9 @@ Connectors are named `connector-{slug}`.
 
 6. **Save the endpoint** to the connector's `definition/endpoints/` directory and **update the manifest**.
 
-## API Endpoint Structure
+## Endpoint Structure
 
-Every API endpoint record has:
-- `connector_id`: UUID of the parent connector
-- `endpoint_id`: UUID (auto-generated)
-- `endpoint`: API path relative to base_url (e.g., `/v1/transfers`)
-- `method`: HTTP method (`GET`, `POST`, etc.)
-- `version`: Integer (starts at 1)
-- `endpoint_schema`: JSON Schema (draft 2020-12) describing the response
-- `filters`: Query parameter definitions (optional)
-- `pagination`: Pagination configuration (optional)
-- `replication_filter_mapping`: Maps response fields to filters for incremental sync (optional)
-
-### endpoint_schema Rules
-
-- Use JSON Schema draft 2020-12: include `"$schema": "https://json-schema.org/draft/2020-12/schema"`
-- For array responses, use `"type": "array"` with `"items"` containing the object schema
-- For single object responses, use `"type": "object"` with `"properties"`
-- Include `description` for every field
-- Use `"nullable": true` for fields that can be null
-- Nested objects use `"type": "object"` with their own `"properties"`
-- Arrays use `"type": "array"` with `"items"` — nested properties inside items are NOT expanded
-
-### filters Rules
-
-Each key is the query parameter name as it appears in the API query string:
-- `description`: Human-readable description
-- `type`: `string`, `integer`, or `boolean`
-- `operators`: Array of supported operators (`eq`, `gte`, `lte`, `in`, `like`)
-- `required`: Whether the filter is mandatory
-- `example`: Example value (optional)
-
-### pagination Rules
-
-Supported types:
-- `offset`: Uses `limit_param` and `offset_param`
-- `cursor`: Uses `cursor_param` and `next_cursor_field`
-- `page`: Uses `page_param` and `limit_param`
-- `link_header`: Uses `uses_link_header: true`
-
-### replication_filter_mapping Rules
-
-Maps a response field to a filter parameter for incremental sync:
-```json
-{ "created": "createdDateStart" }
-```
-This means: use the max `created` value from the last run as the `createdDateStart` filter.
-
-## Database Endpoint Structure
-
-Database endpoints use:
-- `endpoint`: Schema-qualified table path: `schema/table` (e.g., `public/users`)
-- `method`: Always `"DATABASE"`
-- `endpoint_schema.columns`: Array of column definitions with `name`, `type`, `nullable`, `default`, `autoincrement`, `comment`
-- `endpoint_schema.primary_keys`: Array of primary key column names
-
-No filters, pagination, or replication_filter_mapping for database endpoints.
+Refer to the loaded `endpoint-spec` skill for the full endpoint JSON structure, schema rules, filter definitions, pagination types, and replication filter mapping.
 
 ## File Output — MANDATORY
 

@@ -28,9 +28,11 @@ Every connector, regardless of type, has these root attributes:
 | `connector_type` | string | yes | One of: `api`, `database`, `other`                      |
 | `slug` | string | yes | URL-safe identifier (e.g. "xero", "postgresql"). GSI key |
 | `connector_group_id` | string (UUID) | yes | Groups related connectors (e.g. all Google connectors) |
-| `form_fields` | array | yes | Defines what the user sees when creating a connection   |
-| `auth` | object | yes | Authentication configuration (structure varies by type) |
+| `form_fields` | array | no | Defines what the user sees when creating a connection   |
+| `auth` | object | no | Authentication configuration (structure varies by type) |
 | `connector_descr` | string | no | Human-readable description of the connector             |
+| `connector_image` | string | no | Logo/image URL                                          |
+| `api_doc_url` | string | no | Link to API documentation for reference by AI agents    |
 
 ### `form_fields`
 
@@ -58,12 +60,14 @@ Additional root attributes for API connectors:
 
 | Attribute | Type | Description |
 |---|---|---|
-| `client_required` | boolean | Whether the API requires a registered app/client on the target platform |
-| `base_url` | string | Base URL for API data requests (supports `${placeholder}`) |
-| `headers` | object | Headers sent with every API data request |
-| `timeout` | integer | Request timeout in seconds |
+| `client_required` | boolean | Whether the API requires a registered app/client on the target platform (default: false) |
+| `base_url` | string | Base URL for API data requests (supports `${placeholder}`). Nullable for dynamic URL connectors |
+| `headers` | object | Headers sent with every API data request (default: `{}`) |
+| `timeout` | integer | Request timeout in seconds (min: 1) |
 | `requests_per_second` | object | Rate limiting parameters (`max_requests`, `time_window_seconds`) |
 | `post_auth_steps` | array | Steps taken after authentication (optional) |
+| `host` | string | Override host URL (optional) |
+| `max_connections` | integer | Max concurrent connections (min: 1, optional) |
 
 `auth.type` values for API connectors: `api_key`, `basic_auth`, `oauth2_authorization_code`, `oauth2_client_credentials`, `jwt`.
 
