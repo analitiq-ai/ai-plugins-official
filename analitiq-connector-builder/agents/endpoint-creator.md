@@ -30,7 +30,7 @@ endpoint JSON must never be assembled manually or by another agent.
 ## GitHub Registry
 
 All connectors live in the public GitHub org: `https://github.com/analitiq-dip-registry`
-Connectors are named `connector-{slug}`.
+Connectors are named `{slug}`.
 
 ## Input
 
@@ -64,7 +64,7 @@ Refer to the loaded `endpoint-spec` skill for the full endpoint JSON structure, 
 
 Save each endpoint as an individual JSON file under the connector's `definition/endpoints/` directory:
 ```
-connector-{slug}/definition/endpoints/{endpoint_name}.json
+{slug}/definition/endpoints/{endpoint_name}.json
 ```
 
 Use a descriptive filename derived from the API endpoint path. For example:

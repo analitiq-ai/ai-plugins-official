@@ -48,11 +48,9 @@ The connection JSON must conform to this model (`extra="forbid"` — no unknown 
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `connection_id` | string | no | null | UUID, generated on create |
-| `org_id` | string | no | null | Organization ID |
+
 | `connection_name` | string | YES | — | User-facing name (min 1 char) |
-| `connector_id` | UUID string | YES | — | References the parent connector |
-| `connector_name` | string | no | null | Denormalized connector display name |
+| `connector_slug` | string | YES | — | Connector slug (e.g., `wise`, `postgresql`, `s3`) |
 | `status` | `"draft"` / `"active"` | no | `"draft"` | Set `"active"` after successful auth |
 | `connection_type` | `"oauth2"` / null | no | null | ONLY set for OAuth connections |
 | `host` | string / null | no | null | Base URL (API) or hostname (DB) |
@@ -64,7 +62,6 @@ The connection JSON must conform to this model (`extra="forbid"` — no unknown 
 
 - **CRITICAL:** If `connection_type == "oauth2"`, then `host` MUST be null/omitted. The model validator rejects it.
 - `connection_name` must be at least 1 character.
-- `connector_id` must be a valid UUID string.
 - `extra="forbid"` — do not include any fields not listed above.
 
 ### Parameters by Connector Type
@@ -118,11 +115,27 @@ Has `host` because the runtime manages the token exchange. Access token is in se
     "port": "5432",
     "username": "user",
     "password": "${password}",
-    "ssl_mode": "prefer",
+    "ssl_mode": "encrypt",
     "create_permissions": true
   }
 }
 ```
+
+### SSL Mode — Canonical Values
+
+Database connectors may define native SSL mode values in their `form_fields` (e.g., PostgreSQL
+uses `require`, `verify-full`, `prefer`; MySQL uses `REQUIRED`, `PREFERRED`, `DISABLED`). The
+connection-creator agent must map these to canonical values before writing the connection JSON:
+
+| Canonical | Meaning | Native examples |
+|-----------|---------|-----------------|
+| `none` | No encryption | `disable`, `DISABLED`, `false` |
+| `encrypt` | Require encrypted connection | `require`, `REQUIRED`, `true` |
+| `verify` | Encrypt + verify server certificate | `verify-ca`, `verify-full`, `VERIFY_CA`, `VERIFY_IDENTITY` |
+| `prefer` | Try encrypt, fallback to none at runtime | `prefer`, `PREFERRED`, `allow` |
+
+The connector's `form_fields` keep their native values for display. The connection JSON
+`parameters.ssl_mode` always uses one of the four canonical values.
 
 **S3 / Other:**
 ```json
@@ -232,114 +245,60 @@ After building the connection, optionally include a `placeholder_check`:
 
 Set `valid: false` if any required `${placeholder}` from the connector's headers/base_url cannot be satisfied by the secrets file keys. List the missing ones in `missing_keys`.
 
-## HTML Credential Form
+## Credential Collection
 
-Instead of collecting credentials via chat, the agent generates a self-contained HTML form that the
-user fills in through their browser. The form splits submitted values into the correct output files
-based on each field's attributes.
+Collect credentials through a combination of interview and secrets templates:
 
-### Output Location
+1. **Non-sensitive fields** — interview the user directly (host, port, database name, bucket, region, etc.)
+2. **Sensitive fields** — create a `.secrets/` template for the user to fill in manually
 
-Generated form: `connections/{alias}/credential-form.html`
+### Secrets Template
 
-### Field Splitting Rules
+Create `connections/{alias}/.secrets/connection.json` with placeholder values matching the
+connector's secret `form_fields`:
 
-When processing the connector's `form_fields`, each submitted value is routed as follows:
+**API key / basic auth:**
+```json
+{ "token": "REPLACE_WITH_YOUR_API_KEY" }
+```
+
+**Database:**
+```json
+{ "password": "REPLACE_WITH_YOUR_PASSWORD" }
+```
+
+**S3:**
+```json
+{
+  "access_key_id": "REPLACE_WITH_ACCESS_KEY_ID",
+  "secret_access_key": "REPLACE_WITH_SECRET_ACCESS_KEY"
+}
+```
+
+Instruct the user to edit the template and replace placeholder values with their actual
+credentials before proceeding.
+
+### Field Routing
+
+When processing the connector's `form_fields`, route each value:
 
 | Condition | Destination |
 |---|---|
 | `name === "host"` | Top-level `host` field in `connection.json` |
-| `secret === true` | `connections/{alias}/.secrets/connection.json` |
-| `type === "oauth2"` | Skipped — handled by OAuth2 flow, not rendered as an input |
+| `secret === true` | `.secrets/connection.json` (template with placeholders) |
+| `type === "oauth2"` | Skipped — handled by OAuth2 flow |
 | Everything else | `parameters` dict in `connection.json` |
 
-Secret fields that are referenced in the connector's `headers` or `parameters` templates (e.g.
-`password` in a database connector) must also appear in `connection.json` `parameters` as
-`${field_name}` placeholders. The actual values live only in `.secrets/connection.json`.
+## Output
 
-### Generating the Form — Non-OAuth Connectors
+### Directory Structure
 
-Read the connector's `form_fields` array and build the HTML dynamically:
+```
+connections/{alias}/
+├── connection.json
+└── .secrets/
+    └── connection.json          # Secrets template (user fills in)
+```
 
-1. **For each field**, render an input element:
-   - `type: "text"` → `<input type="text">`
-   - `type: "password"` → `<input type="password">`
-   - `type: "select"` → `<select>` (populate options if available)
-   - `type: "oauth2"` → skip entirely
-   - `required: true` → add HTML `required` attribute + asterisk in label
-   - `default` value → set as the input's `value` attribute
-
-2. **Build a `FIELD_META` JS array** from the same `form_fields`:
-   ```js
-   var FIELD_META = [
-     { "name": "host", "secret": false },
-     { "name": "port", "secret": false },
-     { "name": "password", "secret": true }
-   ];
-   ```
-
-3. **On form submit**, the JS splits values into three groups using `FIELD_META`:
-   - `host` → stored in `data-host` attribute on `#output`
-   - Secret fields → JSON in `data-secrets` attribute
-   - Non-secret, non-host fields → JSON in `data-parameters` attribute
-   - Set `data-complete="true"` to signal the form has been submitted
-
-4. **Include a security reminder** appropriate to the auth type (see Credential Security Reminders).
-
-### Generating the Form — OAuth2 Connectors
-
-OAuth2 forms have a multi-step layout:
-
-**Step 1 — Connection parameters:**
-- Render a `client_id` text input (always required — needed to build the authorize URL)
-- Render any additional non-oauth2 `form_fields`
-- "Next: Authorize" button
-
-**Step 2 — Authorize:**
-- JS builds the authorize URL by replacing `${client_id}`, `${redirect_uri}`, and `${state}` in
-  the connector's `auth.authorize.url` template
-- Redirect URI: `https://app.analitiq.io/oauth/callback`
-- State: generated via `crypto.randomUUID()`
-- Render a "Connect to {connector_name}" link/button that opens the built URL in a new tab
-
-**Step 3 — Authorization code:**
-- Text input for the user to paste the `code` parameter from the callback URL
-- "Complete Connection" button
-- On submit: store `data-code`, `data-client-id`, `data-parameters`, `data-complete` on `#output`
-
-After the form is submitted, the agent uses the authorization code to perform the token exchange
-via the connector's `auth.token_exchange` configuration.
-
-### Reading Form Output
-
-Open the generated form via Playwright MCP tools (`browser_navigate` to the local file path). If
-Playwright is not available, instruct the user to open the file in their browser.
-
-After the user submits, read the `data-*` attributes from the `#output` element:
-
-**Non-OAuth forms:**
-- `data-host` — value for top-level `host` (empty string if not applicable)
-- `data-parameters` — JSON string of non-secret, non-host field values
-- `data-secrets` — JSON string of secret field values
-- `data-complete` — `"true"` when form has been submitted
-
-**OAuth2 forms:**
-- `data-code` — authorization code from the callback URL
-- `data-client-id` — the client ID entered by the user
-- `data-parameters` — JSON string of additional parameter values
-- `data-complete` — `"true"` when form has been submitted
-
-### Form Lifecycle
-
-1. **Generate** the form at `connections/{alias}/credential-form.html`
-2. **Open** it for the user (Playwright or manual)
-3. **Read** form output after submission
-4. **Save** connection.json and .secrets/connection.json from the collected values
-5. **Test** credentials by making a test request (non-OAuth only):
-   - API connectors: simple GET to `base_url` with resolved headers
-   - Database connectors: test connection using the connector's `auth.authorize` config
-   - Storage connectors: list/head operation against the bucket/path
-6. **Delete** `credential-form.html` after:
-   - Non-OAuth: credentials are tested and working
-   - OAuth2: tokens are successfully obtained (no testing needed)
-7. If testing fails, keep the form so the user can re-open and correct values
+For database connections, an `endpoints/` directory is created later by the
+`private-endpoint-creator` agent after the connection is set up.

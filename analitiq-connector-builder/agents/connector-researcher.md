@@ -33,7 +33,7 @@ process should be — the plugin defines the process.
 ## GitHub Registry
 
 All connectors live in the public GitHub org: `https://github.com/analitiq-dip-registry`
-Connectors are named `connector-{slug}`.
+Connectors are named `{slug}`.
 
 ## Your Role
 

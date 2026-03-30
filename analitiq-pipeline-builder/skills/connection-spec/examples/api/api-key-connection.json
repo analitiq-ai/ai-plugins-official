@@ -1,9 +1,6 @@
 {
-  "connection_id": "b4904c77-0a4a-4a8d-a768-4a8b5f2f2414",
   "connection_name": "Wise",
-  "connector_id": "0b1b1d31-35ae-4047-a27f-151535fe5531",
-  "connector_name": "Wise",
-  "org_id": "d7a11991-2795-49d1-a858-c7e58ee5ecc6",
+  "connector_slug": "wise",
   "status": "active",
   "host": "https://api.wise.com",
   "parameters": {

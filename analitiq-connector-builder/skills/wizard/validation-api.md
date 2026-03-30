@@ -22,7 +22,7 @@ models to ensure 100% compliance. Without validation, agents may produce JSON wi
 curl -s -X POST "https://rest.analitiq-dev.com/v1/validate/connector" \
   -H "x-api-key: $ANALITIQ_API_KEY" \
   -H "Content-Type: application/json" \
-  -d @connector-{slug}/definition/connector.json
+  -d @{slug}/definition/connector.json
 ```
 
 **Validate an endpoint:**
@@ -30,7 +30,7 @@ curl -s -X POST "https://rest.analitiq-dev.com/v1/validate/connector" \
 curl -s -X POST "https://rest.analitiq-dev.com/v1/validate/endpoint" \
   -H "x-api-key: $ANALITIQ_API_KEY" \
   -H "Content-Type: application/json" \
-  -d @connector-{slug}/definition/endpoints/{endpoint_name}.json
+  -d @{slug}/definition/endpoints/{endpoint_name}.json
 ```
 
 **Responses:**
@@ -54,7 +54,7 @@ After Phase 2 (connector) and Phase 3 (endpoints, if API):
 3. **If ALL validations pass**: the connector is compliant. When creating or updating the
    connector repo, add the topic `validated` to the GitHub repo:
    ```bash
-   gh repo edit analitiq-dip-registry/connector-{slug} --add-topic validated
+   gh repo edit analitiq-dip-registry/{slug} --add-topic validated
    ```
 4. **If validation was skipped** (no API key): do NOT add the `validated` topic.
 
@@ -65,5 +65,5 @@ When updating an existing connector repo (adding endpoints, modifying connector.
 - If all pass, ensure the `validated` topic is present.
 - If any fail, remove the `validated` topic if it was previously set:
   ```bash
-  gh repo edit analitiq-dip-registry/connector-{slug} --remove-topic validated
+  gh repo edit analitiq-dip-registry/{slug} --remove-topic validated
   ```

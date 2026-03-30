@@ -47,9 +47,9 @@ If research results are missing or incomplete, report this to the orchestrator r
    for actual values. Validate every field against the specification.
 
 4. **Create the connector directory structure** using the `connector-scaffolding` skill templates:
-   - Create directory `connector-{slug}/`
-   - Create subdirectory `connector-{slug}/definition/`
-   - Create subdirectory `connector-{slug}/definition/endpoints/`
+   - Create directory `{slug}/`
+   - Create subdirectory `{slug}/definition/`
+   - Create subdirectory `{slug}/definition/endpoints/`
    - Save `connector.json` in `definition/`
    - Create `CLAUDE.md` in repo root (from scaffolding template)
    - Create `AGENTS.md` in repo root (identical to CLAUDE.md)

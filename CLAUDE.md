@@ -9,7 +9,7 @@ This is the official directory of Analitiq Claude Code plugins for building data
 ## Plugins
 
 ### `analitiq-connector-builder` (v2.0.0)
-Creates new connector and endpoint definitions for the Analitiq DIP registry. Connectors are published to the `analitiq-dip-registry` GitHub org as individual repos named `connector-{slug}`.
+Creates new connector and endpoint definitions for the Analitiq DIP registry. Connectors are published to the `analitiq-dip-registry` GitHub org as individual repos named `{slug}`.
 
 **Agent chain:** `wizard` (skill) → `connector-researcher` → `{type}-connector-creator` → `endpoint-creator` (API only) → manifest assembly → validate (optional)
 
@@ -24,15 +24,18 @@ Creates new connector and endpoint definitions for the Analitiq DIP registry. Co
 ### `analitiq-pipeline-builder` (v2.0.0)
 Builds data integration pipelines using pre-defined connectors from the DIP registry (`analitiq-dip-registry` GitHub org). Does **not** create connectors — only downloads and wires them.
 
-**Agent chain (strictly sequential with gates):**
-1. `registry-browser` — downloads source + destination connectors (parallel)
-2. `connection-creator` — collects credentials, produces connection JSON + `.secrets/` files (parallel per side)
-3. `endpoint-data-mapper` — creates field-level mappings with three-way consistency (assignments, source_to_generic, generic_to_destination)
-4. `pipeline-assembler` — assembles the final pipeline JSON with all components
+**Agent chain:** `wizard` (skill) → `registry-browser` → `connection-creator` → `private-endpoint-creator` (DB only) → `pipeline-builder` → `stream-builder` × N (parallel)
+
+- `wizard` interviews the user, presents endpoints for selection, dispatches agents, collects stream results into pipeline
+- `registry-browser` downloads source + destination connectors from the registry (parallel)
+- `connection-creator` creates connection JSON + `.secrets/` templates for user to fill in (parallel per side)
+- `private-endpoint-creator` connects to database, discovers schemas/tables, creates endpoint files in connection directory (DB connections only)
+- `pipeline-builder` creates pipeline JSON shell with connections, schedule, engine, runtime defaults
+- `stream-builder` builds individual stream definitions with source, destination, and field mapping (one per selected endpoint, dispatched in parallel)
 
 ## Key Concepts
 
-- **Connector:** Auth config + metadata for a system (API, database, S3/SFTP). Lives in `connector-{slug}/definition/connector.json`.
+- **Connector:** Auth config + metadata for a system (API, database, S3/SFTP). Lives in `{slug}/definition/connector.json`.
 - **Endpoint:** Schema definition for a single API resource. Lives in `definition/endpoints/{name}.json`. **API connectors only** — database/other connectors do not have pre-defined endpoints (their schema/table combinations are deployment-specific and discovered at runtime).
 - **Manifest:** Index of all endpoints and placeholder registry for a connector. Lives in `definition/manifest.json`. The `placeholders` array registers every `${placeholder}` used in `connector.json` and endpoint files with a source category (`user_defined`, `system_defined`, `post_auth`, `protocol`, `derived`).
 - **Connection:** Runtime auth credentials for a connector instance. Secrets go to `.secrets/{connection_id}.json`.
@@ -45,7 +48,7 @@ Version is bumped automatically by GitHub Actions on PR merge via labels (`versi
 
 **API connectors** (with endpoints):
 ```
-connector-{slug}/
+{slug}/
 ├── CLAUDE.md            # Agent reference (auth, endpoints, caveats)
 ├── AGENTS.md            # Identical to CLAUDE.md, for non-Claude agents
 ├── README.md            # Human docs
@@ -58,7 +61,7 @@ connector-{slug}/
 
 **Database and other connectors** (no endpoints):
 ```
-connector-{slug}/
+{slug}/
 ├── CLAUDE.md            # Agent reference (auth, caveats)
 ├── AGENTS.md            # Identical to CLAUDE.md, for non-Claude agents
 ├── README.md            # Human docs
