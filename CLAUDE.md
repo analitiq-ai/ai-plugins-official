@@ -8,16 +8,18 @@ This is the official directory of Analitiq Claude Code plugins for building data
 
 ## Plugins
 
-### `analitiq-plugin-connector-builder` (v1.2.0)
+### `analitiq-connector-builder` (v2.0.0)
 Creates new connector and endpoint definitions for the Analitiq DIP registry. Connectors are published to the `analitiq-dip-registry` GitHub org as individual repos named `connector-{slug}`.
 
-**Agent chain:** `start` (skill) → `connector-creator` → `endpoint-creator` (API only) → validate (optional), with `api-researcher` invoked automatically for API-type connectors.
+**Agent chain:** `wizard` (skill) → `connector-researcher` → `{type}-connector-creator` → `endpoint-creator` (API only) → manifest assembly → validate (optional)
 
-- `start` interviews the user, checks for duplicates in the registry, collects optional `ANALITIQ_API_KEY`, then dispatches agents
-- `connector-creator` builds `connector.json`, `manifest.json`, and repo scaffolding (CLAUDE.md, AGENTS.md, README.md, CHANGELOG.md)
-- `endpoint-creator` builds individual endpoint JSON files under `definition/endpoints/` and updates the manifest — **API connectors only** (database/other connectors do not have pre-defined endpoints)
-- `api-researcher` fetches auth details and endpoint schemas from official API docs (WebFetch → WebSearch → Playwright fallback)
-- If `ANALITIQ_API_KEY` is available, `start` validates all JSON against `https://rest.analitiq-dev.com/v1/validate/{connector|endpoint}` and adds the `validated` topic to the repo if compliant
+- `wizard` interviews the user, checks for duplicates in the registry, dispatches research and creation agents, builds the manifest, updates docs, optionally validates
+- `connector-researcher` researches system documentation for auth details, connection parameters, or endpoint schemas (type-agnostic — works for APIs, databases, and storage systems)
+- `api-connector-creator` builds API connector definitions (connector.json, repo scaffolding) with auth flows, headers, and rate limits
+- `db-connector-creator` builds database connector definitions with driver, SSH, and db auth configuration
+- `storage-connector-creator` builds storage connector definitions (S3, SFTP) with credentials auth
+- `endpoint-creator` builds individual endpoint JSON files under `definition/endpoints/` — **API connectors only** (database/other connectors do not have pre-defined endpoints). Creates endpoint files only; manifest and docs updates are handled by `wizard` after all endpoints complete.
+- If `ANALITIQ_API_KEY` is available, `wizard` validates all JSON against `https://rest.analitiq-dev.com/v1/validate/{connector|endpoint}` and adds the `validated` topic to the repo if compliant
 
 ### `analitiq-plugin-dataflow` (v2.0.0)
 Builds data integration pipelines using pre-defined connectors from the DIP registry (`analitiq-dip-registry` GitHub org). Does **not** create connectors — only downloads and wires them.
@@ -32,9 +34,12 @@ Builds data integration pipelines using pre-defined connectors from the DIP regi
 
 - **Connector:** Auth config + metadata for a system (API, database, S3/SFTP). Lives in `connector-{slug}/definition/connector.json`.
 - **Endpoint:** Schema definition for a single API resource. Lives in `definition/endpoints/{name}.json`. **API connectors only** — database/other connectors do not have pre-defined endpoints (their schema/table combinations are deployment-specific and discovered at runtime).
-- **Manifest:** Index of all endpoints for a connector. Lives in `definition/manifest.json`. Version is bumped automatically by GitHub Actions on PR merge via labels (`version:minor`, `version:patch`, `version:major`) — never bump manually.
+- **Manifest:** Index of all endpoints and placeholder registry for a connector. Lives in `definition/manifest.json`. The `placeholders` array registers every `${placeholder}` used in `connector.json` and endpoint files with a source category (`user_defined`, `system_defined`, `post_auth`, `protocol`, `derived`).
 - **Connection:** Runtime auth credentials for a connector instance. Secrets go to `.secrets/{connection_id}.json`.
 - **Pipeline:** Full integration definition bundling connectors, connections, endpoints, streams, and mappings.
+
+## Versioning
+Version is bumped automatically by GitHub Actions on PR merge via labels (`version:minor`, `version:patch`, `version:major`) — never bump manually.
 
 ## Connector Directory Structure (output of connector-builder)
 
@@ -47,7 +52,7 @@ connector-{slug}/
 ├── CHANGELOG.md         # Version history
 └── definition/
     ├── connector.json   # Auth + connector config
-    ├── manifest.json    # Endpoint index
+    ├── manifest.json    # Placeholder registry + endpoint index
     └── endpoints/       # Individual endpoint JSON files (API only)
 ```
 

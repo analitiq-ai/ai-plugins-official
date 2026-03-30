@@ -1,0 +1,12 @@
+{
+  "name": "analitiq-connector-builder",
+  "description": "Analitiq Connector Builder - creates connectors and endpoints for the Analitiq DIP registry. Checks the public GitHub org analitiq-dip-registry for existing connectors to avoid duplicates before creating new ones.",
+  "version": "2.0.0",
+  "keywords": ["data-integration", "connectors", "api", "database", "analitiq"],
+  "author": {
+    "name": "Analitiq"
+  },
+  "homepage": "https://github.com/analitiq-ai/ai-plugins-official",
+  "repository": "https://github.com/analitiq-ai/ai-plugins-official",
+  "license": "Apache-2.0"
+}

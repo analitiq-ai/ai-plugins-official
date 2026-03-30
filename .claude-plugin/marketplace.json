@@ -6,12 +6,12 @@
   },
   "plugins": [
     {
-      "name": "analitiq-plugin-connector-builder",
+      "name": "analitiq-connector-builder",
       "description": "Creates connectors and endpoints for the Analitiq DIP registry with support for API, database, and storage integrations",
       "author": {
         "name": "Analitiq"
       },
-      "source": "./analitiq-plugin-connector-builder",
+      "source": "./analitiq-connector-builder",
       "category": "development"
     },
     {

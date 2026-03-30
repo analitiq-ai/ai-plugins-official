@@ -1,5 +1,6 @@
 ---
 name: pipeline-spec
+disable-model-invocation: true
 description: >
   Pipeline specification for assembling complete pipeline configuration files.
   Contains the pipeline JSON format with all sections: pipeline, connections, connectors,

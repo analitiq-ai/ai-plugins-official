@@ -5,5 +5,8 @@
   "keywords": ["data-integration", "pipelines", "etl", "dataflow", "analitiq"],
   "author": {
     "name": "Analitiq"
-  }
+  },
+  "homepage": "https://github.com/analitiq-ai/ai-plugins-official",
+  "repository": "https://github.com/analitiq-ai/ai-plugins-official",
+  "license": "MIT"
 }

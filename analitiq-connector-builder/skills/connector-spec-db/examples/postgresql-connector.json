@@ -1,0 +1,50 @@
+{
+  "connector_name": "PostgreSQL",
+  "connector_type": "database",
+  "connector_descr": "Open-source relational database",
+  "slug": "postgresql",
+  "driver": "postgresql",
+  "enable_ssh": true,
+  "auth": {
+    "type": "db",
+    "authorize": {
+      "url": "/db_utils",
+      "method": "POST",
+      "body": "{\"test_connect_only\": true}"
+    }
+  },
+  "form_fields": [
+    {
+      "name": "host",
+      "label": "Host",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "port",
+      "label": "Port",
+      "type": "text",
+      "required": true,
+      "default": "5432"
+    },
+    {
+      "name": "database",
+      "label": "Database",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "username",
+      "label": "Username",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "password",
+      "label": "Password",
+      "type": "password",
+      "required": true,
+      "secret": true
+    }
+  ]
+}
