@@ -1,5 +1,6 @@
 ---
 name: mapping-spec
+disable-model-invocation: true
 description: >
   Stream mapping specification for creating field-level mappings between source and destination
   endpoints. Contains assignment types, type matching rules, and three-way sync requirements.
@@ -7,6 +8,10 @@ description: >
 ---
 
 # Mapping Specification
+
+## Supporting Files
+
+- [spec-field-mapping.md](spec-field-mapping.md) — detailed field mapping rules, type matching, three-way architecture review checklist
 
 Read the full mapping specification from `${CLAUDE_PLUGIN_ROOT}/skills/mapping-spec/spec-field-mapping.md` before creating any mapping.
 

@@ -1,0 +1,51 @@
+{
+  "connector_name": "SFTP",
+  "connector_type": "other",
+  "connector_descr": "SSH File Transfer Protocol for secure file access",
+  "slug": "sftp",
+  "auth": {
+    "type": "credentials"
+  },
+  "form_fields": [
+    {
+      "name": "host",
+      "label": "Host",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "port",
+      "label": "Port",
+      "type": "text",
+      "required": true,
+      "default": "22"
+    },
+    {
+      "name": "username",
+      "label": "Username",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "password",
+      "label": "Password",
+      "type": "password",
+      "required": false,
+      "secret": true
+    },
+    {
+      "name": "private_key",
+      "label": "Private Key",
+      "type": "password",
+      "required": false,
+      "secret": true
+    },
+    {
+      "name": "path",
+      "label": "Remote Path",
+      "type": "text",
+      "required": false,
+      "default": "/"
+    }
+  ]
+}

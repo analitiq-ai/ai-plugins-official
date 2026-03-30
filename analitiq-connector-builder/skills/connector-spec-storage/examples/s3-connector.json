@@ -1,0 +1,43 @@
+{
+  "connector_name": "Amazon S3",
+  "connector_type": "other",
+  "connector_descr": "Amazon Simple Storage Service for object storage",
+  "slug": "s3",
+  "auth": {
+    "type": "credentials"
+  },
+  "form_fields": [
+    {
+      "name": "bucket",
+      "label": "Bucket Name",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "region",
+      "label": "AWS Region",
+      "type": "text",
+      "required": true,
+      "default": "eu-central-1"
+    },
+    {
+      "name": "access_key_id",
+      "label": "Access Key ID",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "secret_access_key",
+      "label": "Secret Access Key",
+      "type": "password",
+      "required": true,
+      "secret": true
+    },
+    {
+      "name": "prefix",
+      "label": "Key Prefix",
+      "type": "text",
+      "required": false
+    }
+  ]
+}

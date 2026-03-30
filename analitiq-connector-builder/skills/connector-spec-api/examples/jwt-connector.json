@@ -1,0 +1,48 @@
+{
+  "connector_name": "Apple App Store Connect",
+  "connector_type": "api",
+  "connector_descr": "Apple App Store Connect API for app analytics and management",
+  "slug": "apple-app-store",
+  "base_url": "https://api.appstoreconnect.apple.com/v1/",
+  "client_required": false,
+  "auth": {
+    "type": "jwt",
+    "algorithm": "ES256",
+    "claims": {
+      "iss": "${issuer_id}",
+      "aud": "appstoreconnect-v1"
+    },
+    "token_expiry_seconds": 1200
+  },
+  "headers": {
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+    "Authorization": "Bearer ${jwt_token}"
+  },
+  "form_fields": [
+    {
+      "name": "issuer_id",
+      "label": "Issuer ID",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "key_id",
+      "label": "Key ID",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "private_key",
+      "label": "Private Key (.p8)",
+      "type": "password",
+      "required": true,
+      "secret": true
+    }
+  ],
+  "timeout": 30,
+  "requests_per_second": {
+    "max_requests": 60,
+    "time_window_seconds": 60
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "connector_name": "15Five",
+  "connector_type": "api",
+  "connector_descr": "HR performance management platform",
+  "slug": "15five",
+  "base_url": "https://my.15five.com/api/public/",
+  "client_required": false,
+  "auth": {
+    "type": "api_key"
+  },
+  "headers": {
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+    "Authorization": "Bearer ${api_key}"
+  },
+  "form_fields": [
+    {
+      "name": "api_key",
+      "label": "API Key",
+      "type": "password",
+      "required": true,
+      "secret": true
+    }
+  ],
+  "timeout": 30,
+  "requests_per_second": {
+    "max_requests": 60,
+    "time_window_seconds": 60
+  }
+}
