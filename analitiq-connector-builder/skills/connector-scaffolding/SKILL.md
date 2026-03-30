@@ -17,7 +17,7 @@ description: >
 ## GitHub Registry
 
 All connectors live in the public GitHub org: `https://github.com/analitiq-dip-registry`
-Connectors are named `connector-{slug}`. Use the `connector-template` repo as the starting point
+Connectors are named `{slug}`. Use the `connector-template` repo as the starting point
 for new connectors: `https://github.com/analitiq-dip-registry/connector-template`
 
 ### Slug Naming for Multi-Auth Connectors
@@ -25,9 +25,9 @@ for new connectors: `https://github.com/analitiq-dip-registry/connector-template
 When an API supports multiple authentication methods, each method gets its own connector with an
 auth-specific slug:
 
-- Single auth method → `connector-{system}` (e.g., `connector-wise`)
-- Multiple auth methods → `connector-{system}-{auth_suffix}` (e.g., `connector-shopify-oauth2`,
-  `connector-shopify-api-key`)
+- Single auth method → `{system}` (e.g., `wise`)
+- Multiple auth methods → `{system}-{auth_suffix}` (e.g., `shopify-oauth2`,
+  `shopify-api-key`)
 
 Short suffixes: `oauth2`, `api-key`, `basic-auth`, `client-credentials`, `jwt`
 
@@ -151,7 +151,7 @@ Track changes to the connector and its endpoints. Use this template:
 
 ### API connectors (with endpoints)
 ```
-connector-{slug}/
+{slug}/
 ├── CLAUDE.md               # Agent reference for Claude Code (auth, endpoints, caveats)
 ├── AGENTS.md               # Agent reference for other frameworks (identical to CLAUDE.md)
 ├── README.md               # Human documentation (setup instructions, credentials)
@@ -164,7 +164,7 @@ connector-{slug}/
 
 ### Database and other connectors (no `endpoints/` directory)
 ```
-connector-{slug}/
+{slug}/
 ├── CLAUDE.md               # Agent reference for Claude Code (auth, caveats)
 ├── AGENTS.md               # Agent reference for other frameworks (identical to CLAUDE.md)
 ├── README.md               # Human documentation (setup instructions, credentials)

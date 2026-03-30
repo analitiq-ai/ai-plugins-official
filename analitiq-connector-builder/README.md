@@ -4,7 +4,7 @@ Claude Code plugin for creating data integration connectors and endpoints that c
 
 ## What It Does
 
-The plugin interviews you about the target system, researches its documentation, and generates the full connector definition — no coding required. Connectors are published to the [`analitiq-dip-registry`](https://github.com/analitiq-dip-registry) GitHub org as individual repos named `connector-{slug}`.
+The plugin interviews you about the target system, researches its documentation, and generates the full connector definition — no coding required. Connectors are published to the [`analitiq-dip-registry`](https://github.com/analitiq-dip-registry) GitHub org as individual repos named `{slug}`.
 
 **Usage:** Launch Claude Code and say *"I want to create a connector for [system name]"*
 

@@ -48,8 +48,8 @@ If research results are missing or incomplete, report this to the orchestrator r
    for actual values. Ensure all database-specific fields are included.
 
 4. **Create the connector directory structure** using the `connector-scaffolding` skill templates:
-   - Create directory `connector-{slug}/`
-   - Create subdirectory `connector-{slug}/definition/`
+   - Create directory `{slug}/`
+   - Create subdirectory `{slug}/definition/`
    - Do NOT create an `endpoints/` directory — database connectors have no pre-defined endpoints
    - Save `connector.json` in `definition/`
    - Create `CLAUDE.md` in repo root (from scaffolding template, omit "Available Endpoints" section)

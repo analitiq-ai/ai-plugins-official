@@ -53,7 +53,7 @@ When requirements are confirmed, produce a structured summary:
 ### Connector
 - System: {name}
 - Type: {api|database|other}
-- Connector slug: connector-{name}
+- Connector slug: {name}
 - Documentation URL: {url if provided, API only}
 
 ### Endpoints (API connectors only)
@@ -65,27 +65,23 @@ When requirements are confirmed, produce a structured summary:
 ## Duplicate Check — MANDATORY
 
 Before dispatching any agents, you MUST check whether a connector already exists in the public
-GitHub org `https://github.com/analitiq-dip-registry`.
+DIP registry.
 
-Connectors in the registry are named `connector-{connector_name}`.
+Connectors in the registry are named `{slug}`.
 
 ### How to check
 
-1. Use the GitHub API to search for the connector repo:
+1. Fetch the registry index (no authentication needed):
    ```
-   gh api "orgs/analitiq-dip-registry/repos" --paginate -q '.[].name'
-   ```
-   Or if `gh` is not available, use:
-   ```
-   curl -s "https://api.github.com/orgs/analitiq-dip-registry/repos?per_page=100" | jq -r '.[].name'
+   curl -s https://raw.githubusercontent.com/analitiq-dip-registry/.github/main/registry.json | jq '.connectors[].slug'
    ```
 
-2. **Search for similar names** — the connector may exist under a slightly different name.
+2. **Search for similar names** — the connector may exist under a slightly different slug.
    For example, if the user wants "Pipe Drive", check for `connector-pipedrive`, `connector-pipe-drive`, etc.
    Compare the user's requested name against all repos in the org.
 
 3. If the connector already exists:
-   - Tell the user it already exists and provide the repo URL: `https://github.com/analitiq-dip-registry/connector-{name}`
+   - Tell the user it already exists and provide the repo URL: `https://github.com/analitiq-dip-registry/{name}`
    - Ask if the user can use the existing connector as-is
    - **If yes** — the conversation ends here. No further action needed.
    - **If no** — ask what's wrong. Is the connector outdated? Is some information incorrect?
@@ -139,9 +135,9 @@ If the research results contain multiple auth methods in `auth_methods`:
      2. **API Key** — uses a private app API key, simpler setup"
 2. **Ask the user which method they want** for this connector.
 3. **Update the slug** to include the auth method suffix:
-   - If only one auth method exists → `connector-{system}` (no suffix)
-   - If multiple exist → `connector-{system}-{auth_method}` (e.g., `connector-shopify-oauth2`,
-     `connector-shopify-api-key`)
+   - If only one auth method exists → `{system}` (no suffix)
+   - If multiple exist → `{system}-{auth_method}` (e.g., `shopify-oauth2`,
+     `shopify-api-key`)
    - Use short suffixes: `oauth2` (not `oauth2-authorization-code`), `api-key`, `basic-auth`,
      `client-credentials`, `jwt`
 4. **Re-run the duplicate check** against the auth-specific slug before proceeding.
@@ -217,11 +213,11 @@ connector and endpoints against the Analitiq validation API. If all validations 
 
 ## Connector Directory Structure
 
-Each connector is stored in its own directory named `connector-{connector_name}/` with this structure:
+Each connector is stored in its own directory named `{slug}/` with this structure:
 
 **API connectors** (with endpoints):
 ```
-connector-{connector_name}/
+{slug}/
 ├── CLAUDE.md               # Agent reference for Claude Code (auth, endpoints, caveats)
 ├── AGENTS.md               # Agent reference for other frameworks (identical to CLAUDE.md)
 ├── README.md               # Human documentation (setup instructions, credentials)
@@ -236,7 +232,7 @@ connector-{connector_name}/
 
 **Database and other connectors** (no endpoints):
 ```
-connector-{connector_name}/
+{slug}/
 ├── CLAUDE.md               # Agent reference for Claude Code (auth, caveats)
 ├── AGENTS.md               # Agent reference for other frameworks (identical to CLAUDE.md)
 ├── README.md               # Human documentation (setup instructions, credentials)

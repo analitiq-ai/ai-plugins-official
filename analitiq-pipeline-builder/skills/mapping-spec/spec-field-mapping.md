@@ -104,6 +104,15 @@ Rule: the target type must match what the destination API/DB actually expects, n
 
 6. source_to_generic Rules
 
+Each entry is a `GenericTypeMapping` object — NOT a plain string:
+
+```json
+"source_to_generic": {
+  "id": { "generic_type": "integer" },
+  "originator.name.fullName": { "generic_type": "string" }
+}
+```
+
 - Only list source fields that are actually used in expr assignments
 - Do NOT list source fields that are only used indirectly (parent objects when you extract a child)
 - For nested paths like ["originator", "name", "fullName"], use the dotted key: "originator.name.fullName"
@@ -112,10 +121,21 @@ Rule: the target type must match what the destination API/DB actually expects, n
 
 7. generic_to_destination Rules
 
+Each entry is a `DestinationTypeMapping` object, keyed by connection ref:
+
+```json
+"generic_to_destination": {
+  "conn_2": {
+    "id": { "destination_type": "BIGINT", "nullable": false },
+    "name": { "destination_type": "VARCHAR(255)", "nullable": true }
+  }
+}
+```
+
 - Keyed by connection ref (e.g., "conn_2")
 - Only list destination fields that appear in assignments' target.path
-- destination_type must match the assignment's target.type
-- nullable must match the assignment's target.nullable
+- `destination_type` is the native SQL/destination type string (e.g., `BIGINT`, `VARCHAR(255)`, `TIMESTAMP WITH TIME ZONE`)
+- `nullable` must match the assignment's target.nullable
 - Do NOT include fields that were removed from assignments
 
 8. Review Checklist
