@@ -1,6 +1,22 @@
 # Analitiq Plugins for Claude Code
 
-Official [Analitiq](https://analitiq.ai) plugins for Claude Code. Build data integration connectors and pipelines that comply with Analitiq Data Integration Protocols (DIP).
+Official [Analitiq](https://analitiq.ai) plugins for Claude Code. Build data integration connectors and pipelines through conversation — no coding required.
+
+## How Analitiq works
+
+Analitiq is a set of open-source tools for connecting APIs, databases, and storage systems — no coding required.
+
+| Repository | What it does |
+|---|---|
+| **[AI Plugins](https://github.com/analitiq-ai/ai-plugins-official)** *(this repo)* | Claude Code plugins that build connectors and pipelines through conversation. |
+| **[DIP Registry](https://github.com/analitiq-dip-registry)** | Open catalog of ready-made connector definitions for common systems. |
+| **[Core Engine](https://github.com/analitiq-ai/analitiq-core)** | Runs the pipelines — reads from sources, transforms data, writes to destinations. |
+
+**Use the plugins** to create connectors and assemble pipelines. **Connectors** live in the registry. **The engine** executes the pipelines. Or skip the setup and use **[Analitiq Cloud](https://analitiq-app.com)** for a fully managed experience.
+
+Learn more at [analitiq.ai](https://analitiq.ai).
+
+---
 
 ## Plugins
 
