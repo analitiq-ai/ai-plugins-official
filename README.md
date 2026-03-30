@@ -10,7 +10,7 @@ Creates new connectors and endpoints for the [Analitiq DIP Registry](https://git
 
 **Usage:** Launch Claude Code and say *"I want to create a connector for [system name]"*
 
-### analitiq-plugin-dataflow
+### analitiq-pipeline-builder
 
 Builds data integration pipelines using pre-defined connectors from the DIP registry. Handles the full flow: downloading connectors, collecting credentials, mapping fields between source and destination, and assembling the pipeline.
 
@@ -49,7 +49,7 @@ These plugins are not yet available in the Claude Marketplace. To install manual
 2. Install the plugin you need by pointing Claude Code to the local directory:
    ```bash
    claude plugin add ./ai-plugins-official/analitiq-connector-builder
-   claude plugin add ./ai-plugins-official/analitiq-plugin-dataflow
+   claude plugin add ./ai-plugins-official/analitiq-pipeline-builder
    ```
    or
    

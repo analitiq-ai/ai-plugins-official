@@ -15,12 +15,12 @@
       "category": "development"
     },
     {
-      "name": "analitiq-plugin-dataflow",
+      "name": "analitiq-pipeline-builder",
       "description": "AI-driven data integration pipelines using pre-defined connectors from the DIP registry",
       "author": {
         "name": "Analitiq"
       },
-      "source": "./analitiq-plugin-dataflow",
+      "source": "./analitiq-pipeline-builder",
       "category": "development"
     }
   ]
