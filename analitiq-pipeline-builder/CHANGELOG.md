@@ -3,7 +3,7 @@
 ## [2.0.0] - 2026-03-28
 
 ### Added
-- Pipeline orchestrator (`start`) with phased agent dispatch
+- Pipeline orchestrator (`wizard`) with phased agent dispatch
 - Registry browser agent for downloading connectors from the DIP registry
 - Connection creator agent with support for 7 auth types
 - Endpoint data mapper agent with three-way sync validation

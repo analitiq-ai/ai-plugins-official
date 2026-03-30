@@ -1,5 +1,4 @@
----
-name: start
+---name: wizard
 color: green
 description: >
   Entry point for building data integration pipelines. Interviews the user to gather requirements

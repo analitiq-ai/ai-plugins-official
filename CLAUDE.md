@@ -21,7 +21,7 @@ Creates new connector and endpoint definitions for the Analitiq DIP registry. Co
 - `endpoint-creator` builds individual endpoint JSON files under `definition/endpoints/` — **API connectors only** (database/other connectors do not have pre-defined endpoints). Creates endpoint files only; manifest and docs updates are handled by `wizard` after all endpoints complete.
 - If `ANALITIQ_API_KEY` is available, `wizard` validates all JSON against `https://rest.analitiq-dev.com/v1/validate/{connector|endpoint}` and adds the `validated` topic to the repo if compliant
 
-### `analitiq-plugin-dataflow` (v2.0.0)
+### `analitiq-pipeline-builder` (v2.0.0)
 Builds data integration pipelines using pre-defined connectors from the DIP registry (`analitiq-dip-registry` GitHub org). Does **not** create connectors — only downloads and wires them.
 
 **Agent chain (strictly sequential with gates):**

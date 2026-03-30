@@ -1,5 +1,5 @@
 {
-  "name": "analitiq-plugin-dataflow",
+  "name": "analitiq-pipeline-builder",
   "description": "Analitiq - AI driven data integrations. Analitiq uses pre-defined connectors from the DIP registry to create connections, mappings, and pipelines for data integration",
   "version": "2.0.0",
   "keywords": ["data-integration", "pipelines", "etl", "dataflow", "analitiq"],
