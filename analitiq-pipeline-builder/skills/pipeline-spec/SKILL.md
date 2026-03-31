@@ -33,7 +33,7 @@ Streams are added by the wizard after all stream-builders complete.
   "runtime": {
     "buffer_size": 5000,
     "batching": {
-      "batch_size": 100,
+      "batch_size": 3000,
       "max_concurrent_batches": 3
     },
     "logging": {
@@ -93,7 +93,7 @@ Pipeline execution behavior:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `buffer_size` | integer | `5000` | Record buffer size (min: 100) |
-| `batching.batch_size` | integer | `100` | Batch size for processing |
+| `batching.batch_size` | integer | `3000` | Batch size for processing |
 | `batching.max_concurrent_batches` | integer | `3` | Max concurrent batches |
 | `logging.log_level` | string | `"INFO"` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
 | `logging.metrics_enabled` | boolean | `true` | Whether metrics collection is enabled |
