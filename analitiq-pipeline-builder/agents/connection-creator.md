@@ -36,7 +36,7 @@ the user and generating a secrets template.
 ## Output
 
 - Connection JSON → `connections/{alias}/connection.json`
-- Secrets template → `connections/{alias}/.secrets/connection.json`
+- Secrets template → `connections/{alias}/.secrets/credentials.json`
 - OAuth templates → `connections/{alias}/secrets-templates/client.json` (OAuth2 only)
 
 The `{alias}` is a human-readable name chosen by the user (e.g. `my-wise`, `prod-postgres`).
@@ -61,7 +61,7 @@ Always ask the user for the alias before creating files.
 
 6. **Create the `.secrets/` template** with placeholder values for all sensitive fields:
    - Identify secret fields from `form_fields` (where `secret: true` or `type: "password"`)
-   - Write `connections/{alias}/.secrets/connection.json` with `REPLACE_WITH_...` placeholders
+   - Write `connections/{alias}/.secrets/credentials.json` with `REPLACE_WITH_...` placeholders
    - Instruct the user to edit the file and replace placeholders with actual values
 
 7. **Build `connection.json`** from the collected non-sensitive values:
@@ -70,7 +70,27 @@ Always ask the user for the alias before creating files.
    - Copy the connector's `headers` template into `parameters.headers` for API connectors
    - Set metadata: `connector_slug`, `connection_name`, `status: "draft"`
 
-8. **Report back** to the wizard with the connection directory path and alias.
+8. **Report back** to the pipeline-wizard with the connection directory path and alias.
+
+## Post-Auth Parameters
+
+When the connector defines `post_auth_steps`, the resulting values (e.g., `profile_id`,
+`tenant_id`) are stored as concrete values in `connection.parameters`. These are
+connection-scoped values that may be referenced by endpoint filters using `${param_name}`
+placeholders in the filter's `default` field. Do not put these in `.secrets/` — they are
+not sensitive.
+
+For example, a Wise connector with a `post_auth_steps` entry for `profile_id` produces:
+
+```json
+{
+  "parameters": {
+    "profile_id": 12345678
+  }
+}
+```
+
+This value is then available to endpoint filters that declare `"default": "${profile_id}"`.
 
 ## Key Rules
 
@@ -78,3 +98,4 @@ Always ask the user for the alias before creating files.
 - Connection JSON uses `${placeholder}` for secrets — actual values only in `.secrets/`
 - For OAuth2: set `connection_type: "oauth2"` and do NOT set `host`
 - The `host` form field always maps to the top-level `host` in connection.json, never to `parameters`
+- Post-auth-step results go into `parameters` as concrete values, not into `.secrets/`

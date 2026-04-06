@@ -1,5 +1,5 @@
 ---
-name: wizard
+name: pipeline-wizard
 color: green
 description: >
   This skill should be used when the user wants to build a data integration pipeline, connect
@@ -10,15 +10,15 @@ description: >
 
   <example>
   user: "Build a pipeline from Pipedrive to PostgreSQL"
-  assistant: Uses the wizard skill to interview the user, download connectors, and orchestrate the full pipeline build
+  assistant: Uses the pipeline-wizard skill to interview the user, download connectors, and orchestrate the full pipeline build
   </example>
   <example>
   user: "I want to stream data from Wise to my database"
-  assistant: Uses the wizard skill to gather integration requirements and dispatch the agent chain
+  assistant: Uses the pipeline-wizard skill to gather integration requirements and dispatch the agent chain
   </example>
   <example>
   user: "Create a data integration from Shopify to S3"
-  assistant: Uses the wizard skill to interview the user about source and destination systems
+  assistant: Uses the pipeline-wizard skill to interview the user about source and destination systems
   </example>
 argument-hint: "<source system> to <destination system>"
 allowed-tools: Read, Glob, Grep, Bash, WebFetch, WebSearch, Agent
