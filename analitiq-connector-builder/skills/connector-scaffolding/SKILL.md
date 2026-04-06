@@ -14,26 +14,6 @@ description: >
 
 - [spec-common-attributes.md](spec-common-attributes.md) — common connector fields shared by all connector types
 
-## GitHub Registry
-
-All connectors live in the public GitHub org: `https://github.com/analitiq-dip-registry`
-Connectors are named `{slug}`. Use the `connector-template` repo as the starting point
-for new connectors: `https://github.com/analitiq-dip-registry/connector-template`
-
-### Slug Naming for Multi-Auth Connectors
-
-When an API supports multiple authentication methods, each method gets its own connector with an
-auth-specific slug:
-
-- Single auth method → `{system}` (e.g., `wise`)
-- Multiple auth methods → `{system}-{auth_suffix}` (e.g., `shopify-oauth2`,
-  `shopify-api-key`)
-
-Short suffixes: `oauth2`, `api-key`, `basic-auth`, `client-credentials`, `jwt`
-
-All connectors for the same system share the same `connector_name`, `base_url`,
-and endpoints — they differ in `slug`, `auth`, `form_fields`, and `headers`. This is likely to happen when a system offers multipe authentication methods.
-
 ## Common Connector Fields
 
 Read `${CLAUDE_PLUGIN_ROOT}/skills/connector-scaffolding/spec-common-attributes.md` for the full
@@ -48,7 +28,7 @@ connector_type, slug, form_fields, auth, etc.).
 
 ## manifest.json
 
-`manifest.json` is built by the `wizard` orchestrator as a final assembly step — not by
+`manifest.json` is built by the `connector-wizard` orchestrator as a final assembly step — not by
 connector-creator agents. See the [manifest-assembly](../manifest-assembly/SKILL.md) skill for
 the full specification (structure, placeholder registry, source categories, endpoint entries,
 deprecation tagging).
@@ -158,7 +138,7 @@ Track changes to the connector and its endpoints. Use this template:
 ├── CHANGELOG.md            # Version history
 └── definition/             # Connector definition files (machine-consumed JSON)
     ├── connector.json      # The connector definition with auth details
-    ├── manifest.json       # Placeholder registry + endpoint index (built by wizard orchestrator)
+    ├── manifest.json       # Placeholder registry + endpoint index (built by connector-wizard orchestrator)
     └── endpoints/          # Directory for endpoint definitions (API only)
 ```
 
@@ -171,5 +151,5 @@ Track changes to the connector and its endpoints. Use this template:
 ├── CHANGELOG.md            # Version history
 └── definition/             # Connector definition files (machine-consumed JSON)
     ├── connector.json      # The connector definition with auth details
-    └── manifest.json       # Connector manifest (built by wizard orchestrator)
+    └── manifest.json       # Connector manifest (built by connector-wizard orchestrator)
 ```

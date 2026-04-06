@@ -3,7 +3,7 @@
 ## [2.0.0] - 2026-03-28
 
 ### Added
-- Connector builder orchestrator (`wizard`) with duplicate checking and validation
+- Connector builder orchestrator (`connector-wizard`) with duplicate checking and validation
 - Connector researcher agent for API, database, and storage systems
 - Type-specific connector creators (API, database, storage)
 - Endpoint creator agent for API connectors

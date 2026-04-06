@@ -11,22 +11,23 @@ This is the official directory of Analitiq Claude Code plugins for building data
 ### `analitiq-connector-builder` (v2.0.0)
 Creates new connector and endpoint definitions for the Analitiq DIP registry. Connectors are published to the `analitiq-dip-registry` GitHub org as individual repos named `{slug}`.
 
-**Agent chain:** `wizard` (skill) → `connector-researcher` → `{type}-connector-creator` → `endpoint-creator` (API only) → manifest assembly → validate (optional)
+**Agent chain:** `connector-wizard` (skill) → `connector-researcher` → `{type}-connector-creator` → `endpoint-creator` (API only) → manifest assembly → validate (optional) → `registry-contributor` (optional)
 
-- `wizard` interviews the user, checks for duplicates in the registry, dispatches research and creation agents, builds the manifest, updates docs, optionally validates
+- `connector-wizard` interviews the user, checks for duplicates in the registry, dispatches research and creation agents, builds the manifest, updates docs, optionally validates, and optionally contributes to the community registry
 - `connector-researcher` researches system documentation for auth details, connection parameters, or endpoint schemas (type-agnostic — works for APIs, databases, and storage systems)
 - `api-connector-creator` builds API connector definitions (connector.json, repo scaffolding) with auth flows, headers, and rate limits
 - `db-connector-creator` builds database connector definitions with driver, SSH, and db auth configuration
 - `storage-connector-creator` builds storage connector definitions (S3, SFTP) with credentials auth
-- `endpoint-creator` builds individual endpoint JSON files under `definition/endpoints/` — **API connectors only** (database/other connectors do not have pre-defined endpoints). Creates endpoint files only; manifest and docs updates are handled by `wizard` after all endpoints complete.
-- If `ANALITIQ_API_KEY` is available, `wizard` validates all JSON against `https://rest.analitiq-dev.com/v1/validate/{connector|endpoint}` and adds the `validated` topic to the repo if compliant
+- `endpoint-creator` builds individual endpoint JSON files under `definition/endpoints/` — **API connectors only** (database/other connectors do not have pre-defined endpoints). Creates endpoint files only; manifest and docs updates are handled by `connector-wizard` after all endpoints complete.
+- If `ANALITIQ_API_KEY` is available, `connector-wizard` validates all JSON against `https://rest.analitiq-dev.com/v1/validate/{connector|endpoint}` and records validation status
+- `registry-contributor` (optional) scans for PII/credentials, creates a sanitized copy if needed, pushes to the user's GitHub account, and opens a submission issue in `analitiq-dip-registry/connector-submissions`
 
 ### `analitiq-pipeline-builder` (v2.0.0)
 Builds data integration pipelines using pre-defined connectors from the DIP registry (`analitiq-dip-registry` GitHub org). Does **not** create connectors — only downloads and wires them.
 
-**Agent chain:** `wizard` (skill) → `registry-browser` → `connection-creator` → `private-endpoint-creator` (DB only) → `pipeline-builder` → `stream-builder` × N (parallel)
+**Agent chain:** `pipeline-wizard` (skill) → `registry-browser` → `connection-creator` → `private-endpoint-creator` (DB only) → `pipeline-builder` → `stream-builder` × N (parallel)
 
-- `wizard` interviews the user, presents endpoints for selection, dispatches agents, collects stream results into pipeline
+- `pipeline-wizard` interviews the user, presents endpoints for selection, dispatches agents, collects stream results into pipeline
 - `registry-browser` downloads source + destination connectors from the registry (parallel)
 - `connection-creator` creates connection JSON + `.secrets/` templates for user to fill in (parallel per side)
 - `private-endpoint-creator` connects to database, discovers schemas/tables, creates endpoint files in connection directory (DB connections only)
