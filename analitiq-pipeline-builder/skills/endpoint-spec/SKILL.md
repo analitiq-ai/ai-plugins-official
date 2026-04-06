@@ -81,6 +81,34 @@ The `endpoint` field uses the format `{schema}/{table}`:
 - PostgreSQL: `public/users`, `analytics/events`
 - MySQL: `mydb/orders` (MySQL uses database name as schema)
 
+## API Endpoint Filters with Placeholders
+
+API endpoints (pre-defined in connector repos) may include a `filters` object. Filters can
+reference connection parameters using `${param_name}` syntax in their `default` field. At
+runtime, the engine resolves these from `connection.parameters`.
+
+```json
+{
+  "filters": {
+    "profile": {
+      "type": "integer",
+      "required": true,
+      "default": "${profile_id}"
+    }
+  }
+}
+```
+
+The filter key (`profile`) becomes the query parameter name. The `${profile_id}` references
+the connection parameter name. These are often different — the filter key is the API query
+parameter name, while the placeholder references the `field_name` from `post_auth_steps`
+stored in `connection.parameters`.
+
+The engine resolves these placeholders automatically at runtime: it reads the source
+connection's `parameters` dict, stringifies all non-dict values into a flat lookup, and
+runs placeholder expansion on the endpoint's filters and fields. No stream-side
+`source.parameters` config is needed for this — unresolved placeholders are left as-is.
+
 ## Discovery Process
 
 1. Connect to the database using connection parameters + credentials from `.secrets/`

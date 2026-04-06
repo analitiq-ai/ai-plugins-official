@@ -152,7 +152,7 @@ The connector's `form_fields` keep their native values for display. The connecti
 
 ## Step 4: Create the Secrets File
 
-Save to `connections/{alias}/.secrets/connection.json`. Format is a flat JSON object:
+Save to `connections/{alias}/.secrets/credentials.json`. Format is a flat JSON object:
 
 **API key / basic auth:**
 ```json
@@ -254,7 +254,7 @@ Collect credentials through a combination of interview and secrets templates:
 
 ### Secrets Template
 
-Create `connections/{alias}/.secrets/connection.json` with placeholder values matching the
+Create `connections/{alias}/.secrets/credentials.json` with placeholder values matching the
 connector's secret `form_fields`:
 
 **API key / basic auth:**
@@ -285,7 +285,7 @@ When processing the connector's `form_fields`, route each value:
 | Condition | Destination |
 |---|---|
 | `name === "host"` | Top-level `host` field in `connection.json` |
-| `secret === true` | `.secrets/connection.json` (template with placeholders) |
+| `secret === true` | `.secrets/credentials.json` (template with placeholders) |
 | `type === "oauth2"` | Skipped — handled by OAuth2 flow |
 | Everything else | `parameters` dict in `connection.json` |
 

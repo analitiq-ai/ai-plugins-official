@@ -51,19 +51,26 @@ After Phase 2 (connector) and Phase 3 (endpoints, if API):
    - If invalid: read the errors, fix the JSON, and re-validate until it passes.
 2. **Validate each endpoint** (API connectors only): `POST /validate/endpoint` with each endpoint JSON body.
    - If invalid: read the errors, fix the JSON, and re-validate until it passes.
-3. **If ALL validations pass**: the connector is compliant. When creating or updating the
-   connector repo, add the topic `validated` to the GitHub repo:
-   ```bash
-   gh repo edit analitiq-dip-registry/{slug} --add-topic validated
-   ```
-4. **If validation was skipped** (no API key): do NOT add the `validated` topic.
+3. **If ALL validations pass**: the connector is compliant. Record the validation status for
+   use in Phase 6 (community contribution). The handling depends on context:
+   - **New connector (local, not yet in the registry)**: Record `validation_status: "validated"`
+     in the connector-wizard context. The `registry-contributor` agent includes this status in the
+     submission issue. Do NOT run `gh repo edit` — the registry repo does not exist yet.
+   - **Existing connector (already in `analitiq-dip-registry`)**: Add the `validated` topic:
+     ```bash
+     gh repo edit analitiq-dip-registry/{slug} --add-topic validated
+     ```
+4. **If validation was skipped** (no API key): record `validation_status: "not validated"`.
+   Do NOT add the `validated` topic.
 
 ## Updating Existing Connectors
 
 When updating an existing connector repo (adding endpoints, modifying connector.json):
 - Re-validate ALL connector and endpoint files, not just the changed ones.
-- If all pass, ensure the `validated` topic is present.
-- If any fail, remove the `validated` topic if it was previously set:
-  ```bash
-  gh repo edit analitiq-dip-registry/{slug} --remove-topic validated
-  ```
+- If the connector is already in the `analitiq-dip-registry` org:
+  - If all pass, ensure the `validated` topic is present.
+  - If any fail, remove the `validated` topic if it was previously set:
+    ```bash
+    gh repo edit analitiq-dip-registry/{slug} --remove-topic validated
+    ```
+- If the connector is local only, update the `validation_status` in the connector-wizard context.

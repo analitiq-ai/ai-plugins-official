@@ -81,7 +81,7 @@ This agent ONLY creates the endpoint JSON file. It does NOT update:
 - `README.md`
 - `CHANGELOG.md`
 
-These updates are handled by the `wizard` orchestrator after all endpoint-creators complete,
+These updates are handled by the `connector-wizard` orchestrator after all endpoint-creators complete,
 enabling parallel endpoint creation.
 
 Be thorough with the response schema — include ALL fields visible in the documentation.

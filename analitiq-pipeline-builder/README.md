@@ -11,7 +11,7 @@ The plugin interviews you about the source and destination systems, downloads th
 ## Agent Chain
 
 ```
-wizard (orchestrator)
+pipeline-wizard (orchestrator)
   ├── registry-browser              # Downloads connectors from the DIP registry
   ├── connection-creator            # Creates connections + .secrets templates
   ├── private-endpoint-creator      # DB only: discovers schemas/tables from live connection
@@ -24,10 +24,10 @@ Phases are strictly sequential with gates:
 1. **registry-browser** — downloads source + destination connectors (parallel)
 2. **connection-creator** — creates connection JSON + `.secrets/` templates (parallel per side)
 3. **private-endpoint-creator** — DB connections only: connects to database, discovers schemas/tables, creates endpoint files in the connection directory
-4. **wizard interviews** — presents available endpoints, user selects which to stream
+4. **pipeline-wizard interviews** — presents available endpoints, user selects which to stream
 5. **pipeline-builder** — creates pipeline JSON shell with connections and defaults
 6. **stream-builder × N** — builds one stream per selected endpoint with field mapping (parallel)
-7. **wizard collects** — adds stream references to pipeline
+7. **pipeline-wizard collects** — adds stream references to pipeline
 
 ## Installation
 

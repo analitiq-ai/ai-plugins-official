@@ -31,18 +31,18 @@ and tables, and create endpoint files for the user to select from.
 
 ## Input
 
-You receive in your dispatch context from the wizard:
+You receive in your dispatch context from the pipeline-wizard:
 - Connection directory path (e.g., `connections/{alias}/`)
 - Connector type and driver info (e.g., `postgresql`, `mysql`)
 - Connection parameters (host, port, database, username)
-- Path to `.secrets/connection.json` for credentials
+- Path to `.secrets/credentials.json` for credentials
 - **Dispatch mode**: one of `discover-schemas`, `discover-tables`, or `create-endpoints`
 - For `discover-tables`: list of selected schemas
 - For `create-endpoints`: list of selected `{schema}/{table}` pairs
 
 ## Dispatch Modes
 
-This agent supports three dispatch modes. The wizard dispatches it multiple times with user
+This agent supports three dispatch modes. The pipeline-wizard dispatches it multiple times with user
 interviews in between.
 
 ### Mode: `discover-schemas`
@@ -50,20 +50,20 @@ interviews in between.
 1. Connect to the database.
 2. Query `information_schema.schemata` (or equivalent) to list all user schemas.
 3. Filter out system schemas (`pg_catalog`, `information_schema`, `mysql`, `performance_schema`, `sys`).
-4. Report the schema list back to the wizard. Do not create any files.
+4. Report the schema list back to the pipeline-wizard. Do not create any files.
 
 ### Mode: `discover-tables`
 
 1. Connect to the database.
-2. For each schema provided by the wizard, query `information_schema.tables` to list tables.
+2. For each schema provided by the pipeline-wizard, query `information_schema.tables` to list tables.
 3. Filter to `BASE TABLE` type only.
-4. Report the schema/table list back to the wizard. Do not create any files.
+4. Report the schema/table list back to the pipeline-wizard. Do not create any files.
 
 ### Mode: `create-endpoints`
 
 1. Read the endpoint specification from the loaded `endpoint-spec` skill.
 2. Connect to the database.
-3. For each `{schema}/{table}` pair provided by the wizard:
+3. For each `{schema}/{table}` pair provided by the pipeline-wizard:
    - Query `information_schema.columns` for column metadata
    - Query primary key constraints
 4. Create endpoint files in `connections/{alias}/endpoints/` — one JSON file per table.
@@ -110,7 +110,7 @@ ORDER BY table_schema, table_name;
 
 ## Security
 
-- Read `.secrets/connection.json` ONLY to extract the credentials needed for the database
+- Read `.secrets/credentials.json` ONLY to extract the credentials needed for the database
   connection. Do not log, display, or store credential values anywhere else.
 - Use parameterized queries where possible.
 - Close the database connection after discovery is complete.
@@ -131,4 +131,4 @@ connections/{alias}/endpoints/{schema}-{table}.json
 ```
 
 Only create endpoint files when dispatched in `create-endpoints` mode. In `discover-schemas`
-and `discover-tables` modes, report results back to the wizard without creating any files.
+and `discover-tables` modes, report results back to the pipeline-wizard without creating any files.

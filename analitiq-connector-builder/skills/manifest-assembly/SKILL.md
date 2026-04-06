@@ -3,14 +3,14 @@ name: manifest-assembly
 disable-model-invocation: true
 description: >
   Manifest assembly specification. Defines the manifest.json structure including the placeholder
-  registry, endpoint entries, deprecation tagging, and version rules. Used by the wizard
+  registry, endpoint entries, deprecation tagging, and version rules. Used by the connector-wizard
   orchestrator as a final assembly step after all connector-creator and endpoint-creator agents
   have completed.
 ---
 
 # Manifest Assembly
 
-The `wizard` orchestrator builds `manifest.json` as a **final assembly step** after all sub-agents
+The `connector-wizard` orchestrator builds `manifest.json` as a **final assembly step** after all sub-agents
 complete. No other agent creates or modifies the manifest — this ensures the manifest is built
 once with full visibility into `connector.json` and all endpoint files.
 
