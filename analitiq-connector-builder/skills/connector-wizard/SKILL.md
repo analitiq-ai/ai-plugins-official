@@ -1,13 +1,13 @@
 ---
-name: wizard
+name: connector-wizard
 color: green
 description: >
   This skill should be used when the user wants to build, create, or scaffold a new connector
   or add endpoints to an existing connector. Common triggers: "build a connector for [system]",
   "create a new API connector", "add a PostgreSQL connector", "create endpoints for Shopify",
   "scaffold a connector for Wise", "add an S3 connector". Handles the full lifecycle: interview,
-  duplicate check, research, connector creation, endpoint creation (API only), and optional
-  validation.
+  duplicate check, research, connector creation, endpoint creation (API only), optional
+  validation, and optional community contribution to the registry.
 argument-hint: "<system name and optional API docs URL>"
 model: inherit
 allowed-tools: Read, Glob, Grep, Bash, WebFetch, WebSearch, Agent
@@ -103,9 +103,9 @@ or endpoint JSON yourself — use the agents.
 Research the system to gather the information needed for connector creation.
 
 1. Read the matching research brief from this skill's directory:
-   - API: `${CLAUDE_PLUGIN_ROOT}/skills/wizard/research-brief-api.md`
-   - Database: `${CLAUDE_PLUGIN_ROOT}/skills/wizard/research-brief-db.md`
-   - Storage/other: `${CLAUDE_PLUGIN_ROOT}/skills/wizard/research-brief-storage.md`
+   - API: `${CLAUDE_PLUGIN_ROOT}/skills/connector-wizard/research-brief-api.md`
+   - Database: `${CLAUDE_PLUGIN_ROOT}/skills/connector-wizard/research-brief-db.md`
+   - Storage/other: `${CLAUDE_PLUGIN_ROOT}/skills/connector-wizard/research-brief-storage.md`
 
 2. Fill in the system name and documentation URL in the brief.
 
@@ -164,7 +164,7 @@ pre-defined endpoints — their endpoints are schema/table combinations discover
 For API connectors with endpoints to register:
 
 1. **Research all endpoints in parallel**: For each endpoint, read the endpoint research brief
-   at `${CLAUDE_PLUGIN_ROOT}/skills/wizard/research-brief-endpoint.md`, fill in the details,
+   at `${CLAUDE_PLUGIN_ROOT}/skills/connector-wizard/research-brief-endpoint.md`, fill in the details,
    and dispatch **`connector-researcher`** with it. All endpoint research agents can run in parallel.
 
 2. **Deprecation filter**: After research completes, check each endpoint's `deprecated` field.
@@ -208,6 +208,37 @@ is merged, based on PR labels (`version:minor`, `version:patch`, `version:major`
 If the user provided an `ANALITIQ_API_KEY` (see Validation section below), validate the created
 connector and endpoints against the Analitiq validation API. If all validations pass, add the
 `validated` topic to the connector repo.
+
+### Phase 6 — Contribute to Community (optional)
+
+After all build and validation phases are complete, offer the user the option to contribute
+their connector to the Analitiq community registry.
+
+1. Ask the user: *"Would you like to contribute this connector to the Analitiq community
+   registry? This will create a public repo on your GitHub account with a sanitized copy
+   (no credentials or PII) and open a submission request in the registry."*
+
+2. **If the user declines** — end the workflow normally. The connector remains local.
+
+3. **If the user accepts** — dispatch the **`registry-contributor`** agent with the following
+   context:
+   - `slug` — the connector slug
+   - `connector_name` — human-readable name
+   - `connector_type` — `api`, `database`, or `other`
+   - `auth_type` — the auth type used
+   - `connector_descr` — short description
+   - `validation_status` — `"validated"` if Phase 5 passed, `"not validated"` if skipped
+   - `connector_path` — absolute path to the `{slug}/` directory
+
+4. The `registry-contributor` agent handles: PII scanning, sanitized copy creation, GitHub
+   repo creation under the user's account, push, and submission issue creation in
+   `analitiq-dip-registry/connector-submissions`.
+
+5. Report the submission issue URL back to the user. Let them know the connector will be
+   reviewed by registry maintainers before being imported.
+
+**Prerequisites:** The user must have GitHub CLI (`gh`) installed and authenticated. The
+`registry-contributor` agent verifies this before proceeding.
 
 ---
 
@@ -266,7 +297,7 @@ If no version label is applied, the version is not bumped.
 If the user provided an `ANALITIQ_API_KEY`, validate all connector and endpoint JSON against the
 Analitiq validation API. This catches subtle schema errors that agents may introduce.
 
-Read `${CLAUDE_PLUGIN_ROOT}/skills/wizard/validation-api.md` for the full validation protocol
+Read `${CLAUDE_PLUGIN_ROOT}/skills/connector-wizard/validation-api.md` for the full validation protocol
 (API key collection, endpoints, response formats, and the topic-tagging workflow).
 
 ---

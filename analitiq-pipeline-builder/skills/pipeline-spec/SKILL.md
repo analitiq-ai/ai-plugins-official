@@ -11,7 +11,7 @@ description: >
 
 ## Pipeline JSON Structure
 
-Streams are added by the wizard after all stream-builders complete.
+Streams are added by the pipeline-wizard after all stream-builders complete.
 
 ```json
 {
@@ -101,11 +101,63 @@ Pipeline execution behavior:
 | `error_handling.max_retries` | integer | `3` | Max retry attempts (0-100) |
 | `error_handling.retry_delay` | integer | `5` | Retry delay in seconds |
 
-Use defaults unless the user requests specific values.
+Use defaults unless the user requests specific values or batch size derivation (below)
+produces a different value.
+
+## Batch Size Derivation
+
+Rather than always using the default `batch_size` of 3000, derive it from the source and
+destination connector capabilities. Read both connector definitions before setting runtime
+defaults.
+
+### Source constraints
+
+| Source type | Where to look | Constraint |
+|-------------|---------------|------------|
+| API | `endpoint.pagination.params.limit_param` default / max page size | Batch size should not exceed the API's max page size — fetching larger batches than a single page is wasteful since the engine must paginate anyway |
+| API | `connector.requests_per_second` | High batch sizes with tight rate limits cause throttling; keep `max_concurrent_batches` × requests-per-batch ≤ `max_requests` per `time_window_seconds` |
+| Database | No explicit limit | Databases handle large reads well; default (3000) or higher is fine |
+
+### Destination constraints
+
+| Destination type | Constraint |
+|------------------|------------|
+| Database | Most databases handle batch inserts of 1000–5000 rows efficiently. Use the default unless the user specifies otherwise. |
+| API | If the destination is an API with rate limits, cap `batch_size` to avoid exceeding `requests_per_second` |
+| Storage (S3/SFTP) | Batch size is less critical — files are written as complete objects. Default is fine. |
+
+### Derivation rules
+
+1. **API → Database:** Set `batch_size` to the API's max page size (from pagination config).
+   If the endpoint has no pagination, use the default.
+2. **Database → Database:** Use the default (3000).
+3. **API → API:** Set `batch_size` to the minimum of source page size and destination rate
+   limit capacity.
+4. **Database → API:** Cap `batch_size` at the destination API's rate limit capacity.
+5. **Per-stream override:** When source endpoints have different page sizes, the pipeline-wizard or
+   stream-builder can set `destination.batching.batch_size` on individual streams to override
+   the pipeline default.
+
+### Example
+
+A source API with `pagination.params.limit_param` defaulting to 250 and
+`requests_per_second: { "max_requests": 60, "time_window_seconds": 60 }`:
+
+```json
+{
+  "runtime": {
+    "buffer_size": 5000,
+    "batching": {
+      "batch_size": 250,
+      "max_concurrent_batches": 3
+    }
+  }
+}
+```
 
 ## Key Rules
 
-- `streams` array starts empty — populated by wizard after stream-builders complete
+- `streams` array starts empty — populated by pipeline-wizard after stream-builders complete
 - `name` is required and must be non-empty
 - Default status is `"draft"`
 - Schedule, engine, and runtime use sensible defaults — only override if user specifies

@@ -11,7 +11,7 @@ The plugin interviews you about the target system, researches its documentation,
 ## Agent Chain
 
 ```
-wizard (orchestrator)
+connector-wizard (orchestrator)
   ├── connector-researcher        # Researches system docs (auth, endpoints, drivers)
   ├── api-connector-creator       # Builds API connector definitions
   ├── db-connector-creator        # Builds database connector definitions
@@ -19,7 +19,7 @@ wizard (orchestrator)
   └── endpoint-creator            # Builds API endpoint definitions
 ```
 
-1. **wizard** — interviews the user, checks for duplicates in the registry, dispatches research and creation agents, collects results, and optionally validates
+1. **connector-wizard** — interviews the user, checks for duplicates in the registry, dispatches research and creation agents, collects results, and optionally validates
 2. **connector-researcher** — researches official documentation for auth details, connection parameters, or endpoint schemas
 3. **{type}-connector-creator** — builds the connector definition (`connector.json`, `manifest.json`, repo scaffolding, docs)
 4. **endpoint-creator** — builds individual endpoint JSON files (API connectors only)
@@ -61,6 +61,23 @@ claude --plugin-dir /path/to/analitiq-connector-builder
 ## Optional: Validation API
 
 If you have an `ANALITIQ_API_KEY`, the plugin validates all generated JSON against the Analitiq validation API to ensure 100% compliance with the DIP schema. You can get a free key at [analitiq-app.com](https://analitiq-app.com).
+
+## Playwright (Recommended)
+
+The [Playwright MCP server](https://github.com/anthropics/mcp-playwright) is essential for efficient reading of online API documentation. The connector-researcher agent relies on it to navigate and extract auth details, endpoint schemas, and connection parameters directly from official docs pages. Without Playwright, the agent falls back to less reliable methods that may miss important details or require manual copy-pasting of documentation content.
+
+Add the following to `.mcp.json` in the project root:
+
+```json
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest"]
+    }
+  }
+}
+```
 
 ## Links
 

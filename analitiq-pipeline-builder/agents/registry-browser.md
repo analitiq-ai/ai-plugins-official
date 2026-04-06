@@ -139,7 +139,7 @@ Once a connector is downloaded and validated, report back:
 > `private-endpoint-creator` agent. If no endpoints directory exists, report that endpoints
 > are not pre-defined.
 
-This information is used by the `wizard` orchestrator to proceed with connection creation and pipeline assembly.
+This information is used by the `pipeline-wizard` orchestrator to proceed with connection creation and pipeline assembly.
 
 ## Key Rules
 
