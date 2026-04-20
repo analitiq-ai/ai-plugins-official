@@ -3,6 +3,7 @@
   "connector_type": "other",
   "connector_descr": "Amazon Simple Storage Service for object storage",
   "slug": "s3",
+  "category_id": "7123b91d-3f5e-4893-8b41-327c93a8c791",
   "auth": {
     "type": "credentials"
   },

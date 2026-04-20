@@ -146,9 +146,19 @@ If the research results contain multiple auth methods in `auth_methods`:
 
 If only one auth method was returned, skip this phase entirely — no suffix needed, proceed directly.
 
+### Phase 1.6 — Category Selection
+
+Fetch `https://raw.githubusercontent.com/analitiq-dip-registry/.github/main/categories.json`,
+auto-suggest the best match based on the system and research results (e.g. Shopify →
+`e_commerce_platforms`), and confirm with the user. Record the chosen entry's
+`connector_group_id` — this is passed to Phase 2 as `category_id` and written to
+`connector.json`. If the fetch fails, ask the user whether to proceed without a category
+or abort.
+
 ### Phase 2 — Build connector
 
-Dispatch the matching type-specific connector creator agent with the research results as context:
+Dispatch the matching type-specific connector creator agent with the research results and
+the `category_id` from Phase 1.6 as context:
 
 - **API connectors**: dispatch **`api-connector-creator`** with the chosen auth method's data
 - **Database connectors**: dispatch **`db-connector-creator`**
