@@ -3,6 +3,7 @@
   "connector_type": "database",
   "connector_descr": "Open-source relational database",
   "slug": "postgresql",
+  "category_id": "3e5df540-1c3b-4d4a-bb53-d2d9a2b3df0a",
   "driver": "postgresql",
   "enable_ssh": true,
   "auth": {
