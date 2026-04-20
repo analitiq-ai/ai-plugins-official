@@ -3,6 +3,7 @@
   "connector_type": "api",
   "connector_descr": "HR performance management platform",
   "slug": "15five",
+  "category_id": "92d31a2c-54f4-4382-a0b0-4b3c3d05fa77",
   "base_url": "https://my.15five.com/api/public/",
   "client_required": false,
   "auth": {

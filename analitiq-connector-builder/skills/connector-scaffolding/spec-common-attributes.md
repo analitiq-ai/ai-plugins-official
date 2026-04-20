@@ -21,6 +21,7 @@ Every connector, regardless of type, has these root attributes:
 | `connector_name` | string | yes | Display name (e.g. "Xero", "PostgreSQL")                         |
 | `connector_type` | string | yes | One of: `api`, `database`, `other`                               |
 | `slug` | string | yes | URL-safe identifier (e.g. "xero", "postgresql"). GSI key         |
+| `category_id` | string | yes | UUID of the connector category (`connector_group_id` from the public [categories.json](https://raw.githubusercontent.com/analitiq-dip-registry/.github/main/categories.json)). Chosen in Phase 1.6 of `connector-wizard`. |
 | `form_fields` | array | no | Defines the credential or parameter fields the user must fill in |
 | `auth` | object | no | Authentication configuration (structure varies by type)          |
 | `connector_descr` | string | no | Human-readable description of the connector                      |
