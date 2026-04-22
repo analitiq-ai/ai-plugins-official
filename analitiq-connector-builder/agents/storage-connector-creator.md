@@ -65,7 +65,9 @@ If research results are missing or incomplete, report this to the orchestrator r
    { "match": "exact", "native": "LAST_MODIFIED", "canonical": "Timestamp(MICROSECOND, UTC)" }
    ```
 
-   **Object-store connectors** (S3, GCS, Azure Blob, R2) also author:
+   **Object-store connectors** — S3-compatible systems that preserve ETag over their API
+   (S3, GCS, Azure Blob, R2, MinIO, Ceph RadosGW, Wasabi, Backblaze B2, DigitalOcean Spaces,
+   and any other S3-API-compatible store) also author:
 
    ```json
    { "match": "exact", "native": "ETAG",          "canonical": "Utf8" }
