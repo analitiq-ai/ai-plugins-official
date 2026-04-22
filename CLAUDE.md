@@ -98,7 +98,12 @@ Version is bumped automatically by GitHub Actions on PR merge via labels (`versi
 
 Canonical types are Apache Arrow logical types. The machine-readable vocabulary lives in `analitiq-connector-builder/schemas/canonical-types.json` (`$id: https://analitiq.dev/schemas/canonical-types.json`) — do not restate the vocabulary in prose. Each connector ships a `definition/type-map.json` that maps its native types to canonical ones. Authoring guidance: `analitiq-connector-builder/skills/type-mapping-spec/SKILL.md`. Format spec: `analitiq-connector-builder/docs/type-map-format.md`.
 
-**Sibling convention.** `type-map.json` sits **alongside** the `endpoints/` directory, not inside it — on both the connector side (`{slug}/definition/type-map.json` next to `{slug}/definition/endpoints/`) and on the pipeline side (`connections/{alias}/type-map.json` next to `connections/{alias}/endpoints/`). The pipeline-side supplement is optional — used when pipeline-builder discovers private-endpoint natives (e.g., PostGIS `GEOMETRY`, pgvector `vector`) that the base connector's `type-map.json` doesn't cover. Engine resolution order: connection-level supplement → connector-level base → hard error on no match.
+**Layout convention.** Both plugins use a `definition/` directory that holds `type-map.json` alongside an `endpoints/` subdirectory — fully symmetric:
+
+- Connector side: `{slug}/definition/type-map.json` and `{slug}/definition/endpoints/*.json`.
+- Pipeline side: `connections/{alias}/definition/type-map.json` and `connections/{alias}/definition/endpoints/{schema}-{table}.json`.
+
+The pipeline-side `type-map.json` is an **optional supplement** — used when pipeline-builder discovers private-endpoint natives (e.g., PostGIS `GEOMETRY`, pgvector `vector`) that the base connector's `type-map.json` doesn't cover. Engine resolution order: connection-level supplement → connector-level base → hard error on no match. Pipeline-builder implementation of this layout is tracked separately; the convention is recorded here so both sides follow it.
 
 ## Conventions
 
