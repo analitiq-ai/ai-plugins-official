@@ -164,8 +164,8 @@
 
     "canonical_ssl_mode": {
       "title": "canonical_ssl_mode",
-      "description": "Canonical SSL/TLS mode for database connections. `none` disables TLS; `encrypt` requires TLS but does not verify the server certificate; `verify` requires TLS and verifies the certificate chain + hostname; `prefer` attempts TLS and falls back to plaintext if unavailable. Used only by SSL-capable connectors (databases that support TLS). API and storage connectors do not carry an `ssl_mode_map`.",
-      "enum": ["none", "encrypt", "verify", "prefer"]
+      "description": "Canonical SSL/TLS mode for database connections. `none` disables TLS; `require` mandates TLS but performs no certificate verification; `verify-ca` mandates TLS and verifies the certificate chain only (hostname not checked — typical for internal CAs, proxies, or deliberately relaxed setups); `verify-full` mandates TLS and verifies both chain and hostname; `prefer` attempts TLS and falls back to plaintext if unavailable. Values mirror Postgres `sslmode` / MySQL `--ssl-mode` vocabulary so `ssl-mode-map.json` authoring from driver docs is mostly 1:1. Used only by SSL-capable connectors (databases that support TLS). API and storage connectors do not carry an `ssl_mode_map`.",
+      "enum": ["none", "require", "verify-ca", "verify-full", "prefer"]
     }
   }
 }

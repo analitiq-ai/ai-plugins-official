@@ -40,7 +40,7 @@ Builds data integration pipelines using pre-defined connectors from the DIP regi
 - **Endpoint:** Schema definition for a single API resource. Lives in `definition/endpoints/{name}.json`. **API connectors only** — database/other connectors do not have pre-defined endpoints (their schema/table combinations are deployment-specific and discovered at runtime).
 - **Manifest:** Index of all endpoints and placeholder registry for a connector. Lives in `definition/manifest.json`. The `placeholders` array registers every `${placeholder}` used in `connector.json` and endpoint files with a source category (`user_defined`, `system_defined`, `post_auth`, `protocol`, `derived`).
 - **Type map:** Ordered list of rules mapping a connector's native types to canonical Arrow logical types. Lives in `definition/type-map.json`. Required on every connector. Format spec: `analitiq-connector-builder/docs/type-map-format.md`.
-- **SSL mode map:** Maps native driver SSL mode values to the canonical enum (`none | encrypt | verify | prefer`). Lives in `definition/ssl-mode-map.json`. SSL-capable databases only — omitted entirely otherwise.
+- **SSL mode map:** Maps native driver SSL mode values to the canonical enum (`none | require | verify-ca | verify-full | prefer`). Lives in `definition/ssl-mode-map.json`. SSL-capable databases only — omitted entirely otherwise.
 - **Connection:** Runtime auth credentials for a connector instance. Secrets go to `.secrets/{connection_id}.json`.
 - **Pipeline:** Full integration definition bundling connectors, connections, endpoints, streams, and mappings.
 

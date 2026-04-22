@@ -114,18 +114,20 @@ For storage connectors, `type-map.json` covers **connector-level metadata types 
 
 ## `ssl-mode-map.json` (SSL-capable DBs only)
 
-Standalone file with `$schema: "https://analitiq.dev/schemas/ssl-mode-map.json"`. Maps native driver SSL mode values to `canonical_ssl_mode` (`none | encrypt | verify | prefer`) defined in `schemas/canonical-types.json`.
+Standalone file with `$schema: "https://analitiq.dev/schemas/ssl-mode-map.json"`. Maps native driver SSL mode values to `canonical_ssl_mode` (`none | require | verify-ca | verify-full | prefer`) defined in `schemas/canonical-types.json`. Enum values mirror Postgres `sslmode` / MySQL `--ssl-mode` vocabulary, so common drivers produce near-1:1 mappings.
 
 ```json
 {
   "$schema": "https://analitiq.dev/schemas/ssl-mode-map.json",
   "disable":     "none",
-  "require":     "encrypt",
-  "verify-ca":   "verify",
-  "verify-full": "verify",
+  "require":     "require",
+  "verify-ca":   "verify-ca",
+  "verify-full": "verify-full",
   "prefer":      "prefer"
 }
 ```
+
+**Do NOT collapse `verify-ca` and `verify-full` onto a single canonical value.** The chain-only vs chain+hostname distinction is security-relevant — a user who deliberately configured hostname-off (internal CA, proxy, relaxed environment) must get `verify-ca` at runtime, not `verify-full`.
 
 Native values come from the source driver's official docs. Do not create this file on API, storage, or DB connectors without TLS support.
 
