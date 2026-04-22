@@ -129,11 +129,11 @@ connection-creator agent must map these to canonical values before writing the c
 
 | Canonical | Meaning | Native examples |
 |-----------|---------|-----------------|
-| `none` | No encryption | Postgres `disable`; MySQL `DISABLED`, `ssl=false`; SQL Server `Encrypt=false`; MongoDB `tls=false` |
-| `require` | Require encryption, no certificate verification | Postgres `require`; MySQL `REQUIRED`, `ssl=true`; SQL Server `Encrypt=true;TrustServerCertificate=true`; MongoDB `tls=true;tlsInsecure=true` (or `tlsAllowInvalidCertificates=true`) |
+| `none` | No encryption | Postgres `disable`; MySQL `DISABLED`, `ssl=false`; SQL Server `Encrypt=false`; MongoDB `tls=false` (or legacy `ssl=false`) |
+| `require` | Require encryption, no certificate verification | Postgres `require`; MySQL `REQUIRED`, `ssl=true`; SQL Server `Encrypt=true;TrustServerCertificate=true`; MongoDB `tls=true;tlsInsecure=true` (or `tlsAllowInvalidCertificates=true`; legacy `ssl=*` accepted for all MongoDB rows) |
 | `verify-ca` | Require TLS; verify certificate chain only (hostname not checked) | Postgres `verify-ca`; MySQL `VERIFY_CA`; MongoDB `tls=true;tlsAllowInvalidHostnames=true`. SQL Server's SqlClient has no native chain-only mode. |
-| `verify-full` | Require TLS; verify certificate chain AND hostname | Postgres `verify-full`; MySQL `VERIFY_IDENTITY`; SQL Server `Encrypt=true;TrustServerCertificate=false`; MongoDB `tls=true` (default flags) |
-| `prefer` | Try TLS, fallback to none at runtime | Postgres `prefer`; MySQL `PREFERRED`. (Postgres `allow` has inverse semantics — tries plaintext first then TLS; canonicalize to `prefer` only if the driver provides no closer match.) |
+| `verify-full` | Require TLS; verify certificate chain AND hostname | Postgres `verify-full`; MySQL `VERIFY_IDENTITY`; SQL Server `Encrypt=true;TrustServerCertificate=false` or `Encrypt=strict` (TDS 8+ / SqlClient 5.0+); MongoDB `tls=true` (default flags) |
+| `prefer` | Try TLS, fallback to none at runtime | Postgres `prefer`; MySQL `PREFERRED`. Postgres `allow` inverts the attempt order — plaintext first, TLS fallback. Both allow either transport; canonicalize `allow` → `prefer` only when the target driver offers no closer mode. |
 
 The connector's `form_fields` keep their native values for display. The connection JSON
 `parameters.ssl_mode` always uses one of the five canonical values. **Preserve the `verify-ca`
