@@ -39,6 +39,8 @@ Builds data integration pipelines using pre-defined connectors from the DIP regi
 - **Connector:** Auth config + metadata for a system (API, database, S3/SFTP). Lives in `{slug}/definition/connector.json`.
 - **Endpoint:** Schema definition for a single API resource. Lives in `definition/endpoints/{name}.json`. **API connectors only** — database/other connectors do not have pre-defined endpoints (their schema/table combinations are deployment-specific and discovered at runtime).
 - **Manifest:** Index of all endpoints and placeholder registry for a connector. Lives in `definition/manifest.json`. The `placeholders` array registers every `${placeholder}` used in `connector.json` and endpoint files with a source category (`user_defined`, `system_defined`, `post_auth`, `protocol`, `derived`).
+- **Type map:** Ordered list of rules mapping a connector's native types to canonical Arrow logical types. Lives in `definition/type-map.json`. Required on every connector. Format spec: `analitiq-connector-builder/docs/type-map-format.md`.
+- **SSL mode map:** Maps native driver SSL mode values to the canonical enum (`none | encrypt | verify | prefer`). Lives in `definition/ssl-mode-map.json`. SSL-capable databases only — omitted entirely otherwise.
 - **Connection:** Runtime auth credentials for a connector instance. Secrets go to `.secrets/{connection_id}.json`.
 - **Pipeline:** Full integration definition bundling connectors, connections, endpoints, streams, and mappings.
 
@@ -57,28 +59,51 @@ Version is bumped automatically by GitHub Actions on PR merge via labels (`versi
 └── definition/
     ├── connector.json   # Auth + connector config
     ├── manifest.json    # Placeholder registry + endpoint index
+    ├── type-map.json    # Native → Arrow canonical type mapping (required)
     └── endpoints/       # Individual endpoint JSON files (API only)
 ```
 
-**Database and other connectors** (no endpoints):
+**Database connectors** (no endpoints; `ssl-mode-map.json` only on SSL-capable drivers):
 ```
 {slug}/
-├── CLAUDE.md            # Agent reference (auth, caveats)
-├── AGENTS.md            # Identical to CLAUDE.md, for non-Claude agents
-├── README.md            # Human docs
-├── CHANGELOG.md         # Version history
+├── CLAUDE.md
+├── AGENTS.md
+├── README.md
+├── CHANGELOG.md
 └── definition/
-    ├── connector.json   # Auth + connector config
-    └── manifest.json    # Connector manifest (empty endpoints array)
+    ├── connector.json    # Auth + driver + SSH config
+    ├── manifest.json     # Empty endpoints array
+    ├── type-map.json     # Native → Arrow canonical type mapping (required)
+    └── ssl-mode-map.json # Native SSL mode → canonical enum (only if driver supports TLS)
+```
+
+**Storage connectors** (no endpoints, no SSL map):
+```
+{slug}/
+├── CLAUDE.md
+├── AGENTS.md
+├── README.md
+├── CHANGELOG.md
+└── definition/
+    ├── connector.json   # Auth + credentials config
+    ├── manifest.json    # Empty endpoints array
+    └── type-map.json    # Connector-level metadata types only (file-data typing is engine-side)
 ```
 
 ## Supported Auth Types
 
 `api_key`, `basic_auth`, `oauth2_authorization_code`, `oauth2_client_credentials`, `jwt`, `db`, `credentials`
 
-## Mapping Type Enum
+## Canonical Types
 
-The system uses a strict enum: `string | integer | decimal | boolean | date | datetime | timestamp | object | array | json`. Note: `timestamp` is distinct from `datetime` — it maps to SQL `TIMESTAMP`/`DateTime` column types in database adapters. `json` is distinct from `object` — it represents a raw JSON blob/string rather than a typed structured object. Common mistakes: use `decimal` not `number`/`float`, use `integer` not `int`.
+Canonical types are Apache Arrow logical types. The machine-readable vocabulary lives in `analitiq-connector-builder/schemas/canonical-types.json` (`$id: https://analitiq.dev/schemas/canonical-types.json`) — do not restate the vocabulary in prose. Each connector ships a `definition/type-map.json` that maps its native types to canonical ones. Authoring guidance: `analitiq-connector-builder/skills/type-mapping-spec/SKILL.md`. Format spec: `analitiq-connector-builder/docs/type-map-format.md`.
+
+**Layout convention.** Both plugins use a `definition/` directory that holds `type-map.json` alongside an `endpoints/` subdirectory — fully symmetric:
+
+- Connector side: `{slug}/definition/type-map.json` and `{slug}/definition/endpoints/*.json`.
+- Pipeline side: `connections/{alias}/definition/type-map.json` and `connections/{alias}/definition/endpoints/{schema}-{table}.json`.
+
+The pipeline-side `type-map.json` is an **optional supplement** — used when pipeline-builder discovers private-endpoint natives (e.g., PostGIS `GEOMETRY`, pgvector `vector`) that the base connector's `type-map.json` doesn't cover. Engine resolution order: connection-level supplement → connector-level base → hard error on no match. Pipeline-builder implementation of this layout is tracked separately; the convention is recorded here so both sides follow it.
 
 ## Conventions
 

@@ -20,6 +20,7 @@ tools: Read, Write, Edit, Glob, Grep, Bash
 skills:
   - connector-spec-api
   - connector-scaffolding
+  - type-mapping-spec
 ---
 
 You are the Analitiq API Connector Creator. You MUST be used to create any API connector JSON —
@@ -46,11 +47,18 @@ If research results are missing or incomplete, report this to the orchestrator r
 3. **Build the connector JSON** using the example as a structural template and the research results
    for actual values. Validate every field against the specification.
 
-4. **Create the connector directory structure** using the `connector-scaffolding` skill templates:
+4. **Author `type-map.json`** using the `type-mapping-spec` skill. Walk the API's documented
+   response schema types (the native types that appear in endpoint responses — e.g. JSON Schema
+   `string`/`integer`/`number`/`boolean`, plus any `format` narrowings like `date-time`) and
+   produce the mapping using the three authoring methodologies (`exact`, `regex`, agent judgment for semantic calls). Save as
+   `{slug}/definition/type-map.json`.
+
+5. **Create the connector directory structure** using the `connector-scaffolding` skill templates:
    - Create directory `{slug}/`
    - Create subdirectory `{slug}/definition/`
    - Create subdirectory `{slug}/definition/endpoints/`
    - Save `connector.json` in `definition/`
+   - Save `type-map.json` in `definition/` (from step 4)
    - Create `CLAUDE.md` in repo root (from scaffolding template)
    - Create `AGENTS.md` in repo root (identical to CLAUDE.md)
    - Create `README.md` in repo root (from scaffolding template)
@@ -65,4 +73,5 @@ If research results are missing or incomplete, report this to the orchestrator r
   `content_type`, and `body` — never a bare URL string.
 - The `requests_per_second` field uses `{ "max_requests": N, "time_window_seconds": N }`.
 - `client_required: true` means the user must register an app on the target system to obtain `client_id`/`client_secret`/`app_id`/`app_secret`.
+- `type-map.json` is required. Do NOT emit `ssl-mode-map.json` for API connectors.
 - Always read the matching example BEFORE creating the connector JSON.

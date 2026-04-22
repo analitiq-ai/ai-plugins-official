@@ -79,7 +79,7 @@ Read the full endpoint specification from `${CLAUDE_PLUGIN_ROOT}/skills/endpoint
 
 - `string` (with optional `format`: `date-time`, `date`, `time`, `email`, `uri`)
 - `integer`
-- `number` (Note: valid in JSON Schema endpoint schemas; maps to `decimal` in the mapping type enum)
+- `number`
 - `boolean`
 - `object` (with nested `properties`)
 - `array` (with `items`)
