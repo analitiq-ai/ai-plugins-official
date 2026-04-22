@@ -1,32 +1,32 @@
-# `type_map` Format Specification
-
-> Decision record for [issue #8](https://github.com/analitiq-ai/ai-plugins-official/issues/8).
-> Consumed by [issue #7](https://github.com/analitiq-ai/ai-plugins-official/issues/7) (connector-builder adaptation) and the Arrow-adoption umbrella ticket.
-> **Status:** decided. Do not re-litigate the format in #7.
+# `type-map.json` Format Specification
 
 ## Purpose
 
-Every connector's `connector.json` ships a `type_map`: an ordered list of rules
-that map **native** types (Postgres `VARCHAR(255)`, MySQL `TINYINT(1)`, REST API
-`number`, etc.) to **canonical** Arrow logical types (`Utf8`, `Boolean`,
-`Decimal128(10, 2)`, `Timestamp(MICROSECOND, UTC)`, etc.).
+Every connector ships a **standalone `type-map.json`** file at
+`{slug}/definition/type-map.json`, alongside `connector.json` and
+`manifest.json`. It is not a field inside another file — it is an independently
+validated JSON document with its own `$schema` / `$id`
+(`https://analitiq.dev/schemas/type-map.json`). The file contains an ordered
+list of rules that map **native** types (Postgres `VARCHAR(255)`, MySQL
+`TINYINT(1)`, REST API `number`, etc.) to **canonical** Arrow logical types
+(`Utf8`, `Boolean`, `Decimal128(10, 2)`, `Timestamp(MICROSECOND, UTC)`, etc.).
 
-This document specifies the **shape** of that field, the **match algorithm**,
+This document specifies the **shape** of that file, the **match algorithm**,
 **normalization** rules, **fallback** behavior, and the **capture-group
 substitution** mechanism used for parameterized types.
 
 Canonical types themselves — the Arrow logical type vocabulary — are defined in
-a separate reference document per #7. This spec is orthogonal to the canonical
-vocabulary: the same format works whether canonical is Arrow, a subset of
-Arrow, or something else entirely.
+`analitiq-connector-builder/schemas/canonical-types.json`. This spec is
+orthogonal to the canonical vocabulary: the same format works whether canonical
+is Arrow, a subset of Arrow, or something else entirely.
 
 ## Format
 
-`type_map` is a JSON **array of rule objects**. Order matters: rules are
-evaluated top-to-bottom and the **first match wins**.
+`type-map.json` is a **top-level JSON array of rule objects**. Order matters:
+rules are evaluated top-to-bottom and the **first match wins**.
 
 ```json
-"type_map": [
+[
   { "match": "exact", "native": "JSONB",                              "canonical": "Utf8" },
   { "match": "exact", "native": "TINYINT(1)",                         "canonical": "Boolean" },
   { "match": "regex", "native": "^VARCHAR(\\(\\d+\\))?$",             "canonical": "Utf8" },
@@ -72,7 +72,7 @@ Two reasons:
 ```
 match(native_input):
     normalized = normalize(native_input)   # see Normalization
-    for rule in type_map:                  # top-to-bottom
+    for rule in type_map_rules:            # top-to-bottom, from type-map.json
         if rule.match == "exact":
             if normalized == normalize(rule.native):
                 return substitute(rule.canonical, {})
@@ -171,8 +171,8 @@ already-canonical content where feasible (e.g., explicit rules for
 
 ## Fallback
 
-If no rule in `type_map` matches a given native type, the matcher **raises an
-error**. It does not default to any canonical type.
+If no rule in `type-map.json` matches a given native type, the matcher **raises
+an error**. It does not default to any canonical type.
 
 Rationale:
 
@@ -181,21 +181,25 @@ Rationale:
   a loud failure at authoring or ingest time.
 - `HSTORE`, `CITEXT`, `MONEY`, `GEOMETRY(Point, 4326)` — every one of these is
   a judgment call. Silent coercion to string corrupts data.
-- The author-time LLM gap-fill workflow (per #7) exists precisely to reduce the
-  burden of enumerating rare types. It is **not** a runtime fallback: the LLM
+- The author-time agent-judgment step exists precisely to reduce the burden of
+  enumerating rare types. It is **not** a runtime fallback: the authoring agent
   proposes rules, a human commits them, and then the map covers those natives.
-  No LLM is invoked at pipeline runtime.
+  The runtime matcher is deterministic — no agent reasoning is performed during
+  pipeline execution.
 
-## JSON Schema fragment
+## JSON Schema
 
-For inclusion in the connector-level JSON Schema once the canonical types
-reference is published in #7:
+The JSON Schema for `type-map.json` is published at
+`https://analitiq.dev/schemas/type-map.json`. Because a `type-map.json` file is
+a bare top-level array, there is no place to embed a `$schema` key inside the
+document itself — validators associate the file with its schema by filename
+convention (`type-map.json` → the published `$id` above).
 
 ```json
 {
   "$id": "https://analitiq.dev/schemas/type-map.json",
-  "title": "type_map",
-  "description": "Ordered list of native → canonical type mapping rules. First match wins.",
+  "title": "type-map.json",
+  "description": "Ordered list of native → canonical type mapping rules. First match wins. The entire file is a top-level JSON array of rule objects.",
   "type": "array",
   "minItems": 1,
   "items": {
@@ -226,18 +230,19 @@ reference is published in #7:
 
 The `canonical` string is not schema-validated against the Arrow logical type
 vocabulary here — that validation is the job of the canonical-types reference
-published by #7. This schema only validates the **shape** of `type_map`.
+(`analitiq-connector-builder/schemas/canonical-types.json`). This schema only
+validates the **shape** of `type-map.json`.
 
 An additional semantic check — every `${name}` in `canonical` has a matching
 named group in `native` — is out of scope for JSON Schema and performed by the
-validator API / authoring skill in #7.
+validator API / authoring skill.
 
 ## Worked examples
 
 ### Postgres
 
 ```json
-"type_map": [
+[
   { "match": "exact", "native": "BOOLEAN",                  "canonical": "Boolean" },
   { "match": "exact", "native": "SMALLINT",                 "canonical": "Int16" },
   { "match": "exact", "native": "INTEGER",                  "canonical": "Int32" },
@@ -275,7 +280,7 @@ Match walk-throughs (input → normalized → matched rule → canonical):
 ### MySQL
 
 ```json
-"type_map": [
+[
   { "match": "exact", "native": "TINYINT(1)",               "canonical": "Boolean" },
   { "match": "regex", "native": "^TINYINT(\\(\\d+\\))?(?:\\s+UNSIGNED)?$", "canonical": "Int8" },
   { "match": "regex", "native": "^SMALLINT(\\(\\d+\\))?(?:\\s+UNSIGNED)?$", "canonical": "Int16" },
@@ -303,12 +308,3 @@ column would match the generic rule first and canonicalize to `Int8`, silently
 discarding MySQL's convention that `TINYINT(1)` represents a boolean. The
 `first-match-wins` rule makes specificity-before-generality the author's
 responsibility, visible in file order.
-
-## Open questions deferred to #7 / engine repo
-
-- The authoring-skill workflow for programmatic matching + LLM gap-fill is
-  part of #7's `type-mapping-spec` skill, not this spec.
-- The engine's implementation of the matcher (in whatever languages the engine
-  uses) is tracked in the engine repo. This spec is the contract it consumes.
-- Destination-side use of `type_map` (reverse lookup: canonical → preferred
-  native) is covered by the Arrow-adoption umbrella ticket, not this spec.

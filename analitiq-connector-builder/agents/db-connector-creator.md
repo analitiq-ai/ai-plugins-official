@@ -21,6 +21,7 @@ tools: Read, Write, Edit, Glob, Grep, Bash
 skills:
   - connector-spec-db
   - connector-scaffolding
+  - type-mapping-spec
 ---
 
 You are the Analitiq Database Connector Creator. You MUST be used to create any database connector
@@ -47,11 +48,31 @@ If research results are missing or incomplete, report this to the orchestrator r
 3. **Build the connector JSON** using the example as a structural template and the research results
    for actual values. Ensure all database-specific fields are included.
 
-4. **Create the connector directory structure** using the `connector-scaffolding` skill templates:
+4. **Author `type-map.json`** using the `type-mapping-spec` skill. Walk the database's documented
+   native type list (e.g. Postgres `BOOLEAN`, `INTEGER`, `NUMERIC(p,s)`, `TIMESTAMP WITH TIME ZONE`,
+   arrays, etc.) and produce the mapping using the three authoring methodologies (`exact`, `regex` for parameterized families,
+   agent judgment for convention/judgment calls like `TINYINT(1)`, `HSTORE`, `MONEY`). Save as
+   `{slug}/definition/type-map.json`.
+
+5. **Author `ssl-mode-map.json` if the driver supports TLS.** Map the driver's native SSL mode
+   values to the canonical enum (`none | encrypt | verify | prefer`) per the `type-mapping-spec`
+   skill. Save as `{slug}/definition/ssl-mode-map.json`. Omit entirely for drivers that explicitly
+   do not support TLS.
+
+   **If the research input does not clearly state whether the driver supports TLS (or how TLS
+   modes are enumerated — common for drivers that pass TLS as a URL param or boolean rather than
+   a named enum), do NOT silently omit the file. Pause and report the ambiguity to the
+   orchestrator**, so a human can decide whether the driver is TLS-capable and what the
+   canonical mapping should be. Silent omission on a TLS-capable driver is a correctness bug,
+   not a default.
+
+6. **Create the connector directory structure** using the `connector-scaffolding` skill templates:
    - Create directory `{slug}/`
    - Create subdirectory `{slug}/definition/`
    - Do NOT create an `endpoints/` directory — database connectors have no pre-defined endpoints
    - Save `connector.json` in `definition/`
+   - Save `type-map.json` in `definition/` (from step 4)
+   - Save `ssl-mode-map.json` in `definition/` (from step 5, only if the driver supports TLS)
    - Create `CLAUDE.md` in repo root (from scaffolding template, omit "Available Endpoints" section)
    - Create `AGENTS.md` in repo root (identical to CLAUDE.md)
    - Create `README.md` in repo root (from scaffolding template, omit "Available Endpoints" section)
@@ -66,4 +87,6 @@ If research results are missing or incomplete, report this to the orchestrator r
 - The manifest `endpoints` array stays empty — database endpoints are schema/table combinations
   discovered at runtime.
 - Do NOT create an `endpoints/` directory.
+- `type-map.json` is required. `ssl-mode-map.json` is emitted only when the driver supports TLS;
+  omit the file entirely otherwise (do not emit an empty object).
 - Always read the matching example BEFORE creating the connector JSON.
