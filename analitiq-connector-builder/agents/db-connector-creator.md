@@ -50,14 +50,21 @@ If research results are missing or incomplete, report this to the orchestrator r
 
 4. **Author `type-map.json`** using the `type-mapping-spec` skill. Walk the database's documented
    native type list (e.g. Postgres `BOOLEAN`, `INTEGER`, `NUMERIC(p,s)`, `TIMESTAMP WITH TIME ZONE`,
-   arrays, etc.) and produce the three-tool mapping (`exact`, `regex` for parameterized families,
-   LLM gap-fill for convention/judgment calls like `TINYINT(1)`, `HSTORE`, `MONEY`). Save as
+   arrays, etc.) and produce the mapping using the three authoring methodologies (`exact`, `regex` for parameterized families,
+   agent judgment for convention/judgment calls like `TINYINT(1)`, `HSTORE`, `MONEY`). Save as
    `{slug}/definition/type-map.json`.
 
 5. **Author `ssl-mode-map.json` if the driver supports TLS.** Map the driver's native SSL mode
    values to the canonical enum (`none | encrypt | verify | prefer`) per the `type-mapping-spec`
-   skill. Save as `{slug}/definition/ssl-mode-map.json`. Omit entirely for drivers without TLS
-   support.
+   skill. Save as `{slug}/definition/ssl-mode-map.json`. Omit entirely for drivers that explicitly
+   do not support TLS.
+
+   **If the research input does not clearly state whether the driver supports TLS (or how TLS
+   modes are enumerated — common for drivers that pass TLS as a URL param or boolean rather than
+   a named enum), do NOT silently omit the file. Pause and report the ambiguity to the
+   orchestrator**, so a human can decide whether the driver is TLS-capable and what the
+   canonical mapping should be. Silent omission on a TLS-capable driver is a correctness bug,
+   not a default.
 
 6. **Create the connector directory structure** using the `connector-scaffolding` skill templates:
    - Create directory `{slug}/`

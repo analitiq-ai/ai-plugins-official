@@ -51,10 +51,27 @@ If research results are missing or incomplete, report this to the orchestrator r
 
 4. **Author `type-map.json`** using the `type-mapping-spec` skill. Storage connectors do not
    have a connector-level native type vocabulary — data types come from the file format being
-   read at runtime (CSV, Parquet, JSONL, etc.). Emit a minimal `type-map.json` that covers only
-   the connector's own metadata types (e.g. object metadata: `Utf8` for keys, `Int64` for sizes,
-   `Timestamp(MICROSECOND, UTC)` for last-modified). File-format-level typing is handled by the
-   engine's format readers, not by this file. Save as `{slug}/definition/type-map.json`.
+   read at runtime (CSV, Parquet, JSONL, etc.), which is handled by the engine's format readers,
+   not by this file.
+
+   Emit a `type-map.json` covering the connector's **object-metadata types** (the fields the
+   connector returns for object listings). At minimum, author these four rules — do NOT ship
+   an empty array:
+
+   ```json
+   [
+     { "match": "exact", "native": "KEY",           "canonical": "Utf8" },
+     { "match": "exact", "native": "SIZE",          "canonical": "Int64" },
+     { "match": "exact", "native": "LAST_MODIFIED", "canonical": "Timestamp(MICROSECOND, UTC)" },
+     { "match": "exact", "native": "ETAG",          "canonical": "Utf8" }
+   ]
+   ```
+
+   Add further rules for any additional metadata fields the specific storage system exposes
+   (e.g. S3 `STORAGE_CLASS` → `Utf8`, `VERSION_ID` → `Utf8`; SFTP `PERMISSIONS` → `Utf8`,
+   `OWNER` → `Utf8`). Use the research input to enumerate them.
+
+   Save as `{slug}/definition/type-map.json`.
 
 5. **Create the connector directory structure** using the `connector-scaffolding` skill templates:
    - Create directory `{slug}/`

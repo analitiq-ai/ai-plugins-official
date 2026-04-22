@@ -50,7 +50,7 @@ If research results are missing or incomplete, report this to the orchestrator r
 4. **Author `type-map.json`** using the `type-mapping-spec` skill. Walk the API's documented
    response schema types (the native types that appear in endpoint responses — e.g. JSON Schema
    `string`/`integer`/`number`/`boolean`, plus any `format` narrowings like `date-time`) and
-   produce the three-tool mapping (`exact`, `regex`, LLM gap-fill for semantic calls). Save as
+   produce the mapping using the three authoring methodologies (`exact`, `regex`, agent judgment for semantic calls). Save as
    `{slug}/definition/type-map.json`.
 
 5. **Create the connector directory structure** using the `connector-scaffolding` skill templates:

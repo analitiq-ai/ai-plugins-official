@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://analitiq.dev/schemas/canonical-types.json",
   "title": "Analitiq canonical types",
-  "description": "Analitiq's profile of the Apache Arrow logical type system. Canonical types are strings that identify an Arrow logical type in the form used by `type_map.canonical` entries on connector definitions. Primitive types are bare identifiers (`Utf8`, `Int64`, `Boolean`). Parameterized types use PascalCase with parenthesized arguments (`Decimal128(18, 4)`, `Timestamp(MICROSECOND, UTC)`). Nested types use angle brackets (`List<Int32>`, `Struct<id:Int64, name:Utf8>`, `Map<Utf8, Int64>`). Reference: https://arrow.apache.org/docs/format/Columnar.html#logical-types. Scope note: patterns for nested types (List/Struct/Map/Union/Dictionary/RunEndEncoded) validate the outer shape only; deep validation of inner canonical types is the validator API's responsibility, not JSON Schema's.",
+  "description": "Analitiq's profile of the Apache Arrow logical type system. Canonical types are strings that identify an Arrow logical type in the form used by `type_map.canonical` entries on connector definitions. Primitive types are bare identifiers (`Utf8`, `Int64`, `Boolean`). Parameterized types use PascalCase with parenthesized arguments (`Decimal128(18, 4)`, `Timestamp(MICROSECOND, UTC)`). Nested types use angle brackets (`List<Int32>`, `Struct<id:Int64, name:Utf8>`, `Map<Utf8, Int64>`). Reference: https://arrow.apache.org/docs/format/Columnar.html#logical-types. Scope note: patterns for nested types (List/Struct/Map/Union/Dictionary/RunEndEncoded) validate the outer shape only; deep validation of inner canonical types is the validator API's responsibility, not JSON Schema's. Version note: the engine pins PyArrow to ^12.0.0, so Arrow 15+ view types (`Utf8View`, `BinaryView`, `ListView`, `LargeListView`) are intentionally excluded from this vocabulary. If the engine upgrades to Arrow 15 or later, extend this file.",
   "$defs": {
     "canonical_type": {
       "title": "canonical_type",
@@ -89,7 +89,7 @@
       "title": "Timestamp",
       "description": "Arrow Timestamp logical type. Unit is one of SECOND, MILLISECOND, MICROSECOND, NANOSECOND. Timezone is either `null` (zone-naive / local) or a string — IANA zone (`UTC`, `America/New_York`), fixed offset (`+05:30`, `-08:00`), or similar. When mapping from a source that declares a zoned type (e.g., Postgres `TIMESTAMP WITH TIME ZONE`), use `UTC` unless there is a source-specific reason otherwise.",
       "type": "string",
-      "pattern": "^Timestamp\\((SECOND|MILLISECOND|MICROSECOND|NANOSECOND), (null|[^()]+)\\)$"
+      "pattern": "^Timestamp\\((SECOND|MILLISECOND|MICROSECOND|NANOSECOND)\\s*,\\s*(null|[A-Za-z_][A-Za-z0-9_/+\\-:]*|[+\\-][0-9]{2}:[0-9]{2})\\)$"
     },
 
     "duration_type": {
@@ -110,8 +110,8 @@
       "title": "Decimal",
       "description": "Arrow Decimal128 or Decimal256 logical type. `Decimal128(precision, scale)` supports precision 1-38; `Decimal256(precision, scale)` supports precision 1-76. Scale may be negative but is typically 0 or positive. Use `Decimal128` unless the source precision exceeds 38.",
       "oneOf": [
-        { "type": "string", "pattern": "^Decimal128\\([1-9][0-9]?\\s*,\\s*-?[0-9]+\\)$" },
-        { "type": "string", "pattern": "^Decimal256\\([1-9][0-9]?\\s*,\\s*-?[0-9]+\\)$" }
+        { "type": "string", "pattern": "^Decimal128\\((?:[1-9]|[12][0-9]|3[0-8])\\s*,\\s*-?[0-9]+\\)$" },
+        { "type": "string", "pattern": "^Decimal256\\((?:[1-9]|[1-6][0-9]|7[0-6])\\s*,\\s*-?[0-9]+\\)$" }
       ]
     },
 
