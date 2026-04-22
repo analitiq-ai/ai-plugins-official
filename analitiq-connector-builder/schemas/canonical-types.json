@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://analitiq.dev/schemas/canonical-types.json",
+  "title": "Analitiq canonical types",
+  "description": "Analitiq's profile of the Apache Arrow logical type system. Canonical types are strings that identify an Arrow logical type in the form used by `type_map.canonical` entries on connector definitions. Primitive types are bare identifiers (`Utf8`, `Int64`, `Boolean`). Parameterized types use PascalCase with parenthesized arguments (`Decimal128(18, 4)`, `Timestamp(MICROSECOND, UTC)`). Nested types use angle brackets (`List<Int32>`, `Struct<id:Int64, name:Utf8>`, `Map<Utf8, Int64>`). Reference: https://arrow.apache.org/docs/format/Columnar.html#logical-types. Scope note: patterns for nested types (List/Struct/Map/Union/Dictionary/RunEndEncoded) validate the outer shape only; deep validation of inner canonical types is the validator API's responsibility, not JSON Schema's.",
+  "$defs": {
+    "canonical_type": {
+      "title": "canonical_type",
+      "description": "A canonical type string. Must match one of the Arrow logical type families below.",
+      "type": "string",
+      "oneOf": [
+        { "$ref": "#/$defs/null_type" },
+        { "$ref": "#/$defs/boolean_type" },
+        { "$ref": "#/$defs/integer_type" },
+        { "$ref": "#/$defs/floating_type" },
+        { "$ref": "#/$defs/binary_type" },
+        { "$ref": "#/$defs/string_type" },
+        { "$ref": "#/$defs/date_type" },
+        { "$ref": "#/$defs/time_type" },
+        { "$ref": "#/$defs/timestamp_type" },
+        { "$ref": "#/$defs/duration_type" },
+        { "$ref": "#/$defs/interval_type" },
+        { "$ref": "#/$defs/decimal_type" },
+        { "$ref": "#/$defs/list_type" },
+        { "$ref": "#/$defs/struct_type" },
+        { "$ref": "#/$defs/map_type" },
+        { "$ref": "#/$defs/union_type" },
+        { "$ref": "#/$defs/dictionary_type" },
+        { "$ref": "#/$defs/run_end_encoded_type" }
+      ]
+    },
+
+    "null_type": {
+      "title": "Null",
+      "description": "Arrow Null logical type. Column contains only null values. Zero storage.",
+      "const": "Null"
+    },
+
+    "boolean_type": {
+      "title": "Boolean",
+      "description": "Arrow Boolean logical type. 1-bit values: true or false.",
+      "const": "Boolean"
+    },
+
+    "integer_type": {
+      "title": "Int / UInt",
+      "description": "Arrow signed and unsigned integer logical types at fixed widths of 8, 16, 32, or 64 bits. Width should reflect the source system's declared width — do not upcast `Int32` to `Int64` unless the engine requires it.",
+      "enum": ["Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32", "UInt64"]
+    },
+
+    "floating_type": {
+      "title": "FloatingPoint",
+      "description": "Arrow IEEE-754 floating-point logical types. Float16 is half-precision; Float32 is single-precision; Float64 is double-precision.",
+      "enum": ["Float16", "Float32", "Float64"]
+    },
+
+    "binary_type": {
+      "title": "Binary",
+      "description": "Arrow binary logical types. `Binary` is variable-length with 32-bit offsets; `LargeBinary` is variable-length with 64-bit offsets; `FixedSizeBinary(byte_width)` is fixed-length.",
+      "oneOf": [
+        { "const": "Binary" },
+        { "const": "LargeBinary" },
+        { "type": "string", "pattern": "^FixedSizeBinary\\([1-9][0-9]*\\)$" }
+      ]
+    },
+
+    "string_type": {
+      "title": "Utf8",
+      "description": "Arrow UTF-8 string logical types. `Utf8` uses 32-bit offsets (capped ~2 GiB total per array); `LargeUtf8` uses 64-bit offsets.",
+      "enum": ["Utf8", "LargeUtf8"]
+    },
+
+    "date_type": {
+      "title": "Date",
+      "description": "Arrow Date logical types. `Date32` is days since the Unix epoch; `Date64` is milliseconds since the Unix epoch (must be a multiple of 86_400_000).",
+      "enum": ["Date32", "Date64"]
+    },
+
+    "time_type": {
+      "title": "Time",
+      "description": "Arrow time-of-day logical types. `Time32` supports SECOND and MILLISECOND units; `Time64` supports MICROSECOND and NANOSECOND units.",
+      "oneOf": [
+        { "type": "string", "pattern": "^Time32\\((SECOND|MILLISECOND)\\)$" },
+        { "type": "string", "pattern": "^Time64\\((MICROSECOND|NANOSECOND)\\)$" }
+      ]
+    },
+
+    "timestamp_type": {
+      "title": "Timestamp",
+      "description": "Arrow Timestamp logical type. Unit is one of SECOND, MILLISECOND, MICROSECOND, NANOSECOND. Timezone is either `null` (zone-naive / local) or a string — IANA zone (`UTC`, `America/New_York`), fixed offset (`+05:30`, `-08:00`), or similar. When mapping from a source that declares a zoned type (e.g., Postgres `TIMESTAMP WITH TIME ZONE`), use `UTC` unless there is a source-specific reason otherwise.",
+      "type": "string",
+      "pattern": "^Timestamp\\((SECOND|MILLISECOND|MICROSECOND|NANOSECOND), (null|[^()]+)\\)$"
+    },
+
+    "duration_type": {
+      "title": "Duration",
+      "description": "Arrow Duration logical type. Elapsed time with unit SECOND, MILLISECOND, MICROSECOND, or NANOSECOND.",
+      "type": "string",
+      "pattern": "^Duration\\((SECOND|MILLISECOND|MICROSECOND|NANOSECOND)\\)$"
+    },
+
+    "interval_type": {
+      "title": "Interval",
+      "description": "Arrow Interval logical type. YEAR_MONTH stores months as int32; DAY_TIME stores days + milliseconds as two int32s; MONTH_DAY_NANO stores months + days + nanoseconds in 16 bytes.",
+      "type": "string",
+      "pattern": "^Interval\\((YEAR_MONTH|DAY_TIME|MONTH_DAY_NANO)\\)$"
+    },
+
+    "decimal_type": {
+      "title": "Decimal",
+      "description": "Arrow Decimal128 or Decimal256 logical type. `Decimal128(precision, scale)` supports precision 1-38; `Decimal256(precision, scale)` supports precision 1-76. Scale may be negative but is typically 0 or positive. Use `Decimal128` unless the source precision exceeds 38.",
+      "oneOf": [
+        { "type": "string", "pattern": "^Decimal128\\([1-9][0-9]?\\s*,\\s*-?[0-9]+\\)$" },
+        { "type": "string", "pattern": "^Decimal256\\([1-9][0-9]?\\s*,\\s*-?[0-9]+\\)$" }
+      ]
+    },
+
+    "list_type": {
+      "title": "List / LargeList / FixedSizeList",
+      "description": "Arrow list logical types. `List<T>` uses 32-bit offsets; `LargeList<T>` uses 64-bit offsets; `FixedSizeList<T>[n]` has fixed list length `n`. `T` is itself a canonical type; inner-type validation is performed by the validator API.",
+      "oneOf": [
+        { "type": "string", "pattern": "^List<.+>$" },
+        { "type": "string", "pattern": "^LargeList<.+>$" },
+        { "type": "string", "pattern": "^FixedSizeList<.+>\\[[1-9][0-9]*\\]$" }
+      ]
+    },
+
+    "struct_type": {
+      "title": "Struct",
+      "description": "Arrow Struct logical type. Fields are `name:type` pairs separated by commas: `Struct<id:Int64, name:Utf8, created:Timestamp(MICROSECOND, UTC)>`. Field names follow the source field naming; no case normalization is performed.",
+      "type": "string",
+      "pattern": "^Struct<.+>$"
+    },
+
+    "map_type": {
+      "title": "Map",
+      "description": "Arrow Map logical type with key and value types: `Map<Utf8, Int64>`. Arrow maps are logically unordered; engines may sort keys for efficient lookup.",
+      "type": "string",
+      "pattern": "^Map<.+,\\s*.+>$"
+    },
+
+    "union_type": {
+      "title": "Union",
+      "description": "Arrow Union logical type. `SparseUnion<T1, T2, ...>` stores one buffer per child type, full-length; `DenseUnion<T1, T2, ...>` stores child buffers at length equal to each type's usage count, plus an offsets buffer. Use sparse for few types or uniform distribution; dense for many types with skewed distribution.",
+      "oneOf": [
+        { "type": "string", "pattern": "^SparseUnion<.+>$" },
+        { "type": "string", "pattern": "^DenseUnion<.+>$" }
+      ]
+    },
+
+    "dictionary_type": {
+      "title": "Dictionary",
+      "description": "Arrow Dictionary logical type. `Dictionary<index_type, value_type>` stores integer indices referencing a shared dictionary of values. Use for low-cardinality string/binary columns to reduce storage.",
+      "type": "string",
+      "pattern": "^Dictionary<.+,\\s*.+>$"
+    },
+
+    "run_end_encoded_type": {
+      "title": "RunEndEncoded",
+      "description": "Arrow RunEndEncoded logical type. `RunEndEncoded<run_end_type, values_type>` stores consecutive repeated values as (run_end_index, value) pairs. Efficient for columns with long runs of identical values.",
+      "type": "string",
+      "pattern": "^RunEndEncoded<.+,\\s*.+>$"
+    },
+
+    "canonical_ssl_mode": {
+      "title": "canonical_ssl_mode",
+      "description": "Canonical SSL/TLS mode for database connections. `none` disables TLS; `encrypt` requires TLS but does not verify the server certificate; `verify` requires TLS and verifies the certificate chain + hostname; `prefer` attempts TLS and falls back to plaintext if unavailable. Used only by SSL-capable connectors (databases that support TLS). API and storage connectors do not carry an `ssl_mode_map`.",
+      "enum": ["none", "encrypt", "verify", "prefer"]
+    }
+  }
+}

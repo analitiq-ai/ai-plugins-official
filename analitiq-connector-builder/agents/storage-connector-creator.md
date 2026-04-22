@@ -22,6 +22,7 @@ tools: Read, Write, Edit, Glob, Grep, Bash
 skills:
   - connector-spec-storage
   - connector-scaffolding
+  - type-mapping-spec
 ---
 
 You are the Analitiq Storage Connector Creator. You MUST be used to create any storage/file-based
@@ -48,11 +49,19 @@ If research results are missing or incomplete, report this to the orchestrator r
 3. **Build the connector JSON** using the example as a structural template and the research results
    for actual values.
 
-4. **Create the connector directory structure** using the `connector-scaffolding` skill templates:
+4. **Author `type-map.json`** using the `type-mapping-spec` skill. Storage connectors do not
+   have a connector-level native type vocabulary — data types come from the file format being
+   read at runtime (CSV, Parquet, JSONL, etc.). Emit a minimal `type-map.json` that covers only
+   the connector's own metadata types (e.g. object metadata: `Utf8` for keys, `Int64` for sizes,
+   `Timestamp(MICROSECOND, UTC)` for last-modified). File-format-level typing is handled by the
+   engine's format readers, not by this file. Save as `{slug}/definition/type-map.json`.
+
+5. **Create the connector directory structure** using the `connector-scaffolding` skill templates:
    - Create directory `{slug}/`
    - Create subdirectory `{slug}/definition/`
    - Do NOT create an `endpoints/` directory — storage connectors have no pre-defined endpoints
    - Save `connector.json` in `definition/`
+   - Save `type-map.json` in `definition/` (from step 4)
    - Create `CLAUDE.md` in repo root (from scaffolding template, omit "Available Endpoints" section)
    - Create `AGENTS.md` in repo root (identical to CLAUDE.md)
    - Create `README.md` in repo root (from scaffolding template, omit "Available Endpoints" section)
@@ -65,4 +74,5 @@ If research results are missing or incomplete, report this to the orchestrator r
 - Storage connectors do NOT have `base_url`, `headers`, `post_auth_steps`, or `requests_per_second`.
 - The manifest `endpoints` array stays empty — storage connectors have no pre-defined endpoints.
 - Do NOT create an `endpoints/` directory.
+- `type-map.json` covers connector-level metadata types only — actual file data typing is file-format-driven at the engine. Do NOT emit `ssl-mode-map.json` for storage connectors.
 - Always read the matching example BEFORE creating the connector JSON.

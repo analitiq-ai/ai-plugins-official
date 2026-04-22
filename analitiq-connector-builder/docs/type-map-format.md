@@ -1,9 +1,5 @@
 # `type_map` Format Specification
 
-> Decision record for [issue #8](https://github.com/analitiq-ai/ai-plugins-official/issues/8).
-> Consumed by [issue #7](https://github.com/analitiq-ai/ai-plugins-official/issues/7) (connector-builder adaptation) and the Arrow-adoption umbrella ticket.
-> **Status:** decided. Do not re-litigate the format in #7.
-
 ## Purpose
 
 Every connector's `connector.json` ships a `type_map`: an ordered list of rules
@@ -303,12 +299,3 @@ column would match the generic rule first and canonicalize to `Int8`, silently
 discarding MySQL's convention that `TINYINT(1)` represents a boolean. The
 `first-match-wins` rule makes specificity-before-generality the author's
 responsibility, visible in file order.
-
-## Open questions deferred to #7 / engine repo
-
-- The authoring-skill workflow for programmatic matching + LLM gap-fill is
-  part of #7's `type-mapping-spec` skill, not this spec.
-- The engine's implementation of the matcher (in whatever languages the engine
-  uses) is tracked in the engine repo. This spec is the contract it consumes.
-- Destination-side use of `type_map` (reverse lookup: canonical → preferred
-  native) is covered by the Arrow-adoption umbrella ticket, not this spec.
