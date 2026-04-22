@@ -55,23 +55,33 @@ If research results are missing or incomplete, report this to the orchestrator r
    not by this file.
 
    Emit a `type-map.json` covering the connector's **object-metadata types** (the fields the
-   connector returns for object listings). At minimum, author these four rules — do NOT ship
-   an empty array:
+   connector returns for object listings). Do NOT ship an empty array.
+
+   **Universal minimum** (required for every storage connector):
 
    ```json
-   [
-     { "match": "exact", "native": "KEY",           "canonical": "Utf8" },
-     { "match": "exact", "native": "SIZE",          "canonical": "Int64" },
-     { "match": "exact", "native": "LAST_MODIFIED", "canonical": "Timestamp(MICROSECOND, UTC)" },
-     { "match": "exact", "native": "ETAG",          "canonical": "Utf8" }
-   ]
+   { "match": "exact", "native": "KEY",           "canonical": "Utf8" },
+   { "match": "exact", "native": "SIZE",          "canonical": "Int64" },
+   { "match": "exact", "native": "LAST_MODIFIED", "canonical": "Timestamp(MICROSECOND, UTC)" }
    ```
 
-   Add further rules for any additional metadata fields the specific storage system exposes
-   (e.g. S3 `STORAGE_CLASS` → `Utf8`, `VERSION_ID` → `Utf8`; SFTP `PERMISSIONS` → `Utf8`,
-   `OWNER` → `Utf8`). Use the research input to enumerate them.
+   **Object-store connectors** (S3, GCS, Azure Blob, R2) also author:
 
-   Save as `{slug}/definition/type-map.json`.
+   ```json
+   { "match": "exact", "native": "ETAG",          "canonical": "Utf8" }
+   ```
+
+   Plus any driver-specific metadata fields documented by the source — examples: S3
+   `STORAGE_CLASS` → `Utf8`, `VERSION_ID` → `Utf8`; GCS `GENERATION` → `Int64`.
+
+   **Filesystem-style connectors** (SFTP, FTP) do NOT have ETag — author only the universal
+   minimum, plus any filesystem metadata the driver exposes (e.g. `PERMISSIONS` → `Utf8`,
+   `OWNER` → `Utf8`, `GROUP` → `Utf8`). Do not fabricate an `ETAG` rule for SFTP; a dead rule
+   is worse than no rule.
+
+   When in doubt about whether the storage system exposes ETag-like semantics, check the
+   research input and ask the orchestrator rather than guessing. Save as
+   `{slug}/definition/type-map.json`.
 
 5. **Create the connector directory structure** using the `connector-scaffolding` skill templates:
    - Create directory `{slug}/`

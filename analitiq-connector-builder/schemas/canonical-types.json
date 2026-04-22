@@ -89,7 +89,7 @@
       "title": "Timestamp",
       "description": "Arrow Timestamp logical type. Unit is one of SECOND, MILLISECOND, MICROSECOND, NANOSECOND. Timezone is either `null` (zone-naive / local) or a string — IANA zone (`UTC`, `America/New_York`), fixed offset (`+05:30`, `-08:00`), or similar. When mapping from a source that declares a zoned type (e.g., Postgres `TIMESTAMP WITH TIME ZONE`), use `UTC` unless there is a source-specific reason otherwise.",
       "type": "string",
-      "pattern": "^Timestamp\\((SECOND|MILLISECOND|MICROSECOND|NANOSECOND)\\s*,\\s*(null|[A-Za-z_][A-Za-z0-9_/+\\-:]*|[+\\-][0-9]{2}:[0-9]{2})\\)$"
+      "pattern": "^Timestamp\\((SECOND|MILLISECOND|MICROSECOND|NANOSECOND)\\s*,\\s*(null|[A-Za-z_][A-Za-z0-9_/\\-]*|Etc/GMT[+\\-][0-9]{1,2}|[+\\-](?:0[0-9]|1[0-4]):[0-5][0-9])\\)$"
     },
 
     "duration_type": {
