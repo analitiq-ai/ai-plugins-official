@@ -60,10 +60,16 @@ If research results are missing or incomplete, report this to the orchestrator r
    drivers that explicitly do not support TLS.
 
    **Preserve the chain-only vs chain+hostname distinction.** If the driver distinguishes
-   hostname verification (Postgres `verify-ca` vs `verify-full`, MySQL `VERIFY_CA` vs
-   `VERIFY_IDENTITY`, similar), emit separate rules for each. Do NOT collapse both onto
-   canonical `verify-full` — a user who deliberately set `verify-ca` (internal CA, proxy,
-   etc.) must still get `verify-ca` at runtime.
+   hostname verification (Postgres `verify-ca` vs `verify-full`; MySQL `VERIFY_CA` vs
+   `VERIFY_IDENTITY`; MongoDB `tls=true;tlsAllowInvalidHostnames=true` vs default
+   `tls=true`), emit separate rules for each. Do NOT collapse both onto canonical
+   `verify-full` — a user who deliberately set `verify-ca` (internal CA, proxy, etc.) must
+   still get `verify-ca` at runtime.
+
+   **SQL Server (SqlClient) has no native `verify-ca` knob.** `TrustServerCertificate` is
+   binary: `true` → no certificate verification (canonical `require`), `false` → full
+   verification of chain + hostname (canonical `verify-full`). Do not fabricate a
+   `verify-ca` rule for SQL Server — a dead rule is worse than no rule.
 
    **If the research input does not clearly state whether the driver supports TLS (or how TLS
    modes are enumerated — common for drivers that pass TLS as a URL param or boolean rather than

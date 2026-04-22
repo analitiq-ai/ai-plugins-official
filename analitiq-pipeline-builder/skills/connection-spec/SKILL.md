@@ -129,11 +129,11 @@ connection-creator agent must map these to canonical values before writing the c
 
 | Canonical | Meaning | Native examples |
 |-----------|---------|-----------------|
-| `none` | No encryption | `disable`, `DISABLED`, `false` |
-| `require` | Require encrypted connection (no cert verification) | `require`, `REQUIRED`, `true` |
-| `verify-ca` | Require TLS; verify certificate chain only (hostname not checked) | `verify-ca`, `VERIFY_CA` |
-| `verify-full` | Require TLS; verify certificate chain AND hostname | `verify-full`, `VERIFY_IDENTITY` |
-| `prefer` | Try encrypt, fallback to none at runtime | `prefer`, `PREFERRED`, `allow` |
+| `none` | No encryption | Postgres `disable`; MySQL `DISABLED`, `ssl=false`; SQL Server `Encrypt=false`; MongoDB `tls=false` |
+| `require` | Require encryption, no certificate verification | Postgres `require`; MySQL `REQUIRED`, `ssl=true`; SQL Server `Encrypt=true;TrustServerCertificate=true`; MongoDB `tls=true;tlsInsecure=true` (or `tlsAllowInvalidCertificates=true`) |
+| `verify-ca` | Require TLS; verify certificate chain only (hostname not checked) | Postgres `verify-ca`; MySQL `VERIFY_CA`; MongoDB `tls=true;tlsAllowInvalidHostnames=true`. SQL Server's SqlClient has no native chain-only mode. |
+| `verify-full` | Require TLS; verify certificate chain AND hostname | Postgres `verify-full`; MySQL `VERIFY_IDENTITY`; SQL Server `Encrypt=true;TrustServerCertificate=false`; MongoDB `tls=true` (default flags) |
+| `prefer` | Try TLS, fallback to none at runtime | Postgres `prefer`; MySQL `PREFERRED`. (Postgres `allow` has inverse semantics — tries plaintext first then TLS; canonicalize to `prefer` only if the driver provides no closer match.) |
 
 The connector's `form_fields` keep their native values for display. The connection JSON
 `parameters.ssl_mode` always uses one of the five canonical values. **Preserve the `verify-ca`
