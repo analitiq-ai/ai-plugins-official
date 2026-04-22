@@ -115,7 +115,7 @@ Has `host` because the runtime manages the token exchange. Access token is in se
     "port": "5432",
     "username": "user",
     "password": "${password}",
-    "ssl_mode": "encrypt",
+    "ssl_mode": "require",
     "create_permissions": true
   }
 }
@@ -130,12 +130,15 @@ connection-creator agent must map these to canonical values before writing the c
 | Canonical | Meaning | Native examples |
 |-----------|---------|-----------------|
 | `none` | No encryption | `disable`, `DISABLED`, `false` |
-| `encrypt` | Require encrypted connection | `require`, `REQUIRED`, `true` |
-| `verify` | Encrypt + verify server certificate | `verify-ca`, `verify-full`, `VERIFY_CA`, `VERIFY_IDENTITY` |
+| `require` | Require encrypted connection (no cert verification) | `require`, `REQUIRED`, `true` |
+| `verify-ca` | Require TLS; verify certificate chain only (hostname not checked) | `verify-ca`, `VERIFY_CA` |
+| `verify-full` | Require TLS; verify certificate chain AND hostname | `verify-full`, `VERIFY_IDENTITY` |
 | `prefer` | Try encrypt, fallback to none at runtime | `prefer`, `PREFERRED`, `allow` |
 
 The connector's `form_fields` keep their native values for display. The connection JSON
-`parameters.ssl_mode` always uses one of the four canonical values.
+`parameters.ssl_mode` always uses one of the five canonical values. **Preserve the `verify-ca`
+vs `verify-full` distinction** — do not collapse onto a single value, since hostname-off is
+security-relevant and typically intentional (internal CA, proxy, relaxed environment).
 
 **S3 / Other:**
 ```json

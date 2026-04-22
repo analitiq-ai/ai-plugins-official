@@ -5,7 +5,7 @@
   "parameters": {
     "database": "postgres",
     "password": "${password}",
-    "ssl_mode": "encrypt",
+    "ssl_mode": "require",
     "port": "5432",
     "create_permissions": true,
     "username": "postgres"

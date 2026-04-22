@@ -55,9 +55,15 @@ If research results are missing or incomplete, report this to the orchestrator r
    `{slug}/definition/type-map.json`.
 
 5. **Author `ssl-mode-map.json` if the driver supports TLS.** Map the driver's native SSL mode
-   values to the canonical enum (`none | encrypt | verify | prefer`) per the `type-mapping-spec`
-   skill. Save as `{slug}/definition/ssl-mode-map.json`. Omit entirely for drivers that explicitly
-   do not support TLS.
+   values to the canonical enum (`none | require | verify-ca | verify-full | prefer`) per the
+   `type-mapping-spec` skill. Save as `{slug}/definition/ssl-mode-map.json`. Omit entirely for
+   drivers that explicitly do not support TLS.
+
+   **Preserve the chain-only vs chain+hostname distinction.** If the driver distinguishes
+   hostname verification (Postgres `verify-ca` vs `verify-full`, MySQL `VERIFY_CA` vs
+   `VERIFY_IDENTITY`, similar), emit separate rules for each. Do NOT collapse both onto
+   canonical `verify-full` — a user who deliberately set `verify-ca` (internal CA, proxy,
+   etc.) must still get `verify-ca` at runtime.
 
    **If the research input does not clearly state whether the driver supports TLS (or how TLS
    modes are enumerated — common for drivers that pass TLS as a URL param or boolean rather than
