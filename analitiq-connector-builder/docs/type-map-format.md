@@ -201,9 +201,11 @@ vocabulary here — that validation is the job of the canonical-types reference
 (`analitiq-connector-builder/schemas/canonical-types.json`). This schema only
 validates the **shape** of `type-map.json`.
 
-An additional semantic check — every `${name}` in `canonical` has a matching
-named group in `native` — is out of scope for JSON Schema and performed by the
-validator API / authoring skill.
+The schema does enforce one substitution invariant: `exact` rules cannot
+contain `${name}` tokens in `canonical` (captures only come from `regex`
+rules). The complementary semantic check — every `${name}` in `canonical` has
+a matching named group in `native` — is out of scope for JSON Schema and
+performed by the validator API / authoring skill.
 
 ## Worked examples
 

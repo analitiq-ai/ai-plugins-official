@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://api.analitiq-dev.com/schemas/ssl-mode-map.json",
   "title": "ssl-mode-map.json",
-  "description": "Maps a database driver's native SSL mode string values to the Analitiq canonical SSL mode enum. Keys are arbitrary native strings as documented by the driver (e.g. Postgres 'disable' / 'require' / 'verify-ca' / 'verify-full'; MySQL 'DISABLED' / 'PREFERRED' / 'REQUIRED' / 'VERIFY_CA' / 'VERIFY_IDENTITY'). Values must be drawn from the canonical_ssl_mode enum defined in canonical-types.json. Emitted only for SSL-capable database connectors. The chain-only vs chain+hostname distinction (verify-ca vs verify-full) MUST be preserved — do not collapse both onto verify-full. Versioning policy: additive changes keep this `$id` unchanged; breaking changes MUST move to a new `$id` such as `/schemas/ssl-mode-map-v2.json` so artifacts pinning the old `$id` keep validating. Do not expose a `latest` URL for `$id` embedding — `$id` must be stable.",
+  "description": "Maps a database driver's native SSL mode string values to the Analitiq canonical SSL mode enum. Keys are arbitrary native strings as documented by the driver (e.g. Postgres 'disable' / 'require' / 'verify-ca' / 'verify-full'; MySQL 'DISABLED' / 'PREFERRED' / 'REQUIRED' / 'VERIFY_CA' / 'VERIFY_IDENTITY'). The only reserved key is `$schema`; every other key is treated as a native driver SSL mode. Values must be drawn from the canonical_ssl_mode enum defined in canonical-types.json. Emitted only for SSL-capable database connectors. Authoring rule (not schema-enforced): the chain-only vs chain+hostname distinction (verify-ca vs verify-full) MUST be preserved — do not collapse both onto verify-full. Versioning policy: additive changes keep this `$id` unchanged; breaking changes MUST move to a new `$id` such as `/schemas/ssl-mode-map-v2.json` so artifacts pinning the old `$id` keep validating. Do not expose a `latest` URL for `$id` embedding — `$id` must be stable.",
   "type": "object",
   "minProperties": 1,
   "properties": {
@@ -17,5 +17,7 @@
       "$ref": "https://api.analitiq-dev.com/schemas/canonical-types.json#/$defs/canonical_ssl_mode"
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "if": { "required": ["$schema"] },
+  "then": { "minProperties": 2 }
 }
