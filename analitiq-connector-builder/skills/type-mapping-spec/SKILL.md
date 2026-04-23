@@ -13,7 +13,7 @@ description: >
 
 ## Supporting files
 
-- `${CLAUDE_PLUGIN_ROOT}/schemas/canonical-types.json` — JSON Schema defining the canonical Arrow logical type vocabulary. `$id: https://analitiq.dev/schemas/canonical-types.json`. `$ref` from downstream schemas; never restate the vocabulary in prose.
+- `${CLAUDE_PLUGIN_ROOT}/schemas/canonical-types.json` — JSON Schema defining the canonical Arrow logical type vocabulary. `$id: https://api.analitiq-dev.com/schemas/canonical-types.json`. `$ref` from downstream schemas; never restate the vocabulary in prose.
 - `${CLAUDE_PLUGIN_ROOT}/docs/type-map-format.md` — format spec for `type-map.json`: match algorithm, normalization, capture-group substitution, JSON Schema fragment, Postgres + MySQL worked examples.
 
 Read both before authoring.
@@ -31,7 +31,7 @@ Neither is a field inside `connector.json`. Each is a standalone file with its o
 
 ## `type-map.json`
 
-Shape per `${CLAUDE_PLUGIN_ROOT}/docs/type-map-format.md`: a top-level JSON array of `{match, native, canonical}` rules. `$schema: "https://analitiq.dev/schemas/type-map.json"`.
+Shape per `${CLAUDE_PLUGIN_ROOT}/docs/type-map-format.md`: a top-level JSON array of `{match, native, canonical}` rules. `$schema: "https://api.analitiq-dev.com/schemas/type-map.json"`.
 
 ### Canonical vocabulary (from `schemas/canonical-types.json`)
 
@@ -114,11 +114,11 @@ For storage connectors, `type-map.json` covers **connector-level metadata types 
 
 ## `ssl-mode-map.json` (SSL-capable DBs only)
 
-Standalone file with `$schema: "https://analitiq.dev/schemas/ssl-mode-map.json"`. Maps native driver SSL mode values to `canonical_ssl_mode` (`none | require | verify-ca | verify-full | prefer`) defined in `schemas/canonical-types.json`. Enum values mirror Postgres `sslmode` / MySQL `--ssl-mode` vocabulary, so common drivers produce near-1:1 mappings.
+Standalone file with `$schema: "https://api.analitiq-dev.com/schemas/ssl-mode-map.json"`. Maps native driver SSL mode values to `canonical_ssl_mode` (`none | require | verify-ca | verify-full | prefer`) defined in `schemas/canonical-types.json`. Enum values mirror Postgres `sslmode` / MySQL `--ssl-mode` vocabulary, so common drivers produce near-1:1 mappings.
 
 ```json
 {
-  "$schema": "https://analitiq.dev/schemas/ssl-mode-map.json",
+  "$schema": "https://api.analitiq-dev.com/schemas/ssl-mode-map.json",
   "disable":     "none",
   "require":     "require",
   "verify-ca":   "verify-ca",
