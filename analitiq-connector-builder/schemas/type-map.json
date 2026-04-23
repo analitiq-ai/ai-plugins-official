@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://api.analitiq-dev.com/schemas/type-map.json",
   "title": "type-map.json",
-  "description": "Ordered list of native → canonical type mapping rules. First match wins. The entire file is a top-level JSON array of rule objects.",
+  "description": "Ordered list of native → canonical type mapping rules. First match wins. The entire file is a top-level JSON array of rule objects. Versioning policy: additive changes keep this `$id` unchanged; breaking changes (e.g. new required fields, tightened constraints) MUST move to a new `$id` such as `/schemas/type-map-v2.json` so artifacts pinning the old `$id` keep validating. Do not expose a `latest` URL for `$id` embedding — `$id` must be stable. Behavioral semantics (match algorithm, normalization, capture-group substitution, fallback) live in `analitiq-connector-builder/docs/type-map-format.md` and are out of scope for this schema.",
   "type": "array",
   "minItems": 1,
   "items": {
