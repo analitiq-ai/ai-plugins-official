@@ -14,12 +14,12 @@ models to ensure 100% compliance. Without validation, agents may produce JSON wi
 
 ## Validation API
 
-**Base URL:** `https://rest.analitiq-dev.com/v1`
+**Base URL:** `https://api.analitiq-dev.com/v1`
 **Auth:** `x-api-key` header with the API key
 
 **Validate a connector:**
 ```bash
-curl -s -X POST "https://rest.analitiq-dev.com/v1/validate/connector" \
+curl -s -X POST "https://api.analitiq-dev.com/v1/validate/connector" \
   -H "x-api-key: $ANALITIQ_API_KEY" \
   -H "Content-Type: application/json" \
   -d @{slug}/definition/connector.json
@@ -27,7 +27,7 @@ curl -s -X POST "https://rest.analitiq-dev.com/v1/validate/connector" \
 
 **Validate an endpoint:**
 ```bash
-curl -s -X POST "https://rest.analitiq-dev.com/v1/validate/endpoint" \
+curl -s -X POST "https://api.analitiq-dev.com/v1/validate/endpoint" \
   -H "x-api-key: $ANALITIQ_API_KEY" \
   -H "Content-Type: application/json" \
   -d @{slug}/definition/endpoints/{endpoint_name}.json
