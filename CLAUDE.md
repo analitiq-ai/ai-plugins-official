@@ -19,7 +19,7 @@ Creates new connector and endpoint definitions for the Analitiq DIP registry. Co
 - `db-connector-creator` builds database connector definitions with driver, SSH, and db auth configuration
 - `storage-connector-creator` builds storage connector definitions (S3, SFTP) with credentials auth
 - `endpoint-creator` builds individual endpoint JSON files under `definition/endpoints/` — **API connectors only** (database/other connectors do not have pre-defined endpoints). Creates endpoint files only; manifest and docs updates are handled by `connector-wizard` after all endpoints complete.
-- If `ANALITIQ_API_KEY` is available, `connector-wizard` validates all JSON against `https://rest.analitiq-dev.com/v1/validate/{connector|endpoint}` and records validation status
+- If `ANALITIQ_API_KEY` is available, `connector-wizard` validates all JSON against `https://api.analitiq-dev.com/v1/validate/{connector|endpoint}` and records validation status
 - `registry-contributor` (optional) scans for PII/credentials, creates a sanitized copy if needed, pushes to the user's GitHub account, and opens a submission issue in `analitiq-dip-registry/connector-submissions`
 
 ### `analitiq-pipeline-builder` (v2.0.0)
@@ -96,7 +96,7 @@ Version is bumped automatically by GitHub Actions on PR merge via labels (`versi
 
 ## Canonical Types
 
-Canonical types are Apache Arrow logical types. The machine-readable vocabulary lives in `analitiq-connector-builder/schemas/canonical-types.json` (`$id: https://analitiq.dev/schemas/canonical-types.json`) — do not restate the vocabulary in prose. Each connector ships a `definition/type-map.json` that maps its native types to canonical ones. Authoring guidance: `analitiq-connector-builder/skills/type-mapping-spec/SKILL.md`. Format spec: `analitiq-connector-builder/docs/type-map-format.md`.
+Canonical types are Apache Arrow logical types. The machine-readable vocabulary lives in `analitiq-connector-builder/schemas/canonical-types.json` (`$id: https://api.analitiq-dev.com/schemas/canonical-types.json`) — do not restate the vocabulary in prose. Each connector ships a `definition/type-map.json` that maps its native types to canonical ones. Authoring guidance: `analitiq-connector-builder/skills/type-mapping-spec/SKILL.md`. Format spec: `analitiq-connector-builder/docs/type-map-format.md`.
 
 **Layout convention.** Both plugins use a `definition/` directory that holds `type-map.json` alongside an `endpoints/` subdirectory — fully symmetric:
 

@@ -6,7 +6,7 @@ Every connector ships a **standalone `type-map.json`** file at
 `{slug}/definition/type-map.json`, alongside `connector.json` and
 `manifest.json`. It is not a field inside another file — it is an independently
 validated JSON document with its own `$schema` / `$id`
-(`https://analitiq.dev/schemas/type-map.json`). The file contains an ordered
+(`https://api.analitiq-dev.com/schemas/type-map.json`). The file contains an ordered
 list of rules that map **native** types (Postgres `VARCHAR(255)`, MySQL
 `TINYINT(1)`, REST API `number`, etc.) to **canonical** Arrow logical types
 (`Utf8`, `Boolean`, `Decimal128(10, 2)`, `Timestamp(MICROSECOND, UTC)`, etc.).
@@ -189,44 +189,12 @@ Rationale:
 
 ## JSON Schema
 
-The JSON Schema for `type-map.json` is published at
-`https://analitiq.dev/schemas/type-map.json`. Because a `type-map.json` file is
-a bare top-level array, there is no place to embed a `$schema` key inside the
-document itself — validators associate the file with its schema by filename
-convention (`type-map.json` → the published `$id` above).
-
-```json
-{
-  "$id": "https://analitiq.dev/schemas/type-map.json",
-  "title": "type-map.json",
-  "description": "Ordered list of native → canonical type mapping rules. First match wins. The entire file is a top-level JSON array of rule objects.",
-  "type": "array",
-  "minItems": 1,
-  "items": {
-    "type": "object",
-    "required": ["match", "native", "canonical"],
-    "additionalProperties": false,
-    "properties": {
-      "match":     { "enum": ["exact", "regex"] },
-      "native":    { "type": "string", "minLength": 1 },
-      "canonical": { "type": "string", "minLength": 1 }
-    },
-    "allOf": [
-      {
-        "if":   { "properties": { "match": { "const": "exact" } } },
-        "then": {
-          "properties": {
-            "canonical": {
-              "not": { "pattern": "\\$\\{[^}]+\\}" },
-              "description": "exact rules cannot use ${name} substitution"
-            }
-          }
-        }
-      }
-    ]
-  }
-}
-```
+The JSON Schema for `type-map.json` lives at
+`analitiq-connector-builder/schemas/type-map.json` and is published at
+`https://api.analitiq-dev.com/schemas/type-map.json`. Because a `type-map.json`
+file is a bare top-level array, there is no place to embed a `$schema` key
+inside the document itself — validators associate the file with its schema by
+filename convention (`type-map.json` → the published `$id` above).
 
 The `canonical` string is not schema-validated against the Arrow logical type
 vocabulary here — that validation is the job of the canonical-types reference
