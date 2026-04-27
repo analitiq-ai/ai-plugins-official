@@ -203,7 +203,9 @@ as the final assembly step. Read the `connector-assembly` skill at
 `${CLAUDE_PLUGIN_ROOT}/skills/connector-assembly/SKILL.md` for the full specification. There is
 no separate `manifest.json` file — these fields live inside `connector.json`.
 
-1. **Read `connector.json`** — extract all `${placeholder}` tokens and categorize each by source.
+1. **Read `connector.json`** — extract every `${placeholder}` token, every name referenced in
+   any `derived_from` array, and every auth-protocol input the runtime needs but doesn't
+   template (e.g. JWT `private_key`, `key_id`, claim inputs). Categorize each by source.
 2. **Read all endpoint files** in `definition/endpoints/` (API connectors only) — extract any
    `${placeholder}` tokens per endpoint.
 3. **Merge the manifest fields back into `connector.json`** — add `version`, `placeholders`, and
