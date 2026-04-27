@@ -37,7 +37,8 @@
   "version": "1.0.0",
   "placeholders": [
     { "name": "company_domain", "source": "user_defined" },
-    { "name": "base64_credentials", "source": "derived", "derived_from": ["username", "password"] }
+    { "name": "api_key", "source": "user_defined" },
+    { "name": "base64_credentials", "source": "derived", "derived_from": ["api_key"] }
   ],
   "endpoints": []
 }

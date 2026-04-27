@@ -59,9 +59,17 @@ automatically when a PR is merged, based on PR labels (`version:minor`, `version
 
 ## Placeholder Registry
 
-The `placeholders` array is the **single source of truth** for all `${placeholder}` tokens used in
-`connector.json` (auth/runtime body) and endpoint files. Every placeholder must be listed here
-with its source category.
+The `placeholders` array is the **single source of truth** for every named value the runtime
+needs to resolve when executing this connector. It must list:
+
+1. Every `${placeholder}` token that appears in `connector.json` (auth/runtime body) or any
+   endpoint file.
+2. Every name listed in any `derived_from` array, even if it never appears as `${...}` directly
+   (the runtime needs to resolve those inputs to compute the derived value).
+3. Every auth-protocol input the runtime needs but does not template via `${...}` — for example,
+   the JWT `private_key`, `key_id`, and any claim inputs the signer consumes.
+
+Every entry must carry a source category.
 
 Each entry is an object:
 
@@ -140,11 +148,12 @@ Common derived values:
 ]
 ```
 
-**Basic Auth with tenant subdomain** (e.g., BambooHR):
+**Basic Auth with tenant subdomain** (e.g., BambooHR — uses `api_key` as the basic-auth username with an empty password):
 ```json
 "placeholders": [
   { "name": "company_domain", "source": "user_defined" },
-  { "name": "base64_credentials", "source": "derived", "derived_from": ["username", "password"] }
+  { "name": "api_key", "source": "user_defined" },
+  { "name": "base64_credentials", "source": "derived", "derived_from": ["api_key"] }
 ]
 ```
 

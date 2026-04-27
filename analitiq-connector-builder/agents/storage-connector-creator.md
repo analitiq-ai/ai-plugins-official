@@ -89,7 +89,7 @@ If research results are missing or incomplete, report this to the orchestrator r
    - Create directory `{slug}/`
    - Create subdirectory `{slug}/definition/`
    - Do NOT create an `endpoints/` directory — storage connectors have no pre-defined endpoints
-   - Save `connector.json` in `definition/`
+   - Save `connector.json` in `definition/` — emit only the auth/runtime body. Do NOT include `version`, `placeholders`, or `endpoints` fields; the orchestrator appends those in Phase 4 (`connector-assembly`). The example files end with those fields for reference, but they are out of scope for this agent.
    - Save `type-map.json` in `definition/` (from step 4)
    - Create `CLAUDE.md` in repo root (from scaffolding template, omit "Available Endpoints" section)
    - Create `AGENTS.md` in repo root (identical to CLAUDE.md)
