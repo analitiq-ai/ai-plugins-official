@@ -97,4 +97,4 @@ The `${placeholder}` resolves from stored connection credentials at runtime.
 
 **Critical:** `token_exchange` MUST be a full object (url + method + content_type + body), not a bare URL string.
 
-Every `${placeholder}` must be registered in `manifest.json` with a source category (`user_defined`, `system_defined`, `post_auth`, `protocol`, or `derived`). See the `connector-scaffolding` skill for the placeholder registry format.
+Every `${placeholder}` must be registered in the `placeholders` array inside `connector.json` with a source category (`user_defined`, `system_defined`, `post_auth`, `protocol`, or `derived`). See the `connector-assembly` skill for the placeholder registry format.

@@ -11,14 +11,14 @@ This is the official directory of Analitiq Claude Code plugins for building data
 ### `analitiq-connector-builder` (v2.0.0)
 Creates new connector and endpoint definitions for the Analitiq DIP registry. Connectors are published to the `analitiq-dip-registry` GitHub org as individual repos named `{slug}`.
 
-**Agent chain:** `connector-wizard` (skill) → `connector-researcher` → `{type}-connector-creator` → `endpoint-creator` (API only) → manifest assembly → validate (optional) → `registry-contributor` (optional)
+**Agent chain:** `connector-wizard` (skill) → `connector-researcher` → `{type}-connector-creator` → `endpoint-creator` (API only) → connector assembly → validate (optional) → `registry-contributor` (optional)
 
-- `connector-wizard` interviews the user, checks for duplicates in the registry, dispatches research and creation agents, builds the manifest, updates docs, optionally validates, and optionally contributes to the community registry
+- `connector-wizard` interviews the user, checks for duplicates in the registry, dispatches research and creation agents, finalizes `connector.json` (placeholder registry + endpoint index), updates docs, optionally validates, and optionally contributes to the community registry
 - `connector-researcher` researches system documentation for auth details, connection parameters, or endpoint schemas (type-agnostic — works for APIs, databases, and storage systems)
 - `api-connector-creator` builds API connector definitions (connector.json, repo scaffolding) with auth flows, headers, and rate limits
 - `db-connector-creator` builds database connector definitions with driver, SSH, and db auth configuration
 - `storage-connector-creator` builds storage connector definitions (S3, SFTP) with credentials auth
-- `endpoint-creator` builds individual endpoint JSON files under `definition/endpoints/` — **API connectors only** (database/other connectors do not have pre-defined endpoints). Creates endpoint files only; manifest and docs updates are handled by `connector-wizard` after all endpoints complete.
+- `endpoint-creator` builds individual endpoint JSON files under `definition/endpoints/` — **API connectors only** (database/other connectors do not have pre-defined endpoints). Creates endpoint files only; the placeholder registry, endpoint index, and docs updates are handled by `connector-wizard` after all endpoints complete.
 - If `ANALITIQ_API_KEY` is available, `connector-wizard` validates all JSON against `https://api.analitiq-dev.com/v1/validate/{connector|endpoint}` and records validation status
 - `registry-contributor` (optional) scans for PII/credentials, creates a sanitized copy if needed, pushes to the user's GitHub account, and opens a submission issue in `analitiq-dip-registry/connector-submissions`
 
@@ -36,9 +36,8 @@ Builds data integration pipelines using pre-defined connectors from the DIP regi
 
 ## Key Concepts
 
-- **Connector:** Auth config + metadata for a system (API, database, S3/SFTP). Lives in `{slug}/definition/connector.json`.
+- **Connector:** Auth config + metadata + placeholder registry + endpoint index for a system (API, database, S3/SFTP). Lives in `{slug}/definition/connector.json`. Carries `version`, `placeholders`, and `endpoints` fields directly — there is no separate `manifest.json`. The `placeholders` array registers every `${placeholder}` used in the auth body and endpoint files with a source category (`user_defined`, `system_defined`, `post_auth`, `protocol`, `derived`).
 - **Endpoint:** Schema definition for a single API resource. Lives in `definition/endpoints/{name}.json`. **API connectors only** — database/other connectors do not have pre-defined endpoints (their schema/table combinations are deployment-specific and discovered at runtime).
-- **Manifest:** Index of all endpoints and placeholder registry for a connector. Lives in `definition/manifest.json`. The `placeholders` array registers every `${placeholder}` used in `connector.json` and endpoint files with a source category (`user_defined`, `system_defined`, `post_auth`, `protocol`, `derived`).
 - **Type map:** Ordered list of rules mapping a connector's native types to canonical Arrow logical types. Lives in `definition/type-map.json`. Required on every connector. Format spec: `analitiq-connector-builder/docs/type-map-format.md`.
 - **SSL mode map:** Maps native driver SSL mode values to the canonical enum (`none | require | verify-ca | verify-full | prefer`). Lives in `definition/ssl-mode-map.json`. SSL-capable databases only — omitted entirely otherwise.
 - **Connection:** Runtime auth credentials for a connector instance. Secrets go to `.secrets/{connection_id}.json`.
@@ -57,8 +56,7 @@ Version is bumped automatically by GitHub Actions on PR merge via labels (`versi
 ├── README.md            # Human docs
 ├── CHANGELOG.md         # Version history
 └── definition/
-    ├── connector.json   # Auth + connector config
-    ├── manifest.json    # Placeholder registry + endpoint index
+    ├── connector.json   # Auth + placeholder registry + endpoint index
     ├── type-map.json    # Native → Arrow canonical type mapping (required)
     └── endpoints/       # Individual endpoint JSON files (API only)
 ```
@@ -71,8 +69,7 @@ Version is bumped automatically by GitHub Actions on PR merge via labels (`versi
 ├── README.md
 ├── CHANGELOG.md
 └── definition/
-    ├── connector.json    # Auth + driver + SSH config
-    ├── manifest.json     # Empty endpoints array
+    ├── connector.json    # Auth + driver + SSH config (placeholders/endpoints arrays empty)
     ├── type-map.json     # Native → Arrow canonical type mapping (required)
     └── ssl-mode-map.json # Native SSL mode → canonical enum (only if driver supports TLS)
 ```
@@ -85,8 +82,7 @@ Version is bumped automatically by GitHub Actions on PR merge via labels (`versi
 ├── README.md
 ├── CHANGELOG.md
 └── definition/
-    ├── connector.json   # Auth + credentials config
-    ├── manifest.json    # Empty endpoints array
+    ├── connector.json   # Auth + credentials config (placeholders/endpoints arrays empty)
     └── type-map.json    # Connector-level metadata types only (file-data typing is engine-side)
 ```
 

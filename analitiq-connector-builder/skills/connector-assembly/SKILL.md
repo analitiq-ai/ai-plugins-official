@@ -1,20 +1,25 @@
 ---
-name: manifest-assembly
+name: connector-assembly
 disable-model-invocation: true
 description: >
-  Manifest assembly specification. Defines the manifest.json structure including the placeholder
-  registry, endpoint entries, deprecation tagging, and version rules. Used by the connector-wizard
-  orchestrator as a final assembly step after all connector-creator and endpoint-creator agents
-  have completed.
+  Connector assembly specification. Defines the manifest fields that ride directly inside
+  connector.json — placeholder registry, endpoint entries, version, and deprecation tagging.
+  Used by the connector-wizard orchestrator as a final assembly step after all
+  connector-creator and endpoint-creator agents have completed.
 ---
 
-# Manifest Assembly
+# Connector Assembly
 
-The `connector-wizard` orchestrator builds `manifest.json` as a **final assembly step** after all sub-agents
-complete. No other agent creates or modifies the manifest — this ensures the manifest is built
-once with full visibility into `connector.json` and all endpoint files.
+The `connector-wizard` orchestrator finalizes `connector.json` as a **last assembly step** after
+all sub-agents complete. The connector-creator agent writes the auth/runtime body of
+`connector.json`; the orchestrator then layers on the `version`, `placeholders`, and `endpoints`
+fields (and an optional `deprecated` flag). No other agent touches these manifest fields — this
+ensures they are built once with full visibility into the auth body and all endpoint files.
 
-## When to Build
+There is no separate `manifest.json` file. Everything that used to live in the manifest now lives
+inside `connector.json`.
+
+## When to Assemble
 
 - **After Phase 2** (connector creation) for database and storage connectors (no endpoints)
 - **After Phase 3** (endpoint creation) for API connectors
@@ -30,14 +35,18 @@ once with full visibility into `connector.json` and all endpoint files.
 3. **Read all endpoint files** in `definition/endpoints/` (API connectors only) — extract any
    `${placeholder}` tokens per endpoint.
 
-4. **Build `manifest.json`** with the complete placeholder registry and endpoint index.
+4. **Merge the manifest fields back into `connector.json`** — set `version`, `placeholders`, and
+   `endpoints` on the same JSON document the connector-creator emitted, then write it back.
 
-## manifest.json Structure
+## connector.json Manifest Fields
+
+These fields layer onto the auth/runtime body produced by the connector-creator:
 
 ```json
 {
   "connector_name": "<connector_name>",
   "slug": "<slug>",
+  "...": "auth, base_url, headers, form_fields, etc.",
   "version": "1.0.0",
   "placeholders": [],
   "endpoints": []
@@ -51,7 +60,8 @@ automatically when a PR is merged, based on PR labels (`version:minor`, `version
 ## Placeholder Registry
 
 The `placeholders` array is the **single source of truth** for all `${placeholder}` tokens used in
-`connector.json` and endpoint files. Every placeholder must be listed here with its source category.
+`connector.json` (auth/runtime body) and endpoint files. Every placeholder must be listed here
+with its source category.
 
 Each entry is an object:
 
@@ -182,14 +192,15 @@ endpoints.
 
 ## Deprecation Tagging
 
-If the connector is deprecated, add `"deprecated": true` at the manifest root:
+If the connector is deprecated, add `"deprecated": true` at the `connector.json` root:
 
 ```json
 {
   "connector_name": "<connector_name>",
   "slug": "<slug>",
-  "version": "1.0.0",
+  "...": "...",
   "deprecated": true,
+  "version": "1.0.0",
   "placeholders": [],
   "endpoints": []
 }

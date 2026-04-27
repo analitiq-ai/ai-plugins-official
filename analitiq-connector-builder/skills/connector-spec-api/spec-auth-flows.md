@@ -138,7 +138,7 @@ Root-level `headers` are only for API data requests — they are never sent to `
 ```
 Key rules:
 - `auth.type` determines the flow (what the runtime does). Root `headers` determines where credentials go in API data requests. They're independent.
-- Every `${placeholder}` in root `headers`, `base_url`, or auth operation fields must be registered in `manifest.json` with a source category.
+- Every `${placeholder}` in root `headers`, `base_url`, or auth operation fields must be registered in the `placeholders` array inside `connector.json` with a source category.
 - Literal header values (e.g. `Accept: application/json`) are static defaults. `${placeholder}` values are resolved from stored parameters or credentials at runtime.
 - `form_fields` controls what the user sees: text = plain input, password = masked input, oauth2 = triggers OAuth redirect, select = dropdown.
 - `post_auth_steps` types: `"select"` = user picks from dropdown, `"auto"` = runtime resolves without user interaction. Adding `"apply_to": "base_url"` stores the result as the base URL used for API requests.
@@ -275,7 +275,7 @@ In all cases, the connector's headers use `${placeholder}` syntax (e.g. `"Author
 
 The `${placeholder}` syntax is used uniformly across all auth operations and root `headers`. All templates are **inline strings** — URLs are URL strings, POST bodies are form-encoded strings, consistent with how `base_url` already works.
 
-**Valid placeholder sources** — every `${placeholder}` must be registered in `manifest.json` with one of these source categories:
+**Valid placeholder sources** — every `${placeholder}` must be registered in the `placeholders` array inside `connector.json` with one of these source categories:
 
 | Source | Description | Examples |
 |--------|-------------|----------|

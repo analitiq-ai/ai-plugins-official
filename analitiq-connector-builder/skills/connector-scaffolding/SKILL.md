@@ -3,7 +3,8 @@ name: connector-scaffolding
 disable-model-invocation: true
 description: >
   Common scaffolding templates shared by all connector creator agents.
-  Contains templates for CLAUDE.md, AGENTS.md, README.md, CHANGELOG.md, and manifest.json,
+  Contains templates for CLAUDE.md, AGENTS.md, README.md, CHANGELOG.md, and the connector
+  manifest fields (placeholders + endpoints) that ride inside connector.json,
   plus the common connector fields specification. This skill should be loaded by any agent
   that creates connector directory structures.
 ---
@@ -22,20 +23,23 @@ connector_type, slug, form_fields, auth, etc.).
 
 ## Key Rules
 
-- Every `${placeholder}` in headers, base_url, or auth operations must be registered in `manifest.json` with a source category.
+- Every `${placeholder}` in headers, base_url, or auth operations must be registered in the
+  `placeholders` array inside `connector.json` with a source category.
 - Root `headers` are for API data requests only — never sent to auth operation URLs.
 - For OAuth2 connectors, `auth.token_exchange` must be a full object with `url`, `method`, `content_type`, and `body` — never a bare URL string.
 
-## manifest.json
+## connector.json manifest fields
 
-`manifest.json` is built by the `connector-wizard` orchestrator as a final assembly step — not by
-connector-creator agents. See the [manifest-assembly](../manifest-assembly/SKILL.md) skill for
-the full specification (structure, placeholder registry, source categories, endpoint entries,
-deprecation tagging).
+`connector.json` carries the manifest fields directly — there is no separate `manifest.json`.
+The `connector-wizard` orchestrator assembles the `version`, `placeholders`, and `endpoints`
+fields as a final step after all sub-agents complete, and writes them into the same
+`connector.json` produced by the connector-creator agent. See the
+[connector-assembly](../connector-assembly/SKILL.md) skill for the full specification
+(structure, placeholder registry, source categories, endpoint entries, deprecation tagging).
 
 > **Database and other connectors** do NOT have pre-defined endpoints. Their "endpoints" are
-> schema/table combinations specific to each deployment and discovered at runtime. The manifest
-> `endpoints` array stays empty, and no `endpoints/` directory is created.
+> schema/table combinations specific to each deployment and discovered at runtime. The
+> `connector.json` `endpoints` array stays empty, and no `endpoints/` directory is created.
 
 ## CLAUDE.md and AGENTS.md — Agent Reference Files
 
@@ -137,8 +141,7 @@ Track changes to the connector and its endpoints. Use this template:
 ├── README.md               # Human documentation (setup instructions, credentials)
 ├── CHANGELOG.md            # Version history
 └── definition/             # Connector definition files (machine-consumed JSON)
-    ├── connector.json      # The connector definition with auth details
-    ├── manifest.json       # Placeholder registry + endpoint index (built by connector-wizard orchestrator)
+    ├── connector.json      # Connector definition + placeholder registry + endpoint index
     └── endpoints/          # Directory for endpoint definitions (API only)
 ```
 
@@ -150,6 +153,5 @@ Track changes to the connector and its endpoints. Use this template:
 ├── README.md               # Human documentation (setup instructions, credentials)
 ├── CHANGELOG.md            # Version history
 └── definition/             # Connector definition files (machine-consumed JSON)
-    ├── connector.json      # The connector definition with auth details
-    └── manifest.json       # Connector manifest (built by connector-wizard orchestrator)
+    └── connector.json      # Connector definition (placeholders/endpoints arrays empty)
 ```

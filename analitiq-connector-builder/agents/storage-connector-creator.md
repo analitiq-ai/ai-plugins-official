@@ -101,7 +101,9 @@ If research results are missing or incomplete, report this to the orchestrator r
 - `auth.type` is always `"credentials"` for storage connectors.
 - Storage connectors do NOT have `driver` or `enable_ssh` fields.
 - Storage connectors do NOT have `base_url`, `headers`, `post_auth_steps`, or `requests_per_second`.
-- The manifest `endpoints` array stays empty — storage connectors have no pre-defined endpoints.
+- The `connector.json` `endpoints` array stays empty — storage connectors have no pre-defined
+  endpoints. The orchestrator finalizes this array; connector-creators only emit the
+  auth/runtime body.
 - Do NOT create an `endpoints/` directory.
 - `type-map.json` covers connector-level metadata types only — actual file data typing is file-format-driven at the engine. Do NOT emit `ssl-mode-map.json` for storage connectors.
 - Always read the matching example BEFORE creating the connector JSON.

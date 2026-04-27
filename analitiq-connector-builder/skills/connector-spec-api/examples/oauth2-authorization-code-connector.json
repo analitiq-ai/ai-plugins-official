@@ -67,5 +67,18 @@
   "requests_per_second": {
     "max_requests": 60,
     "time_window_seconds": 60
-  }
+  },
+  "version": "1.0.0",
+  "placeholders": [
+    { "name": "client_id", "source": "protocol" },
+    { "name": "client_secret", "source": "protocol" },
+    { "name": "redirect_uri", "source": "protocol" },
+    { "name": "state", "source": "protocol" },
+    { "name": "code", "source": "system_defined" },
+    { "name": "access_token", "source": "system_defined" },
+    { "name": "refresh_token", "source": "system_defined" },
+    { "name": "basic_auth", "source": "derived", "derived_from": ["client_id", "client_secret"] },
+    { "name": "tenant_id", "source": "post_auth" }
+  ],
+  "endpoints": []
 }

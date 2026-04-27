@@ -27,5 +27,10 @@
   "requests_per_second": {
     "max_requests": 60,
     "time_window_seconds": 60
-  }
+  },
+  "version": "1.0.0",
+  "placeholders": [
+    { "name": "api_key", "source": "user_defined" }
+  ],
+  "endpoints": []
 }

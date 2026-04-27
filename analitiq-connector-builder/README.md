@@ -21,7 +21,7 @@ connector-wizard (orchestrator)
 
 1. **connector-wizard** — interviews the user, checks for duplicates in the registry, dispatches research and creation agents, collects results, and optionally validates
 2. **connector-researcher** — researches official documentation for auth details, connection parameters, or endpoint schemas
-3. **{type}-connector-creator** — builds the connector definition (`connector.json`, `manifest.json`, repo scaffolding, docs)
+3. **{type}-connector-creator** — builds the connector definition (`connector.json`, repo scaffolding, docs). The placeholder registry and endpoint index are layered onto `connector.json` by the orchestrator after endpoint creation
 4. **endpoint-creator** — builds individual endpoint JSON files (API connectors only)
 
 ## Supported Connector Types
@@ -34,7 +34,7 @@ connector-wizard (orchestrator)
 
 ## Placeholder Source Categories
 
-Every `${placeholder}` in a connector definition is registered in `manifest.json` with a source category describing where the value comes from.
+Every `${placeholder}` in a connector definition is registered in the `placeholders` array inside `connector.json` with a source category describing where the value comes from.
 
 | Source | Description | Examples |
 |--------|-------------|----------|
