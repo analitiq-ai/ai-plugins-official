@@ -26,9 +26,13 @@ inside `connector.json`.
 
 ## Assembly Steps
 
-1. **Read `connector.json`** — extract all `${placeholder}` tokens from `base_url`, `headers`,
-   `auth` operations (`authorize.url`, `token_exchange.url/headers/body`, `refresh.url/headers/body`),
-   and `post_auth_steps`.
+1. **Read `connector.json`** — extract every name the runtime needs to resolve: (a) every
+   `${placeholder}` token in `base_url`, `headers`, `auth` operations
+   (`authorize.url`, `token_exchange.url/headers/body`, `refresh.url/headers/body`), and
+   `post_auth_steps`; (b) every name referenced in any `derived_from` array; and (c) every
+   auth-protocol input the runtime needs but does not template (e.g. JWT `private_key`,
+   `key_id`, `claims` inputs). See the Placeholder Registry section below for the full
+   inclusion rule.
 
 2. **Categorize each placeholder** by source (see Source Categories below).
 

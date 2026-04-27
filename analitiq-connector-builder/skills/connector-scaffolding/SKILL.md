@@ -24,7 +24,9 @@ connector_type, slug, form_fields, auth, etc.).
 ## Key Rules
 
 - Every `${placeholder}` in headers, base_url, or auth operations must be registered in the
-  `placeholders` array inside `connector.json` with a source category.
+  `placeholders` array inside `connector.json` with a source category. The array also covers
+  `derived_from` inputs and auth-protocol inputs the runtime needs but doesn't template — see
+  the `connector-assembly` skill for the full inclusion rule.
 - Root `headers` are for API data requests only — never sent to auth operation URLs.
 - For OAuth2 connectors, `auth.token_exchange` must be a full object with `url`, `method`, `content_type`, and `body` — never a bare URL string.
 

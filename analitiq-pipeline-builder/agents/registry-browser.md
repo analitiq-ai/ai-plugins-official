@@ -61,7 +61,7 @@ connectors/{slug}/
 
 ## Key Files
 
-- **`connector.json`** — has `connector_type` (`api` | `database` | `other`), `slug`, `auth`, `form_fields`, `base_url`, `headers`, plus `placeholders` (registry of every `${placeholder}` token with its source category) and `endpoints` (index of every public endpoint file).
+- **`connector.json`** — has `connector_type` (`api` | `database` | `other`), `slug`, `auth`, `form_fields`, `base_url`, `headers`, plus `placeholders` (registry of every named value the runtime resolves: used `${...}` tokens, `derived_from` inputs, and untemplated auth-protocol inputs like JWT signing keys, each with a source category) and `endpoints` (index of every public endpoint file).
 - **`CLAUDE.md`** — human-readable context about auth flows, rate limits, caveats
 
 ## Capabilities

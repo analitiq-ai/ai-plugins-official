@@ -42,9 +42,9 @@ Every named value the runtime needs is registered in the `placeholders` array in
 | `system_defined` | Values returned by the target system during authentication | `access_token`, `refresh_token`, `code` |
 | `post_auth` | Values resolved via post-authentication steps | `tenant_id`, `server_url`, `session_token`, `account_id` |
 | `protocol` | OAuth2/auth protocol parameters from app registration or flow setup | `client_id`, `client_secret`, `redirect_uri`, `state`, `code_verifier` |
-| `derived` | Values computed from other placeholders | `basic_auth`, `base64_credentials`, `jwt_token`, `code_challenge` |
+| `derived` | Values computed from other registered names (the inputs do not need to appear as `${...}` tokens themselves) | `basic_auth`, `base64_credentials`, `jwt_token`, `code_challenge` |
 
-Derived placeholders include a `derived_from` field listing their input placeholders.
+Derived placeholders include a `derived_from` field listing the names they're computed from. Those names must be entries in the same `placeholders` array, but they are resolution inputs, not necessarily template tokens. See the `connector-assembly` skill for the full inclusion rule and source-category guidance.
 
 ## Installation
 
