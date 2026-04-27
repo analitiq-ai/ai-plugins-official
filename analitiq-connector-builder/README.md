@@ -34,7 +34,7 @@ connector-wizard (orchestrator)
 
 ## Placeholder Source Categories
 
-Every `${placeholder}` in a connector definition is registered in the `placeholders` array inside `connector.json` with a source category describing where the value comes from.
+Every named value the runtime needs is registered in the `placeholders` array inside `connector.json` with a source category describing where the value comes from. The array covers (1) every `${placeholder}` token in the auth/runtime body or endpoint files, (2) every name listed in any `derived_from` array, and (3) auth-protocol inputs the runtime needs but does not template (e.g. JWT signing key + claim inputs).
 
 | Source | Description | Examples |
 |--------|-------------|----------|
