@@ -44,5 +44,13 @@
   "requests_per_second": {
     "max_requests": 60,
     "time_window_seconds": 60
-  }
+  },
+  "version": "1.0.0",
+  "placeholders": [
+    { "name": "issuer_id", "source": "user_defined" },
+    { "name": "key_id", "source": "user_defined" },
+    { "name": "private_key", "source": "user_defined" },
+    { "name": "jwt_token", "source": "derived", "derived_from": ["private_key", "issuer_id", "key_id"] }
+  ],
+  "endpoints": []
 }

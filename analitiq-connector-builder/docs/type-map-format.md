@@ -3,8 +3,8 @@
 ## Purpose
 
 Every connector ships a **standalone `type-map.json`** file at
-`{slug}/definition/type-map.json`, alongside `connector.json` and
-`manifest.json`. It is not a field inside another file — it is an independently
+`{slug}/definition/type-map.json`, alongside `connector.json`. It is not a
+field inside another file — it is an independently
 validated JSON document with its own `$schema` / `$id`
 (`https://api.analitiq-dev.com/schemas/type-map.json`). The file contains an ordered
 list of rules that map **native** types (Postgres `VARCHAR(255)`, MySQL

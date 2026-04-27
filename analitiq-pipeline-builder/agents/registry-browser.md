@@ -51,8 +51,7 @@ Result on disk:
 ```
 connectors/{slug}/
 ├── definition/
-│   ├── connector.json       # Connector metadata, auth config, form_fields
-│   ├── manifest.json        # Index of public endpoints + placeholder registry
+│   ├── connector.json       # Connector metadata, auth config, form_fields, placeholder registry, endpoint index
 │   └── endpoints/           # Public endpoint definitions (API connectors only)
 │       ├── transfers.json
 │       └── balances.json
@@ -62,8 +61,7 @@ connectors/{slug}/
 
 ## Key Files
 
-- **`connector.json`** — has `connector_type` (`api` | `database` | `other`), `slug`, `auth`, `form_fields`, `base_url`, `headers`
-- **`manifest.json`** — lists all available public endpoints with file paths and placeholder registry
+- **`connector.json`** — has `connector_type` (`api` | `database` | `other`), `slug`, `auth`, `form_fields`, `base_url`, `headers`, plus `placeholders` (registry of every `${placeholder}` token with its source category) and `endpoints` (index of every public endpoint file).
 - **`CLAUDE.md`** — human-readable context about auth flows, rate limits, caveats
 
 ## Capabilities
@@ -91,11 +89,12 @@ Fetch key files directly via raw URLs:
 
 ```bash
 curl -s https://raw.githubusercontent.com/analitiq-dip-registry/{slug}/main/CLAUDE.md
-curl -s https://raw.githubusercontent.com/analitiq-dip-registry/{slug}/main/definition/manifest.json
+curl -s https://raw.githubusercontent.com/analitiq-dip-registry/{slug}/main/definition/connector.json
 ```
 
 `CLAUDE.md` contains a machine-readable summary of the connector: auth type, endpoints,
-rate limits, and caveats. `manifest.json` lists all public endpoints with file paths.
+rate limits, and caveats. `connector.json` carries the auth body, the placeholder registry,
+and the endpoint index.
 
 ### 3. Download a Connector
 
@@ -131,7 +130,7 @@ ls connectors/
 Once a connector is downloaded and validated, report back:
 - Connector name, slug, and `connector_type`
 - Auth type (from `CLAUDE.md` or `definition/connector.json`)
-- Available endpoints (from `definition/manifest.json` or `definition/endpoints/` — API connectors only)
+- Available endpoints (from `connector.json`'s `endpoints` array; cross-check against `definition/endpoints/` — API connectors only)
 - Any caveats or limitations
 
 > **Note:** Non-API connectors (`database`, `other`) do not have a `definition/endpoints/`

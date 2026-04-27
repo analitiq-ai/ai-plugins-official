@@ -40,5 +40,8 @@
       "type": "text",
       "required": false
     }
-  ]
+  ],
+  "version": "1.0.0",
+  "placeholders": [],
+  "endpoints": []
 }

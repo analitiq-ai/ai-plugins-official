@@ -40,5 +40,14 @@
     }
   ],
   "timeout": 30,
-  "requests_per_second": { "max_requests": 150, "time_window_seconds": 60 }
+  "requests_per_second": { "max_requests": 150, "time_window_seconds": 60 },
+  "version": "1.0.0",
+  "placeholders": [
+    { "name": "app_id", "source": "user_defined" },
+    { "name": "app_secret", "source": "user_defined" },
+    { "name": "install_token", "source": "user_defined" },
+    { "name": "session_token", "source": "post_auth" },
+    { "name": "server_url", "source": "post_auth" }
+  ],
+  "endpoints": []
 }

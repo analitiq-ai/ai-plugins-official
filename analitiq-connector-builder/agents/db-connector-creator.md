@@ -96,8 +96,9 @@ If research results are missing or incomplete, report this to the orchestrator r
 - Database connectors must include `enable_ssh` (boolean).
 - `auth.type` is always `"db"` for database connectors.
 - `auth.authorize` defines the test connection endpoint (url, method, body).
-- The manifest `endpoints` array stays empty — database endpoints are schema/table combinations
-  discovered at runtime.
+- The `connector.json` `endpoints` array stays empty — database endpoints are schema/table
+  combinations discovered at runtime. The orchestrator finalizes this array; connector-creators
+  only emit the auth/runtime body.
 - Do NOT create an `endpoints/` directory.
 - `type-map.json` is required. `ssl-mode-map.json` is emitted only when the driver supports TLS;
   omit the file entirely otherwise (do not emit an empty object).
