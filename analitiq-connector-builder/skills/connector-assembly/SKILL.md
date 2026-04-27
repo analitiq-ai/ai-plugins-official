@@ -87,7 +87,7 @@ Each entry is an object:
 | `system_defined` | Values returned by the target system during authentication | `access_token`, `refresh_token`, `code` |
 | `post_auth` | Values resolved via post-authentication steps | `tenant_id`, `server_url`, `session_token`, `account_id` |
 | `protocol` | OAuth2/auth protocol parameters from app registration or flow setup | `client_id`, `client_secret`, `redirect_uri`, `state`, `code_verifier` |
-| `derived` | Values computed from other placeholders | `basic_auth`, `base64_credentials`, `jwt_token`, `code_challenge` |
+| `derived` | Values computed from other registered names (the inputs do not need to appear as `${...}` tokens themselves) | `basic_auth`, `base64_credentials`, `jwt_token`, `code_challenge` |
 
 ### Categorization Rules
 
@@ -107,10 +107,16 @@ authentication response (e.g., `access_token`, `refresh_token`, `code`).
 outputs (`client_id`, `client_secret`, `app_id`, `app_secret`) or flow parameters
 (`redirect_uri`, `state`, `code_verifier`, `scopes`).
 
-**`derived`** — the value is computed from other placeholders. Always include `derived_from`.
-Common derived values:
+**`derived`** — the value is computed from other registered names. Always include
+`derived_from`. The names in `derived_from` must match entries in this `placeholders` array,
+but they need not appear as `${...}` tokens in the connector body — they are resolution inputs,
+not template tokens. Common derived values:
 - `basic_auth` — derived from `["client_id", "client_secret"]` (base64-encoded)
-- `base64_credentials` — derived from `["username", "password"]` (base64-encoded)
+- `base64_credentials` — derived from the form-field names that fill the basic-auth username
+  and (optionally) password slots. For a typical username+password connector that's
+  `["username", "password"]`; for connectors that route an API key into the username slot with
+  an empty password (e.g. BambooHR — see Examples below) it's `["api_key"]`. The names are
+  always connector-specific.
 - `jwt_token` — derived from private key and claims (issuer_id, key_id, etc.)
 - `code_challenge` — derived from `["code_verifier"]` (SHA256)
 
