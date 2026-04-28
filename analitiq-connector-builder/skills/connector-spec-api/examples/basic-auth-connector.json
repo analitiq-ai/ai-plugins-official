@@ -33,5 +33,12 @@
   "requests_per_second": {
     "max_requests": 60,
     "time_window_seconds": 60
-  }
+  },
+  "version": "1.0.0",
+  "placeholders": [
+    { "name": "company_domain", "source": "user_defined" },
+    { "name": "api_key", "source": "user_defined" },
+    { "name": "base64_credentials", "source": "derived", "derived_from": ["api_key"] }
+  ],
+  "endpoints": []
 }

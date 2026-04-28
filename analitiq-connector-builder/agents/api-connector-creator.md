@@ -57,7 +57,7 @@ If research results are missing or incomplete, report this to the orchestrator r
    - Create directory `{slug}/`
    - Create subdirectory `{slug}/definition/`
    - Create subdirectory `{slug}/definition/endpoints/`
-   - Save `connector.json` in `definition/`
+   - Save `connector.json` in `definition/` — emit only the auth/runtime body. Do NOT include `version`, `placeholders`, or `endpoints` fields; the orchestrator appends those in Phase 4 (`connector-assembly`). The example files end with those fields for reference, but they are out of scope for this agent.
    - Save `type-map.json` in `definition/` (from step 4)
    - Create `CLAUDE.md` in repo root (from scaffolding template)
    - Create `AGENTS.md` in repo root (identical to CLAUDE.md)
@@ -66,8 +66,11 @@ If research results are missing or incomplete, report this to the orchestrator r
 
 ## Key Rules
 
-- Every `${placeholder}` in headers, base_url, or auth operations must be registered in
-  `manifest.json` with a source category.
+- Every `${placeholder}` in headers, base_url, or auth operations is registered in the
+  `placeholders` array inside `connector.json` with a source category. The array also covers
+  `derived_from` inputs and auth-protocol inputs the runtime needs but doesn't template (e.g.
+  JWT signing key + claims) — see `connector-assembly` for the full inclusion rule. The
+  orchestrator finalizes this array; connector-creators only emit the auth/runtime body.
 - Root `headers` are for API data requests only — never sent to auth operation URLs.
 - For OAuth2 connectors, `auth.token_exchange` must be a full object with `url`, `method`,
   `content_type`, and `body` — never a bare URL string.

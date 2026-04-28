@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- `registry-browser` now reads the placeholder registry and endpoint index from
+  `definition/connector.json` (the new home for `version`/`placeholders`/`endpoints` after
+  the connector-builder merged `manifest.json` into `connector.json`).
+
 ## [3.0.0] - 2026-03-30
 
 ### Added

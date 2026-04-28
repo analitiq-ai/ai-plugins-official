@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- Merged `manifest.json` into `connector.json`. The `version`, `placeholders`, `endpoints`, and
+  optional root `deprecated` fields now live directly inside `connector.json`; the separate
+  `manifest.json` file is no longer produced. Renamed the `manifest-assembly` skill to
+  `connector-assembly` to reflect the new flow.
+
 ## [2.0.0] - 2026-03-28
 
 ### Added

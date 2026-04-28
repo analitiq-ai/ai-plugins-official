@@ -20,7 +20,7 @@ Read both before authoring.
 
 ## Files this skill produces
 
-Both sit in `{slug}/definition/` alongside `connector.json`, `manifest.json`, and `endpoints/`.
+Both sit in `{slug}/definition/` alongside `connector.json` and `endpoints/`.
 
 | File | Required | Which connectors |
 |------|----------|------------------|
