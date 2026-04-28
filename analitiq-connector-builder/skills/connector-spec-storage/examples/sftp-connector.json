@@ -47,5 +47,8 @@
       "required": false,
       "default": "/"
     }
-  ]
+  ],
+  "version": "1.0.0",
+  "placeholders": [],
+  "endpoints": []
 }

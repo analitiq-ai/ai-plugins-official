@@ -82,7 +82,7 @@ If research results are missing or incomplete, report this to the orchestrator r
    - Create directory `{slug}/`
    - Create subdirectory `{slug}/definition/`
    - Do NOT create an `endpoints/` directory — database connectors have no pre-defined endpoints
-   - Save `connector.json` in `definition/`
+   - Save `connector.json` in `definition/` — emit only the auth/runtime body. Do NOT include `version`, `placeholders`, or `endpoints` fields; the orchestrator appends those in Phase 4 (`connector-assembly`). The example files end with those fields for reference, but they are out of scope for this agent.
    - Save `type-map.json` in `definition/` (from step 4)
    - Save `ssl-mode-map.json` in `definition/` (from step 5, only if the driver supports TLS)
    - Create `CLAUDE.md` in repo root (from scaffolding template, omit "Available Endpoints" section)
@@ -96,8 +96,9 @@ If research results are missing or incomplete, report this to the orchestrator r
 - Database connectors must include `enable_ssh` (boolean).
 - `auth.type` is always `"db"` for database connectors.
 - `auth.authorize` defines the test connection endpoint (url, method, body).
-- The manifest `endpoints` array stays empty — database endpoints are schema/table combinations
-  discovered at runtime.
+- The `connector.json` `endpoints` array stays empty — database endpoints are schema/table
+  combinations discovered at runtime. The orchestrator finalizes this array; connector-creators
+  only emit the auth/runtime body.
 - Do NOT create an `endpoints/` directory.
 - `type-map.json` is required. `ssl-mode-map.json` is emitted only when the driver supports TLS;
   omit the file entirely otherwise (do not emit an empty object).

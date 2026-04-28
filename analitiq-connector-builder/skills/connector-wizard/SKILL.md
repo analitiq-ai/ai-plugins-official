@@ -118,7 +118,7 @@ Research the system to gather the information needed for connector creation.
    (`"deprecated": true`):
    - Warn the user that this system/API is deprecated.
    - Ask if they still want to proceed. The user may need a deprecated-but-functional connector.
-   - **If yes** — proceed. The connector will be tagged as deprecated in the manifest.
+   - **If yes** — proceed. The connector will be tagged as deprecated in `connector.json`.
    - **If no** — stop here. Suggest the recommended replacement if one was found.
    - For API connectors with multiple auth methods: individual auth methods may be deprecated
      independently (e.g., API key auth deprecated but OAuth2 still active). Filter out deprecated
@@ -181,7 +181,8 @@ For API connectors with endpoints to register:
    - Skip deprecated endpoints silently — do NOT build them.
    - Inform the user which endpoints were skipped and why.
    - If the user explicitly asks to include a deprecated endpoint, build it and tag it as
-     deprecated in the manifest (see `connector-scaffolding` for the manifest format).
+     deprecated in the `connector.json` `endpoints` entry (see `connector-assembly` for the
+     entry format).
 
 3. **Create all endpoint files in parallel**: For each non-deprecated endpoint (plus any
    deprecated endpoints the user explicitly requested), dispatch **`endpoint-creator`**
@@ -195,23 +196,29 @@ For API connectors with endpoints to register:
    - **`README.md`** — add all endpoints to the "Available Endpoints" table
    - **`CHANGELOG.md`** — add entries for all new endpoints
 
-### Phase 4 — Build manifest
+### Phase 4 — Finalize connector.json
 
-Build `manifest.json` as the final assembly step. Read the `manifest-assembly` skill at
-`${CLAUDE_PLUGIN_ROOT}/skills/manifest-assembly/SKILL.md` for the full specification.
+Layer the manifest fields (`version`, `placeholders`, `endpoints`) directly onto `connector.json`
+as the final assembly step. Read the `connector-assembly` skill at
+`${CLAUDE_PLUGIN_ROOT}/skills/connector-assembly/SKILL.md` for the full specification. There is
+no separate `manifest.json` file — these fields live inside `connector.json`.
 
-1. **Read `connector.json`** — extract all `${placeholder}` tokens and categorize each by source.
+1. **Read `connector.json`** — extract every `${placeholder}` token, every name referenced in
+   any `derived_from` array, and every auth-protocol input the runtime needs but doesn't
+   template (e.g. JWT `private_key`, `key_id`, claim inputs). Categorize each by source.
 2. **Read all endpoint files** in `definition/endpoints/` (API connectors only) — extract any
    `${placeholder}` tokens per endpoint.
-3. **Build `manifest.json`** in `definition/` with the complete placeholder registry and endpoint
-   index. Follow the manifest-assembly skill for structure, source categories, and examples.
+3. **Merge the manifest fields back into `connector.json`** — add `version`, `placeholders`, and
+   `endpoints` to the same JSON document and write it back. Follow the connector-assembly skill
+   for structure, source categories, and examples.
 
 This phase applies to **all connector types**:
-- **API connectors**: manifest includes connector-level placeholders and all endpoint entries
-- **Database/storage connectors**: manifest has empty `placeholders` and `endpoints` arrays
+- **API connectors**: `placeholders` includes connector-level tokens; `endpoints` lists every
+  endpoint file
+- **Database/storage connectors**: `placeholders` and `endpoints` are empty arrays
 
-Do NOT manually bump the manifest `version` — a GitHub Action bumps it automatically when a PR
-is merged, based on PR labels (`version:minor`, `version:patch`, `version:major`).
+Do NOT manually bump the `version` — a GitHub Action bumps it automatically when a PR is merged,
+based on PR labels (`version:minor`, `version:patch`, `version:major`).
 
 ### Phase 5 — Validate (optional, requires ANALITIQ_API_KEY)
 
@@ -264,8 +271,7 @@ Each connector is stored in its own directory named `{slug}/` with this structur
 ├── README.md               # Human documentation (setup instructions, credentials)
 ├── CHANGELOG.md            # Version history
 └── definition/             # Connector definition files (machine-consumed JSON)
-    ├── connector.json      # Authentication details and connector definition
-    ├── manifest.json       # Placeholder registry + endpoint index
+    ├── connector.json      # Auth + placeholder registry + endpoint index
     └── endpoints/          # Directory containing all endpoint JSON definitions
         ├── {endpoint_name}.json
         └── ...
@@ -279,8 +285,7 @@ Each connector is stored in its own directory named `{slug}/` with this structur
 ├── README.md               # Human documentation (setup instructions, credentials)
 ├── CHANGELOG.md            # Version history
 └── definition/             # Connector definition files (machine-consumed JSON)
-    ├── connector.json      # Authentication details and connector definition
-    └── manifest.json       # Connector manifest (empty placeholders and endpoints arrays)
+    └── connector.json      # Auth + connector definition (placeholders/endpoints arrays empty)
 ```
 
 Database and other connectors do NOT have an `endpoints/` directory or endpoint JSON files.
@@ -291,7 +296,7 @@ Their "endpoints" (schema/table combinations) are specific to each deployment an
 ## Version Bumping — PR Labels
 
 Version bumping happens automatically when a PR is merged, based on labels. Do NOT manually bump
-the version in `definition/manifest.json` or `CHANGELOG.md` — a GitHub Action handles this on merge.
+the version in `definition/connector.json` or `CHANGELOG.md` — a GitHub Action handles this on merge.
 
 When creating a PR, apply the appropriate label:
 - `version:minor` — new connector or new endpoints added (most common)
@@ -316,4 +321,4 @@ Read `${CLAUDE_PLUGIN_ROOT}/skills/connector-wizard/validation-api.md` for the f
 
 - Be conversational but efficient. Don't overwhelm with questions — ask the most important ones first.
 - If the user mentions a well-known system (Wise, Xero, Shopify, PostgreSQL, etc.), note that the Connector Research Agent can look up documentation automatically.
-- You are the orchestrator. You gather requirements, check for duplicates, dispatch research and creation agents, and handle post-creation updates (manifest, docs). You do NOT create connector or endpoint JSON files yourself.
+- You are the orchestrator. You gather requirements, check for duplicates, dispatch research and creation agents, and handle post-creation updates (finalizing `connector.json` with placeholders/endpoints, updating docs). You do NOT create the connector or endpoint JSON bodies yourself — the connector-creator and endpoint-creator agents do that.

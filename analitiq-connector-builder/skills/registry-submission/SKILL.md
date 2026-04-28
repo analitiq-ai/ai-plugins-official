@@ -31,8 +31,7 @@ hardcoded instead.
 ### What to Scan
 
 Scan all files in the connector directory:
-- `definition/connector.json` — highest risk (contains auth config, headers, URLs)
-- `definition/manifest.json` — lower risk but check placeholder values
+- `definition/connector.json` — highest risk (contains auth config, headers, URLs, placeholder registry)
 - `definition/endpoints/*.json` — check for hardcoded tokens in headers or URL parameters
 - `CLAUDE.md`, `AGENTS.md`, `README.md`, `CHANGELOG.md` — check examples and descriptions
 

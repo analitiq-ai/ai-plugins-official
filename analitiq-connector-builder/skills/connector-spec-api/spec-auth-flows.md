@@ -138,7 +138,7 @@ Root-level `headers` are only for API data requests — they are never sent to `
 ```
 Key rules:
 - `auth.type` determines the flow (what the runtime does). Root `headers` determines where credentials go in API data requests. They're independent.
-- Every `${placeholder}` in root `headers`, `base_url`, or auth operation fields must be registered in `manifest.json` with a source category.
+- Every `${placeholder}` in root `headers`, `base_url`, or auth operation fields must be registered in the `placeholders` array inside `connector.json` with a source category. The array also covers `derived_from` inputs and auth-protocol inputs the runtime needs but doesn't template (e.g. JWT signing key + claims) — see the `connector-assembly` skill for the full inclusion rule.
 - Literal header values (e.g. `Accept: application/json`) are static defaults. `${placeholder}` values are resolved from stored parameters or credentials at runtime.
 - `form_fields` controls what the user sees: text = plain input, password = masked input, oauth2 = triggers OAuth redirect, select = dropdown.
 - `post_auth_steps` types: `"select"` = user picks from dropdown, `"auto"` = runtime resolves without user interaction. Adding `"apply_to": "base_url"` stores the result as the base URL used for API requests.
@@ -275,7 +275,7 @@ In all cases, the connector's headers use `${placeholder}` syntax (e.g. `"Author
 
 The `${placeholder}` syntax is used uniformly across all auth operations and root `headers`. All templates are **inline strings** — URLs are URL strings, POST bodies are form-encoded strings, consistent with how `base_url` already works.
 
-**Valid placeholder sources** — every `${placeholder}` must be registered in `manifest.json` with one of these source categories:
+**Source categories** — every entry in the `placeholders` array inside `connector.json` carries one of these source categories. The set of *what* must be registered (used `${...}` tokens, `derived_from` inputs, untemplated auth-protocol inputs) is defined in the `connector-assembly` skill.
 
 | Source | Description | Examples |
 |--------|-------------|----------|
@@ -283,7 +283,7 @@ The `${placeholder}` syntax is used uniformly across all auth operations and roo
 | `system_defined` | Values returned by the target system during authentication | `${access_token}`, `${refresh_token}`, `${code}` |
 | `post_auth` | Values resolved via post-authentication steps | `${tenant_id}`, `${server_url}`, `${session_token}` |
 | `protocol` | OAuth2/auth protocol parameters from app registration or flow setup | `${client_id}`, `${client_secret}`, `${redirect_uri}`, `${state}`, `${code_verifier}` |
-| `derived` | Values computed from other placeholders | `${basic_auth}`, `${base64_credentials}`, `${jwt_token}`, `${code_challenge}` |
+| `derived` | Values computed from other registered names (inputs need not be `${...}` tokens themselves) | `${basic_auth}`, `${base64_credentials}`, `${jwt_token}`, `${code_challenge}` |
 
 ### Redirect URI
 

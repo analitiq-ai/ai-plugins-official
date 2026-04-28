@@ -75,7 +75,7 @@ Use a descriptive filename derived from the API endpoint path. For example:
 ### What this agent does NOT do
 
 This agent ONLY creates the endpoint JSON file. It does NOT update:
-- `manifest.json`
+- `connector.json` (including its `placeholders` and `endpoints` arrays)
 - `CLAUDE.md`
 - `AGENTS.md`
 - `README.md`

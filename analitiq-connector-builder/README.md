@@ -21,7 +21,7 @@ connector-wizard (orchestrator)
 
 1. **connector-wizard** — interviews the user, checks for duplicates in the registry, dispatches research and creation agents, collects results, and optionally validates
 2. **connector-researcher** — researches official documentation for auth details, connection parameters, or endpoint schemas
-3. **{type}-connector-creator** — builds the connector definition (`connector.json`, `manifest.json`, repo scaffolding, docs)
+3. **{type}-connector-creator** — builds the connector definition (`connector.json`, repo scaffolding, docs). The placeholder registry and endpoint index are layered onto `connector.json` by the orchestrator after endpoint creation
 4. **endpoint-creator** — builds individual endpoint JSON files (API connectors only)
 
 ## Supported Connector Types
@@ -34,7 +34,7 @@ connector-wizard (orchestrator)
 
 ## Placeholder Source Categories
 
-Every `${placeholder}` in a connector definition is registered in `manifest.json` with a source category describing where the value comes from.
+Every named value the runtime needs is registered in the `placeholders` array inside `connector.json` with a source category describing where the value comes from. The array covers (1) every `${placeholder}` token in the auth/runtime body or endpoint files, (2) every name listed in any `derived_from` array, and (3) auth-protocol inputs the runtime needs but does not template (e.g. JWT signing key + claim inputs).
 
 | Source | Description | Examples |
 |--------|-------------|----------|
@@ -42,9 +42,9 @@ Every `${placeholder}` in a connector definition is registered in `manifest.json
 | `system_defined` | Values returned by the target system during authentication | `access_token`, `refresh_token`, `code` |
 | `post_auth` | Values resolved via post-authentication steps | `tenant_id`, `server_url`, `session_token`, `account_id` |
 | `protocol` | OAuth2/auth protocol parameters from app registration or flow setup | `client_id`, `client_secret`, `redirect_uri`, `state`, `code_verifier` |
-| `derived` | Values computed from other placeholders | `basic_auth`, `base64_credentials`, `jwt_token`, `code_challenge` |
+| `derived` | Values computed from other registered names (the inputs do not need to appear as `${...}` tokens themselves) | `basic_auth`, `base64_credentials`, `jwt_token`, `code_challenge` |
 
-Derived placeholders include a `derived_from` field listing their input placeholders.
+Derived placeholders include a `derived_from` field listing the names they're computed from. Those names must be entries in the same `placeholders` array, but they are resolution inputs, not necessarily template tokens. See the `connector-assembly` skill for the full inclusion rule and source-category guidance.
 
 ## Installation
 
