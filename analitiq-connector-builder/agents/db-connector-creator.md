@@ -48,11 +48,18 @@ If research results are missing or incomplete, report this to the orchestrator r
 3. **Build the connector JSON** using the example as a structural template and the research results
    for actual values. Ensure all database-specific fields are included.
 
-4. **Author `type-map.json`** using the `type-mapping-spec` skill. Walk the database's documented
-   native type list (e.g. Postgres `BOOLEAN`, `INTEGER`, `NUMERIC(p,s)`, `TIMESTAMP WITH TIME ZONE`,
-   arrays, etc.) and produce the mapping using the three authoring methodologies (`exact`, `regex` for parameterized families,
-   agent judgment for convention/judgment calls like `TINYINT(1)`, `HSTORE`, `MONEY`). Save as
-   `{slug}/definition/type-map.json`.
+4. **Author `type-map.json`** using the `type-mapping-spec` skill. If the target database has a
+   commonly-known native type vocabulary (Postgres, MySQL, MariaDB, SQL Server, Oracle, SQLite,
+   MongoDB, Snowflake, BigQuery, Redshift, etc.), emit a **comprehensive** mapping that covers
+   the database's standard types from your own knowledge — not just whatever the researcher
+   surfaced. Cover the typical scalar types (booleans, integers at every documented width,
+   floats, decimals, strings, dates/times/timestamps with and without timezone, JSON-ish blobs,
+   UUIDs, binary), parameterized families via `regex` rules, and convention calls that need
+   `exact` rules above the regex (e.g. MySQL `TINYINT(1)` → `Boolean`). For databases where the
+   native vocabulary is niche or not well-known, fall back to the researched list and note
+   the gap to the orchestrator. Use the three authoring methodologies (`exact`, `regex` for
+   parameterized families, agent judgment for cases like `TINYINT(1)`, `HSTORE`, `MONEY`). Save
+   as `{slug}/definition/type-map.json`.
 
 5. **Author `ssl-mode-map.json` if the driver supports TLS.** Map the driver's native SSL mode
    values to the canonical enum (`none | require | verify-ca | verify-full | prefer`) per the
