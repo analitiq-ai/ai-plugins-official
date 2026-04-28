@@ -48,18 +48,33 @@ If research results are missing or incomplete, report this to the orchestrator r
 3. **Build the connector JSON** using the example as a structural template and the research results
    for actual values. Ensure all database-specific fields are included.
 
-4. **Author `type-map.json`** using the `type-mapping-spec` skill. If the target database has a
-   commonly-known native type vocabulary (Postgres, MySQL, MariaDB, SQL Server, Oracle, SQLite,
-   MongoDB, Snowflake, BigQuery, Redshift, etc.), emit a **comprehensive** mapping that covers
-   the database's standard types from your own knowledge — not just whatever the researcher
-   surfaced. Cover the typical scalar types (booleans, integers at every documented width,
-   floats, decimals, strings, dates/times/timestamps with and without timezone, JSON-ish blobs,
-   UUIDs, binary), parameterized families via `regex` rules, and convention calls that need
-   `exact` rules above the regex (e.g. MySQL `TINYINT(1)` → `Boolean`). For databases where the
-   native vocabulary is niche or not well-known, fall back to the researched list and note
-   the gap to the orchestrator. Use the three authoring methodologies (`exact`, `regex` for
-   parameterized families, agent judgment for cases like `TINYINT(1)`, `HSTORE`, `MONEY`). Save
-   as `{slug}/definition/type-map.json`.
+4. **Author `type-map.json`** using the `type-mapping-spec` skill.
+
+   **For stable, well-documented OLTP databases** (Postgres, MySQL, MariaDB, SQL Server, Oracle,
+   SQLite), use the researcher's list as a starting point and **expand it from your knowledge of
+   the database's officially documented native vocabulary** — do NOT author rules for types you
+   cannot independently confirm exist in the database's official documentation (the
+   no-fabrication rule from `type-mapping-spec` SKILL §Authoring order step 5 still binds).
+   Cover the typical scalar families (booleans, integers at every documented width, floats,
+   decimals, strings, dates/times/timestamps with and without timezone, JSON-ish blobs, UUIDs,
+   binary), parameterized families via `regex` rules, and convention calls authored as `exact`
+   rules placed above the matching regex (e.g. MySQL `TINYINT(1)` → `Boolean`).
+
+   **For warehouse engines** (Snowflake, BigQuery, Redshift, Databricks), the SQL surface is
+   familiar but native vocabularies have version-dependent or vendor-specific extensions
+   (`SUPER`, `GEOGRAPHY`, `BIGNUMERIC`, etc.). Lean on the researcher's list as the spine and
+   only expand into types you can independently confirm in the engine's current docs.
+
+   **For NoSQL / document stores** (MongoDB BSON, etc.) and any database where the native
+   vocabulary is niche, version-fragmented, or otherwise outside your confident knowledge:
+   restrict authoring to the researched list. If the researched list looks incomplete, **pause
+   and report the gap to the orchestrator** rather than guessing.
+
+   In all cases, finish with the verify-coverage step (`type-mapping-spec` SKILL §Authoring
+   order step 6): every documented native must be matched by an authored rule, handled by
+   agent judgment, or explicitly reported as an intentional omission with a reason. Use the
+   three authoring methodologies (`exact`, `regex` for parameterized families, agent judgment
+   for convention calls like `HSTORE`, `MONEY`). Save as `{slug}/definition/type-map.json`.
 
 5. **Author `ssl-mode-map.json` if the driver supports TLS.** Map the driver's native SSL mode
    values to the canonical enum (`none | require | verify-ca | verify-full | prefer`) per the
