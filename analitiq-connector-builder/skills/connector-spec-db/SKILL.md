@@ -1,42 +1,42 @@
 ---
 name: connector-spec-db
+description: Database connector authoring vocabulary — DSN URL templates with bindings and encoding, TLS declarations, resource discovery, native type maps. Loaded by db-connector-creator only. Not invoked directly by users.
 disable-model-invocation: true
-description: >
-  Database connector specification knowledge. Contains database auth configuration,
-  driver and SSH settings, and database connector examples. Load when creating or modifying
-  a database connector definition (connector.json).
 ---
 
-# Database Connector Specification
+# connector-spec-db
 
-## Supporting Files
+This skill is loaded by `db-connector-creator` when authoring a database
+connector. It carries the DB-specific vocabulary and examples needed to
+populate `transports`, `auth`, `connection_contract`, `resource_discovery`,
+and `type_maps` for `kind: "database"`.
 
-- [spec-form-based-db.md](spec-form-based-db.md) — database form field definitions, driver configs, SSH tunnel settings
-- `examples/` — complete connector.json examples (postgresql, mysql)
+## Required reading (load on demand)
 
-## Step 1: Read the Matching Example
+- This skill's `spec-dsn-bindings.md` — DSN URL templates and bindings.
+- This skill's `spec-tls.md` — TLS declaration mechanics.
+- This skill's `spec-resource-discovery.md` — schema/table enumeration at
+  connection time.
+- This skill's `spec-type-maps.md` — native → Arrow canonical mapping.
+- The matching example under `examples/`.
 
-Read from `${CLAUDE_PLUGIN_ROOT}/skills/connector-spec-db/examples/`:
+## What this skill covers
 
-- `postgresql-connector.json` — PostgreSQL with SSH tunnel support
-- `mysql-connector.json` — MySQL with SSH tunnel support
+- `dsn.kind: "url_template"` shape with `template`, `bindings`, and
+  per-binding `encoding` (closed enum: `raw`, `host`, `url_userinfo`,
+  `url_path_segment`, `url_query_key`, `url_query_value`).
+- `tls.mode` and `tls.ca_certificate` declarations and their rules
+  (`verify-ca` / `verify-full` require `ssl_ca_certificate` input).
+- `resource_discovery` declarations for enumerating schemas / tables /
+  columns at connection time.
+- Connector-level `type_maps` covering native database types.
+- Driver names and per-driver DSN layout idioms (`postgresql+asyncpg`,
+  `mysql+asyncmy`, etc.).
+- `auth.type: "db"` — credentials live in `connection_contract.inputs`;
+  `auth.test` is the connection test operation.
 
-## Step 2: Read the Detailed Specification
+## What this skill does NOT cover
 
-Read `${CLAUDE_PLUGIN_ROOT}/skills/connector-spec-db/spec-form-based-db.md` for the full database connector schema including:
-- Additional database attributes (`driver`, `enable_ssh`)
-- Auth configuration (`auth.type: "db"`, `auth.authorize` test connection)
-- Form field conventions (host, port, database, username, password)
-
-## Step 3: Build the Connector JSON
-
-### Quick Reference — Database Connector Fields
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `driver` | string | yes | Database driver name (e.g. `"postgresql"`, `"mysql"`) |
-| `enable_ssh` | boolean | yes | Whether SSH tunnel fields are shown in the form |
-| `auth.type` | string | yes | Always `"db"` for database connectors |
-| `auth.authorize` | object | no | Test connection endpoint (url, method, body) |
-
-Database `enable_ssh` attribute would be set to 'false' by default.
+- HTTP transport idioms (that's `connector-spec-api`).
+- OAuth flows or other API auth types.
+- API endpoint authoring (database connectors do not ship endpoint files).

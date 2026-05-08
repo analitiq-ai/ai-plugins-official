@@ -1,0 +1,44 @@
+{
+  "x-comment": "Reference example, not normative. Models an API where the user supplies a region or subdomain that templates into the base_url.",
+  "$schema": "https://schemas.analitiq.ai/connector/latest.json",
+  "kind": "api",
+  "alias": "api-key-dynamic-host-example",
+  "display_name": "API Key (Dynamic Host) Example",
+  "description": "Reference connector demonstrating api_key auth where the user supplies a region that templates into base_url.",
+  "tags": ["example", "api", "api-key", "multi-region"],
+  "version": "1.0.0",
+  "default_transport": "api",
+  "transports": {
+    "api": {
+      "transport_type": "http",
+      "base_url": { "template": "https://${connection.parameters.region}.example.com/v1" },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": { "template": "Bearer ${secrets.api_key}" }
+      },
+      "timeout_seconds": 30
+    }
+  },
+  "auth": { "type": "api_key" },
+  "connection_contract": {
+    "inputs": {
+      "region": {
+        "source": "user",
+        "phase": "pre_auth",
+        "storage": "connection.parameters",
+        "type": "string",
+        "required": true,
+        "enum": ["us", "eu", "ap"],
+        "default": "us"
+      },
+      "api_key": {
+        "source": "user",
+        "phase": "auth",
+        "storage": "secrets",
+        "type": "string",
+        "required": true,
+        "secret": true
+      }
+    }
+  }
+}

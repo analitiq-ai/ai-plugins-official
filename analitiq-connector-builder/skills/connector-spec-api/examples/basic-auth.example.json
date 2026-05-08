@@ -1,0 +1,48 @@
+{
+  "x-comment": "Reference example, not normative. Models an API authenticated with HTTP Basic Auth.",
+  "$schema": "https://schemas.analitiq.ai/connector/latest.json",
+  "kind": "api",
+  "alias": "basic-auth-example",
+  "display_name": "Basic Auth Example",
+  "description": "Reference connector demonstrating HTTP Basic auth using the basic_auth function expression.",
+  "tags": ["example", "api", "basic-auth"],
+  "version": "1.0.0",
+  "default_transport": "api",
+  "transports": {
+    "api": {
+      "transport_type": "http",
+      "base_url": "https://api.example.com",
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": {
+          "function": "basic_auth",
+          "input": {
+            "username": { "ref": "connection.parameters.username" },
+            "password": { "ref": "secrets.password" }
+          }
+        }
+      },
+      "timeout_seconds": 30
+    }
+  },
+  "auth": { "type": "basic_auth" },
+  "connection_contract": {
+    "inputs": {
+      "username": {
+        "source": "user",
+        "phase": "auth",
+        "storage": "connection.parameters",
+        "type": "string",
+        "required": true
+      },
+      "password": {
+        "source": "user",
+        "phase": "auth",
+        "storage": "secrets",
+        "type": "string",
+        "required": true,
+        "secret": true
+      }
+    }
+  }
+}
