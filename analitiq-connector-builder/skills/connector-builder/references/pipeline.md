@@ -5,6 +5,37 @@ on demand by the orchestrator skill.
 
 ## Phases
 
+### 0. Pre-flight: collision check
+
+Before any other work, check whether a directory named `{alias}/`
+already exists in the current working directory.
+
+- If it does NOT exist → proceed to phase 1.
+- If it DOES exist → halt the run and surface a structured warning.
+
+The warning must include:
+
+- The full absolute path of the existing directory.
+- The exact `rm -rf {path}` command the user can run to remove it.
+  The orchestrator MUST NOT delete the directory itself — manual
+  removal is required so the user has a chance to inspect or back up
+  whatever's there.
+- A note that re-running after removal produces a fresh connector
+  authored from scratch (no migration of legacy connector shapes).
+
+**Why this exists.** The plugin authors connectors against the
+published schema contract. Pre-existing connectors authored against
+older shapes (with `placeholders` arrays, separate `manifest.json` /
+`type-map.json` / `ssl-mode-map.json` files) are not migrated by this
+plugin. Stopping early avoids partial-state writes and keeps the build
+path simple. A future migrator agent could relax this check; for now,
+manual removal is the contract.
+
+**Failure mode.** If the user reports they cannot remove the directory
+(permissions, dirty tree under VCS, etc.), do not attempt workarounds.
+Surface the OS-level error and let the user resolve it before
+re-running.
+
 ### 1. Research
 
 Invoke `connector-provider-researcher` with `provider`, optional

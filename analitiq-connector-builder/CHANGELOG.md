@@ -44,6 +44,11 @@
   discovery, OAuth2 client-credentials, JWT) and four DB reference
   examples (PostgreSQL, MySQL, Snowflake, MongoDB) — all validate clean
   against the published schema.
+- Pre-flight collision check in the orchestrator (phase 0): if a
+  directory matching `{alias}/` already exists, the build halts and
+  asks the user to remove it manually. Acts as a stopgap against
+  overwriting legacy-shape connectors until a real migration tool is
+  built.
 
 ## [2.0.0] - 2026-03-28
 

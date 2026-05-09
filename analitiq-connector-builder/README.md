@@ -102,6 +102,17 @@ Server-managed fields (`connector_id`, `connector_schema_version`,
 `created_at`, `updated_at`) are NEVER written to disk — the registry
 stamps them on insert/update.
 
+### Existing directories are not overwritten
+
+If a directory matching the connector's `{alias}` already exists in
+the current working directory, the orchestrator halts and asks the
+user to remove it manually before re-running. The plugin does not
+migrate legacy-shape connectors — pre-existing files (with
+`placeholders` arrays, separate `manifest.json` / `type-map.json` /
+`ssl-mode-map.json`) must be deleted first so the rebuild can produce
+a clean schema-aligned connector from scratch. The orchestrator never
+deletes files on the user's behalf.
+
 ## Installation
 
 ```bash

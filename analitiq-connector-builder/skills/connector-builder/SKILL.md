@@ -38,6 +38,22 @@ sub-agents own those skills.
 
 ## Pipeline (full contract: `references/pipeline.md`)
 
+0. **Pre-flight: collision check** — before any research or authoring,
+   check whether a directory named `{alias}/` already exists in the
+   current working directory. If it does, **halt** and ask the user to
+   remove or rename it before re-running. Do not read the existing
+   directory's contents and do not attempt to migrate or merge — this
+   is a stopgap to prevent accidental overwrites and to keep the build
+   path simple. Migration of pre-existing connectors authored under
+   the legacy shape is intentionally out of scope.
+
+   The user-facing message must include:
+   - The full path of the existing directory.
+   - The exact `rm -rf {path}` command they can run to remove it (do
+     NOT run it for them).
+   - A note that re-running after removal will produce a fresh
+     connector authored from scratch.
+
 1. **Research** — invoke `connector-provider-researcher`. Receive
    `ProviderFacts` (discriminated by kind). If the user did not supply
    `docs_url`, halt and ask.
@@ -104,3 +120,6 @@ Report to the user:
   intentional during the dev → prod migration.
 - Storage kinds (`file`, `s3`, `stdout`) currently produce a structured
   refusal. If the user asks for one, surface the refusal note and stop.
+- Never overwrite an existing `{alias}/` directory. The pre-flight
+  check (phase 0) halts the run and asks the user to remove the
+  directory manually. Never delete files on the user's behalf.
