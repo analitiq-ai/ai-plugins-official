@@ -75,9 +75,12 @@ sub-agents own those skills.
    - API endpoint → `https://schemas.analitiq.work/api-endpoint/latest.json`.
    - Database endpoint → `https://schemas.analitiq.work/database-endpoint/latest.json`.
 
-   Loop fixes until `passed: true` (max 5 iterations per artifact). If
-   validation still has `error`-severity findings after 5 passes, halt
-   and surface diagnostics.
+   The orchestrator should attempt at most 5 fix passes per artifact —
+   re-dispatch the matching creator with the validator's findings,
+   re-validate, repeat. If `error`-severity findings persist after 5
+   passes, halt and surface the diagnostics; do not write partial
+   files. The validator script itself is single-shot — iteration
+   discipline lives in the orchestrator's prose, not in the script.
 6. **Drift** — if `previous_release_path` was supplied, invoke
    `connector-drift-classifier` and apply the bump to top-level
    `version`. Otherwise this is a first release; set `version: "1.0.0"`.
@@ -88,7 +91,7 @@ sub-agents own those skills.
    ├── definition/
    │   ├── connector.json
    │   └── endpoints/
-   │       └── {alias}.json   # api connectors only
+   │       └── {endpoint-alias}.json   # api connectors only — one file per endpoint
    └── README.md
    ```
 

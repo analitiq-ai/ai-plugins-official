@@ -30,7 +30,7 @@ schema points at `analitiq.ai`, so authored documents must declare the
 Invoke the validator script:
 
 ```
-python ${CLAUDE_PLUGIN_ROOT}/scripts/validate_connector.py \
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/validate_connector.py \
   --schema-url <schema_url> \
   --document <document_path>
 ```
@@ -50,7 +50,7 @@ the document type:
 | `phase-resolvability` | Refs to `connection.discovered.*` are produced by a declared post-auth output. |
 | `transport-ref` | Every `transport_ref` resolves to a key in `transports`; `default_transport` exists in `transports`. |
 | `dsn-binding` | Every `{placeholder}` has a binding; every binding is referenced; `encoding` is in the closed enum. |
-| `auth-shape` | `auth.type` × required/forbidden children matrix per parent §Authentication. |
+| `auth-shape` | OAuth2 variants (`oauth2_authorization_code` requires `authorize`+`token_exchange`; `oauth2_client_credentials` requires `token_exchange` and forbids `authorize`) and `none` (forbids all auth ops). Other auth types are validated by JSON Schema only. |
 | `tls-consistency` | If `ssl_mode` enum allows `verify-ca` / `verify-full`, then `ssl_ca_certificate` is declared in `connection_contract.inputs`. |
 | `type-map-coverage` | Database connectors should declare a `type_maps` block. |
 

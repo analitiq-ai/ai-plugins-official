@@ -92,9 +92,12 @@ endpoint document, invoke the validator with the kind-specific URL:
 - Database endpoint (when applicable in future) →
   `https://schemas.analitiq.work/database-endpoint/latest.json`.
 
-Loop fixes until `passed: true` (max 5 iterations per artifact). If
-validator still returns `error`-severity findings after 5 passes, halt
-and surface the diagnostics to the user.
+The orchestrator should attempt at most 5 fix passes per artifact —
+re-dispatch the matching creator with the validator's findings,
+re-validate, repeat. If `error`-severity findings persist after 5
+passes, halt and surface the diagnostics; do not write partial files.
+The validator script is single-shot; iteration discipline lives in
+the orchestrator's prose, not in the script.
 
 ### 6. Drift
 
@@ -111,11 +114,11 @@ Write the connector document and any endpoint files to disk at
 predictable paths:
 
 ```
-{slug}/
+{alias}/
 ├── definition/
 │   ├── connector.json
 │   └── endpoints/
-│       └── {alias}.json   # api connectors only
+│       └── {endpoint-alias}.json   # api connectors only — one file per endpoint
 └── README.md
 ```
 

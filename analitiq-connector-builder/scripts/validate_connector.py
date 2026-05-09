@@ -21,13 +21,13 @@ import json
 import os
 import re
 import sys
+import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any, Callable
 
 try:
     from jsonschema import Draft202012Validator
-    from referencing import Registry, Resource
 except ImportError as exc:
     print(
         json.dumps(
@@ -38,7 +38,7 @@ except ImportError as exc:
                         "validator": "json-schema",
                         "severity": "error",
                         "path": "",
-                        "message": f"Missing dependency: {exc}. Install with `pip install jsonschema referencing`.",
+                        "message": f"Missing dependency: {exc}. Install with `pip install jsonschema`.",
                     }
                 ],
             }
@@ -55,16 +55,26 @@ CACHE_DIR = Path.home() / ".cache" / "analitiq" / "schemas"
 
 
 def fetch_schema(url: str, cache: bool = True) -> dict:
-    """Fetch a JSON schema from URL with disk cache."""
+    """Fetch a JSON schema from URL with atomic disk cache.
+
+    Parses the JSON response *before* writing to disk so a malformed
+    response can never poison the cache. Writes via a temp file +
+    `os.replace` so a Ctrl-C mid-write leaves no truncated cache file.
+    """
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     cache_key = hashlib.sha256(url.encode()).hexdigest()[:16]
     cache_path = CACHE_DIR / f"{cache_key}.json"
     if cache and cache_path.exists():
         return json.loads(cache_path.read_text())
     with urllib.request.urlopen(url, timeout=30) as resp:
+        if resp.status != 200:
+            raise RuntimeError(f"schema fetch returned HTTP {resp.status} for {url}")
         body = resp.read().decode()
-    cache_path.write_text(body)
-    return json.loads(body)
+    schema = json.loads(body)
+    tmp_path = cache_path.with_suffix(".tmp")
+    tmp_path.write_text(body)
+    os.replace(tmp_path, cache_path)
+    return schema
 
 
 # ---------------------------------------------------------------------------
@@ -207,6 +217,27 @@ def _is_value_expression(node: Any) -> str | None:
     return None
 
 
+_SINGLE_TOKEN_SCOPES = {s for s in KNOWN_SCOPES if "." not in s}
+_MULTI_TOKEN_SCOPE_HEADS = {s.split(".", 1)[0] for s in KNOWN_SCOPES if "." in s}
+
+
+def _scope_is_known(dotted: str) -> bool:
+    """Decide whether a dotted path targets a known scope.
+
+    For single-token scopes (`secrets`, `auth`, `runtime`, `stream`),
+    the head alone is enough. For multi-token scope heads like
+    `connection`, the *two-token* prefix must be one of the registered
+    scopes — `connection.bogus.x` is rejected.
+    """
+    head_one = dotted.split(".", 1)[0]
+    if head_one in _SINGLE_TOKEN_SCOPES:
+        return True
+    if head_one in _MULTI_TOKEN_SCOPE_HEADS:
+        head_two = ".".join(dotted.split(".", 2)[:2])
+        return head_two in KNOWN_SCOPES
+    return False
+
+
 def check_expressions(doc: dict) -> list[dict]:
     findings: list[dict] = []
     ref_pattern = re.compile(r"^([a-z_]+(?:\.[a-z_]+)*)(?:\.[A-Za-z0-9_-]+)*$")
@@ -229,9 +260,7 @@ def check_expressions(doc: dict) -> list[dict]:
                     )
                 )
                 continue
-            head_one = ref.split(".", 1)[0]
-            head_two = ".".join(ref.split(".", 2)[:2])
-            if head_one not in {s.split(".", 1)[0] for s in KNOWN_SCOPES} and head_two not in KNOWN_SCOPES:
+            if not _scope_is_known(ref):
                 findings.append(
                     finding(
                         "expression-resolver",
@@ -243,9 +272,7 @@ def check_expressions(doc: dict) -> list[dict]:
                 )
         elif kind == "template":
             for var in template_var.findall(node["template"]):
-                head_one = var.split(".", 1)[0]
-                head_two = ".".join(var.split(".", 2)[:2])
-                if head_one not in {s.split(".", 1)[0] for s in KNOWN_SCOPES} and head_two not in KNOWN_SCOPES:
+                if not _scope_is_known(var):
                     findings.append(
                         finding(
                             "expression-resolver",
@@ -274,6 +301,15 @@ def check_transport_refs(doc: dict) -> list[dict]:
     findings: list[dict] = []
     transports = doc.get("transports", {})
     if not isinstance(transports, dict):
+        findings.append(
+            finding(
+                "transport-ref",
+                "error",
+                "/transports",
+                f"transports must be an object; got {type(transports).__name__}.",
+                rule_doc="connectors/connector-schema-parameterization.md#transport-contracts",
+            )
+        )
         return findings
     transport_keys = set(transports.keys())
     default = doc.get("default_transport")
@@ -307,10 +343,19 @@ def check_dsn_bindings(doc: dict) -> list[dict]:
     findings: list[dict] = []
     transports = doc.get("transports", {})
     if not isinstance(transports, dict):
-        return findings
+        return findings  # `check_transport_refs` already emitted the structural error
     placeholder_re = re.compile(r"\{([^}]+)\}")
     for tname, tspec in transports.items():
         if not isinstance(tspec, dict):
+            findings.append(
+                finding(
+                    "dsn-binding",
+                    "error",
+                    f"/transports/{tname}",
+                    f"transport entry must be an object; got {type(tspec).__name__}.",
+                    rule_doc="connectors/connector-schema-parameterization.md#transport-contracts",
+                )
+            )
             continue
         dsn = tspec.get("dsn")
         if not isinstance(dsn, dict) or dsn.get("kind") != "url_template":
@@ -343,6 +388,15 @@ def check_dsn_bindings(doc: dict) -> list[dict]:
         if isinstance(bindings, dict):
             for bk, bspec in bindings.items():
                 if not isinstance(bspec, dict):
+                    findings.append(
+                        finding(
+                            "dsn-binding",
+                            "error",
+                            f"{path_prefix}/bindings/{bk}",
+                            f"binding must be an object with 'value' and 'encoding'; got {type(bspec).__name__}.",
+                            rule_doc="connectors/connector-schema-parameterization.md#transport-contracts",
+                        )
+                    )
                     continue
                 enc = bspec.get("encoding")
                 if enc is not None and enc not in KNOWN_ENCODINGS:
@@ -437,27 +491,52 @@ def check_tls_consistency(doc: dict) -> list[dict]:
 
 
 def check_phase_resolvability(doc: dict) -> list[dict]:
-    """Lightweight check: refs in transports must target scopes resolvable in their phase.
+    """Flag refs to `connection.discovered.*` that no post_auth_outputs entry produces.
 
-    We don't have full lifecycle phase info per transport; we flag the
-    common error of a transport using `connection.discovered.*` without
-    a documented post-auth output that produces it.
+    Other phase-resolvability rules from `shared/lifecycle-phases.md`
+    (e.g. flagging `auth.*` refs that appear in pre_auth-phase transports)
+    are not yet implemented — see follow-up issue.
+
+    Also emits a warning when a `post_auth_outputs` entry is malformed
+    (missing `storage`, or `storage = "connection.discovered"` with no /
+    invalid `value_path`) so a producer-side bug doesn't masquerade as a
+    consumer-side one downstream.
     """
     findings: list[dict] = []
     contract = doc.get("connection_contract", {})
     post_auth = contract.get("post_auth_outputs") or {}
     discovered_keys = set()
     if isinstance(post_auth, dict):
-        for out in post_auth.values():
-            if isinstance(out, dict) and out.get("storage") == "connection.discovered":
-                value_path = out.get("value_path")
-                if isinstance(value_path, str) and value_path.startswith("connection.discovered."):
-                    discovered_keys.add(value_path.split(".", 2)[2])
+        for name, out in post_auth.items():
+            if not isinstance(out, dict):
+                continue
+            storage = out.get("storage")
+            value_path = out.get("value_path")
+            if storage != "connection.discovered":
+                continue
+            if not isinstance(value_path, str) or not value_path.startswith("connection.discovered."):
+                findings.append(
+                    finding(
+                        "phase-resolvability",
+                        "warning",
+                        f"/connection_contract/post_auth_outputs/{name}",
+                        (
+                            f"post_auth_outputs.{name} declares storage='connection.discovered' "
+                            f"but value_path is missing or does not start with 'connection.discovered.': "
+                            f"{value_path!r}"
+                        ),
+                        rule_doc="shared/lifecycle-phases.md",
+                    )
+                )
+                continue
+            discovered_keys.add(value_path.split(".", 2)[2])
     transports = doc.get("transports") or {}
+    template_var = re.compile(r"\$\{([^}]+)\}")
     for tname, tspec in transports.items() if isinstance(transports, dict) else []:
-        for path, node in _walk({"t": tspec}, f"/transports/{tname}"):
+        for path, node in _walk(tspec, f"/transports/{tname}"):
             if not isinstance(node, dict):
                 continue
+            # ref form
             ref = node.get("ref")
             if isinstance(ref, str) and ref.startswith("connection.discovered."):
                 key = ref.split(".", 2)[2].split(".", 1)[0]
@@ -474,29 +553,66 @@ def check_phase_resolvability(doc: dict) -> list[dict]:
                             rule_doc="shared/lifecycle-phases.md",
                         )
                     )
+            # template form
+            tmpl = node.get("template")
+            if isinstance(tmpl, str):
+                for var in template_var.findall(tmpl):
+                    if var.startswith("connection.discovered."):
+                        key = var.split(".", 2)[2].split(".", 1)[0]
+                        if key not in discovered_keys:
+                            findings.append(
+                                finding(
+                                    "phase-resolvability",
+                                    "error",
+                                    path,
+                                    (
+                                        f"transport '{tname}' template references "
+                                        f"'connection.discovered.{key}' but no post-auth output produces it."
+                                    ),
+                                    rule_doc="shared/lifecycle-phases.md",
+                                )
+                            )
     return findings
 
 
 def check_type_map_coverage(doc: dict) -> list[dict]:
-    """Stub — full coverage check requires shared/type-maps.md spec wiring.
+    """Warn when a database connector ships no usable type_maps rules.
 
-    For now we warn on empty type_maps for database connectors.
+    Per-native-type coverage analysis (every native type encountered at
+    discovery time has a matching rule) is intentionally deferred to a
+    separate engine-side check — this validator only catches the common
+    bug where the field is absent, an empty object, or a rule list with
+    no entries.
     """
     findings: list[dict] = []
     if doc.get("kind") != "database":
         return findings
     tm = doc.get("type_maps")
-    if tm is None or tm == {}:
+    if not _has_usable_rules(tm):
         findings.append(
             finding(
                 "type-map-coverage",
                 "warning",
                 "/type_maps",
-                "database connector has no type_maps; native types will not be mapped to canonical Arrow types.",
+                "database connector has no usable type_maps rules; native types will not be mapped to canonical Arrow types.",
                 rule_doc="shared/type-maps.md",
             )
         )
     return findings
+
+
+def _has_usable_rules(tm: Any) -> bool:
+    """Return True iff `tm` is a non-empty mapping with at least one rule."""
+    if not isinstance(tm, dict) or not tm:
+        return False
+    # Direct shape: {"rules": [...]}
+    if "rules" in tm:
+        return isinstance(tm["rules"], list) and len(tm["rules"]) > 0
+    # Nested shape: {"native_to_arrow": {"rules": [...]}, ...}
+    for v in tm.values():
+        if isinstance(v, dict) and isinstance(v.get("rules"), list) and len(v["rules"]) > 0:
+            return True
+    return False
 
 
 SEMANTIC_VALIDATORS: dict[str, Callable[[dict], list[dict]]] = {
@@ -515,11 +631,9 @@ def is_connector_doc(doc: dict) -> bool:
     return "kind" in doc and isinstance(doc.get("transports"), dict)
 
 
-def run_semantic_validators(doc: dict, only: set[str] | None = None) -> list[dict]:
+def run_semantic_validators(doc: dict) -> list[dict]:
     findings: list[dict] = []
     for vid, fn in SEMANTIC_VALIDATORS.items():
-        if only is not None and vid not in only:
-            continue
         # Skip validators that don't apply to non-connector docs
         if vid in {"transport-ref", "dsn-binding", "auth-shape", "tls-consistency", "type-map-coverage"} and not is_connector_doc(doc):
             continue
@@ -540,6 +654,9 @@ def main() -> int:
     parser.add_argument("--json-only", action="store_true", help="Skip Layer 2 semantic validators.")
     parser.add_argument("--no-cache", action="store_true", help="Bypass schema disk cache.")
     args = parser.parse_args()
+
+    if args.semantic_only and args.json_only:
+        parser.error("--semantic-only and --json-only are mutually exclusive (would skip all validation).")
 
     document_path = Path(args.document)
     try:
@@ -562,7 +679,7 @@ def main() -> int:
     if not args.semantic_only:
         try:
             schema = fetch_schema(args.schema_url, cache=not args.no_cache)
-        except Exception as exc:
+        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError, OSError, RuntimeError) as exc:
             print(
                 json.dumps(
                     {

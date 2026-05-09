@@ -1,0 +1,41 @@
+{
+  "$schema": "https://schemas.analitiq.ai/connector/latest.json",
+  "kind": "database",
+  "alias": "fixture-bad-tls",
+  "version": "1.0.0",
+  "default_transport": "database",
+  "transports": {
+    "database": {
+      "transport_type": "sqlalchemy",
+      "driver": "postgresql+asyncpg",
+      "dsn": {
+        "kind": "url_template",
+        "template": "postgresql+asyncpg://{username}:{password}@{host}:{port}/{database}",
+        "bindings": {
+          "username": { "value": { "ref": "connection.parameters.username" }, "encoding": "url_userinfo" },
+          "password": { "value": { "ref": "secrets.password" }, "encoding": "url_userinfo" },
+          "host":     { "value": { "ref": "connection.parameters.host" }, "encoding": "host" },
+          "port":     { "value": { "ref": "connection.parameters.port" }, "encoding": "raw" },
+          "database": { "value": { "ref": "connection.parameters.database" }, "encoding": "url_path_segment" }
+        }
+      },
+      "tls": {
+        "mode": { "ref": "connection.parameters.ssl_mode" }
+      }
+    }
+  },
+  "auth": { "type": "db" },
+  "connection_contract": {
+    "inputs": {
+      "host":     { "source": "user", "phase": "pre_auth", "storage": "connection.parameters", "type": "string", "required": true },
+      "port":     { "source": "user", "phase": "pre_auth", "storage": "connection.parameters", "type": "integer", "required": true },
+      "database": { "source": "user", "phase": "pre_auth", "storage": "connection.parameters", "type": "string", "required": true },
+      "username": { "source": "user", "phase": "auth",     "storage": "connection.parameters", "type": "string", "required": true },
+      "password": { "source": "user", "phase": "auth",     "storage": "secrets",                "type": "string", "required": true, "secret": true },
+      "ssl_mode": {
+        "source": "user", "phase": "pre_auth", "storage": "connection.parameters", "type": "string", "required": true,
+        "enum": ["none", "require", "verify-ca", "verify-full"], "default": "require"
+      }
+    }
+  }
+}

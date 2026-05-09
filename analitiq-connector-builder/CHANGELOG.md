@@ -50,6 +50,51 @@
   overwriting legacy-shape connectors until a real migration tool is
   built.
 
+### Fixed (PR review pass)
+- `check_phase_resolvability` no longer prefixes findings with a
+  spurious `/t/` segment in the JSON pointer.
+- `expression-resolver` now correctly rejects unknown sub-scopes like
+  `connection.bogus.x`; previously the head-one check let any
+  `connection.*` ref through.
+- `phase-resolvability` now also scans `${connection.discovered.X}`
+  refs inside `template` strings (was ref-form only).
+- `phase-resolvability` emits a warning when a `post_auth_outputs`
+  entry is malformed (missing `storage`, or invalid `value_path`)
+  instead of silently dropping it.
+- `check_type_map_coverage` catches additional empty-ish shapes
+  (`{"rules": []}`, nested `{"native_to_arrow": {"rules": []}}`).
+- `fetch_schema` now writes the cache atomically (temp file + rename)
+  and validates the response is parseable JSON before writing — a
+  Ctrl-C mid-write can no longer poison the cache.
+- Removed unused `referencing` import; `pip install jsonschema` is
+  now sufficient.
+- `--semantic-only` and `--json-only` are mutually exclusive (was
+  silently producing `passed: true` with empty findings).
+- Narrowed broad `except Exception` in schema fetch to a typed list.
+- Validator agent now invokes `python3` instead of `python` for
+  portability.
+- Endpoint output path documented as `endpoints/{endpoint-alias}.json`
+  consistently across SKILL.md, README.md, and CLAUDE.md.
+- Standardized on `{alias}/` as the connector output directory name
+  (was inconsistently `{slug}/` in `references/pipeline.md`).
+- Narrowed the `auth-shape` validator coverage claim to OAuth2 +
+  `none`; other auth types are validated by JSON Schema only.
+- Reworded the "loop fixes (max 5 iterations)" wording from imperative
+  to advisory; the validator script is single-shot, iteration
+  discipline lives in the orchestrator.
+
+### Tests (PR review pass)
+- Test suite expanded from 3 cases to 28: at least one negative
+  fixture per semantic validator, parametrized reserved-field across
+  all four reserved fields, integration test that runs all 10
+  reference example JSONs through the validator (catches
+  schema/example drift), schema-fetch-failure test, malformed-JSON
+  test, missing-path test, mutex-flag test, multi-validator
+  collision test.
+- Default tests run with `--semantic-only` so they don't require
+  network access; one explicit `network`-marked test exercises the
+  Layer 1 fetch path against the live schema.
+
 ## [2.0.0] - 2026-03-28
 
 ### Added
