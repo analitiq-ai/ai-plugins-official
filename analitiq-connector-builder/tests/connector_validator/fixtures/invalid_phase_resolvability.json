@@ -1,0 +1,37 @@
+{
+  "$schema": "https://schemas.analitiq.ai/connector/latest.json",
+  "kind": "api",
+  "alias": "fixture-bad-phase",
+  "version": "1.0.0",
+  "default_transport": "api",
+  "transports": {
+    "api": {
+      "transport_type": "http",
+      "base_url": { "template": "https://${connection.discovered.tenant_id}.example.com/api/v1" },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": { "template": "Bearer ${auth.access_token}" }
+      }
+    }
+  },
+  "auth": {
+    "type": "oauth2_authorization_code",
+    "authorize":      { "transport_ref": "api", "method": "GET",  "path": "/oauth/authorize" },
+    "token_exchange": { "transport_ref": "api", "method": "POST", "path": "/oauth/token" }
+  },
+  "connection_contract": {
+    "inputs": {
+      "client_id":     { "source": "platform", "phase": "auth", "storage": "connection.parameters", "type": "string", "required": true },
+      "client_secret": { "source": "platform", "phase": "auth", "storage": "secrets", "type": "string", "required": true, "secret": true }
+    },
+    "post_auth_outputs": {
+      "region": {
+        "mode": "auto_discovery",
+        "storage": "connection.discovered",
+        "type": "string",
+        "value_path": "connection.discovered.region",
+        "discovery_request": { "transport_ref": "api", "method": "GET", "path": "/me" }
+      }
+    }
+  }
+}

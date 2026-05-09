@@ -9,18 +9,18 @@ This is the official directory of Analitiq Claude Code plugins for building data
 ## Plugins
 
 ### `analitiq-connector-builder` (v2.0.0)
-Creates new connector and endpoint definitions for the Analitiq DIP registry. Connectors are published to the `analitiq-dip-registry` GitHub org as individual repos named `{slug}`.
+Authors connector and endpoint JSON documents conforming to the published Analitiq schema contract at `schemas.analitiq.work` (dev) / `schemas.analitiq.ai` (production). Connectors may be published to the `analitiq-dip-registry` GitHub org as individual repos named `{alias}`.
 
-**Agent chain:** `connector-wizard` (skill) → `connector-researcher` → `{type}-connector-creator` → `endpoint-creator` (API only) → connector assembly → validate (optional) → `registry-contributor` (optional)
+**Agent chain:** `connector-builder` (skill, orchestrator) → `connector-provider-researcher` → `{api|db|storage}-connector-creator` → `endpoint-creator` (API only, parallel) → `connector-schema-validator` (loop) → `connector-drift-classifier` (optional) → write files
 
-- `connector-wizard` interviews the user, checks for duplicates in the registry, dispatches research and creation agents, finalizes `connector.json` (placeholder registry + endpoint index), updates docs, optionally validates, and optionally contributes to the community registry
-- `connector-researcher` researches system documentation for auth details, connection parameters, or endpoint schemas (type-agnostic — works for APIs, databases, and storage systems)
-- `api-connector-creator` builds API connector definitions (connector.json, repo scaffolding) with auth flows, headers, and rate limits
-- `db-connector-creator` builds database connector definitions with driver, SSH, and db auth configuration
-- `storage-connector-creator` builds storage connector definitions (S3, SFTP) with credentials auth
-- `endpoint-creator` builds individual endpoint JSON files under `definition/endpoints/` — **API connectors only** (database/other connectors do not have pre-defined endpoints). Creates endpoint files only; the placeholder registry, endpoint index, and docs updates are handled by `connector-wizard` after all endpoints complete.
-- If `ANALITIQ_API_KEY` is available, `connector-wizard` validates all JSON against `https://api.analitiq-dev.com/v1/validate/{connector|endpoint}` and records validation status
-- `registry-contributor` (optional) scans for PII/credentials, creates a sanitized copy if needed, pushes to the user's GitHub account, and opens a submission issue in `analitiq-dip-registry/connector-submissions`
+- `connector-builder` (skill) — orchestrator. Classifies connector kind, dispatches to the matching creator, runs the validator loop, runs drift classification, writes files. Carries shared invariant references (value expressions, lifecycle phases, connection-contract outer shape, metadata/versioning, I/O contracts) under `skills/connector-builder/references/`.
+- `connector-provider-researcher` — extracts a discriminated `ProviderFacts` JSON object from official documentation. Uses `WebFetch` only — does not run web searches; the user must supply the official docs URL.
+- `api-connector-creator` — authors `kind: "api"` connector bodies. Loads the `connector-spec-api` skill (auth flows, HTTP transports, pagination, replication).
+- `db-connector-creator` — authors `kind: "database"` connector bodies. Loads the `connector-spec-db` skill (DSN URL templates with bindings + encoding, TLS, resource discovery, native type maps).
+- `storage-connector-creator` — stub for `kind ∈ {file, s3, stdout}`. The schema accepts those kinds but the engine does not yet execute them, so this agent returns a structured refusal until support lands.
+- `endpoint-creator` — authors one API endpoint JSON document per invocation. Endpoint documents have no top-level `kind` field; the parent connector's `kind` selects the endpoint schema. Database endpoints are connection-scoped and produced by the connector's `resource_discovery` workflow at runtime, not authored here.
+- `connector-schema-validator` — runs Layer 1 (Draft 2020-12 JSON Schema) and Layer 2 (semantic validators: reserved-field, expression-resolver, phase-resolvability, transport-ref, dsn-binding, auth-shape, tls-consistency, type-map-coverage). Backed by `scripts/validate_connector.py`.
+- `connector-drift-classifier` — diffs the assembled draft against `previous_release_path` and emits a `DriftVerdict` (patch/minor/major/none) so the orchestrator can bump `version` correctly.
 
 ### `analitiq-pipeline-builder` (v2.0.0)
 Builds data integration pipelines using pre-defined connectors from the DIP registry (`analitiq-dip-registry` GitHub org). Does **not** create connectors — only downloads and wires them.
@@ -36,80 +36,67 @@ Builds data integration pipelines using pre-defined connectors from the DIP regi
 
 ## Key Concepts
 
-- **Connector:** Auth config + metadata + placeholder registry + endpoint index for a system (API, database, S3/SFTP). Lives in `{slug}/definition/connector.json`. Carries `version`, `placeholders`, and `endpoints` fields directly — there is no separate `manifest.json`. The `placeholders` array registers every named value the runtime resolves: every `${placeholder}` used in the auth body and endpoint files, every name listed in any `derived_from` array, and any auth-protocol input the runtime needs but does not template (e.g. JWT signing key + claim inputs). Each entry carries a source category (`user_defined`, `system_defined`, `post_auth`, `protocol`, `derived`). Inclusion rule and format spec: `analitiq-connector-builder/skills/connector-assembly/SKILL.md`.
-- **Endpoint:** Schema definition for a single API resource. Lives in `definition/endpoints/{name}.json`. **API connectors only** — database/other connectors do not have pre-defined endpoints (their schema/table combinations are deployment-specific and discovered at runtime).
-- **Type map:** Ordered list of rules mapping a connector's native types to canonical Arrow logical types. Lives in `definition/type-map.json`. Required on every connector. Format spec: `analitiq-connector-builder/docs/type-map-format.md`.
-- **SSL mode map:** Maps native driver SSL mode values to the canonical enum (`none | require | verify-ca | verify-full | prefer`). Lives in `definition/ssl-mode-map.json`. SSL-capable databases only — omitted entirely otherwise.
-- **Connection:** Runtime auth credentials for a connector instance. Secrets go to `.secrets/{connection_id}.json`.
-- **Pipeline:** Full integration definition bundling connectors, connections, endpoints, streams, and mappings.
+- **Connector:** Reusable provider transport + auth contract. Lives in `{alias}/definition/connector.json` and validates against `https://schemas.analitiq.work/connector/latest.json`. Top-level fields: `$schema`, `kind` (one of `api`, `database`, `file`, `s3`, `stdout`), `alias`, `version`, `default_transport`, `transports`, `auth`, `connection_contract`, optional `resource_discovery` and `type_maps`. Server-managed fields (`connector_id`, `connector_schema_version`, `created_at`, `updated_at`) are stamped by the registry on insert and must NOT appear in authored documents.
+- **Endpoint:** Operation template for a single resource. API endpoints live in `{alias}/definition/endpoints/{endpoint-alias}.json` and validate against `https://schemas.analitiq.work/api-endpoint/latest.json`. Database endpoints validate against `database-endpoint/latest.json` but are connection-scoped — the plugin does not author them; they are produced from the connector's `resource_discovery` workflow at runtime. Endpoint documents do not carry a `kind` field; the parent connector's `kind` selects the endpoint schema.
+- **Type map:** Map from native types to Arrow canonical types. Authored as `connector.type_maps.native_to_arrow.rules` (an array of `{method, native, canonical}` entries with `method` ∈ `exact` | `regex`). For OLTP databases, the connector ships a comprehensive type map; for warehouses and document stores, restrict to documented native types. Connection-level supplements may extend coverage at runtime (e.g. PostGIS `GEOMETRY`).
+- **TLS declaration:** Database transports declare TLS via `transports.<name>.tls` with `mode` (refs `connection.parameters.ssl_mode`) and `ca_certificate` (refs `secrets.ssl_ca_certificate`). The runtime materializer translates this generic declaration into driver-specific arguments. The canonical SSL mode enum is `none | require | verify-ca | verify-full | prefer`.
+- **Value expression:** One of `ref` / `template` / `literal` / `function`. Refs and template variables target the closed scope list: `secrets.*`, `connection.parameters.*`, `connection.selections.*`, `connection.discovered.*`, `auth.*`, `runtime.*`, `stream.*`. Inline functions: `basic_auth`, `jwt_sign`, `url_encode`. Unknown scopes/functions are validation errors.
+- **DSN bindings:** Database transports use `dsn.kind: "url_template"` with a `template` containing `{placeholder}` markers and a `bindings` map. Each binding has a `value` (value expression) and an `encoding` (closed enum: `raw`, `host`, `url_userinfo`, `url_path_segment`, `url_query_key`, `url_query_value`). Authors must NEVER pre-encode binding values; the runtime owns percent-encoding.
+- **Connection:** Runtime auth credentials for a connector instance. Owned by `analitiq-pipeline-builder`, not `analitiq-connector-builder`.
+- **Pipeline:** Full integration definition bundling connectors, connections, endpoints, streams, and mappings. Owned by `analitiq-pipeline-builder`.
 
 ## Versioning
 Version is bumped automatically by GitHub Actions on PR merge via labels (`version:minor`, `version:patch`, `version:major`) — never bump manually.
 
 ## Connector Directory Structure (output of connector-builder)
 
-**API connectors** (with endpoints):
+**API connectors** (with endpoint files):
 ```
-{slug}/
-├── CLAUDE.md            # Agent reference (auth, endpoints, caveats)
-├── AGENTS.md            # Identical to CLAUDE.md, for non-Claude agents
-├── README.md            # Human docs
-├── CHANGELOG.md         # Version history
+{alias}/
+├── README.md
 └── definition/
-    ├── connector.json   # Auth + placeholder registry + endpoint index
-    ├── type-map.json    # Native → Arrow canonical type mapping (required)
-    └── endpoints/       # Individual endpoint JSON files (API only)
+    ├── connector.json              # validates against connector/latest.json
+    └── endpoints/
+        └── {endpoint-alias}.json   # validates against api-endpoint/latest.json
 ```
 
-**Database connectors** (no endpoints; `ssl-mode-map.json` only on SSL-capable drivers):
+**Database connectors** (no authored endpoints; `type_maps` and `tls` declared inside `connector.json`):
 ```
-{slug}/
-├── CLAUDE.md
-├── AGENTS.md
+{alias}/
 ├── README.md
-├── CHANGELOG.md
 └── definition/
-    ├── connector.json    # Auth + driver + SSH config (placeholders/endpoints arrays empty)
-    ├── type-map.json     # Native → Arrow canonical type mapping (required)
-    └── ssl-mode-map.json # Native SSL mode → canonical enum (only if driver supports TLS)
+    └── connector.json              # validates against connector/latest.json
 ```
 
-**Storage connectors** (no endpoints, no SSL map):
-```
-{slug}/
-├── CLAUDE.md
-├── AGENTS.md
-├── README.md
-├── CHANGELOG.md
-└── definition/
-    ├── connector.json   # Auth + credentials config (placeholders/endpoints arrays empty)
-    └── type-map.json    # Connector-level metadata types only (file-data typing is engine-side)
-```
+Server-managed fields (`connector_id`, `connector_schema_version`, `created_at`, `updated_at`) never appear in authored files.
 
 ## Supported Auth Types
 
-`api_key`, `basic_auth`, `oauth2_authorization_code`, `oauth2_client_credentials`, `jwt`, `db`, `credentials`
+`api_key`, `basic_auth`, `oauth2_authorization_code`, `oauth2_client_credentials`, `jwt`, `db`, `credentials`, `aws_iam`, `none`. The set is closed by the published schema; adding another auth type requires a schema-contract change first.
+
+## Schemas + Validation
+
+Published schemas (dev host: `schemas.analitiq.work`; production host: `schemas.analitiq.ai`):
+
+- Connector: `https://schemas.analitiq.work/connector/latest.json`
+- API endpoint: `https://schemas.analitiq.work/api-endpoint/latest.json`
+- Database endpoint: `https://schemas.analitiq.work/database-endpoint/latest.json`
+
+Authored documents declare `$schema` with the production host (`.ai`) — that URL is locked by a `const` inside each schema. The validator currently *fetches* from the dev host (`.work`); production cutover flips fetch to `.ai`.
+
+The `connector-schema-validator` sub-agent runs `scripts/validate_connector.py`, which performs Draft 2020-12 JSON Schema validation plus semantic validators (reserved-field, expression-resolver, phase-resolvability, transport-ref, dsn-binding, auth-shape, tls-consistency, type-map-coverage). Tests under `analitiq-connector-builder/tests/connector_validator/`.
 
 ## Canonical Types
 
-Canonical types are Apache Arrow logical types. The machine-readable vocabulary lives in `analitiq-connector-builder/schemas/canonical-types.json` (`$id: https://api.analitiq-dev.com/schemas/canonical-types.json`) — do not restate the vocabulary in prose. Each connector ships a `definition/type-map.json` that maps its native types to canonical ones. Authoring guidance: `analitiq-connector-builder/skills/type-mapping-spec/SKILL.md`. Format spec: `analitiq-connector-builder/docs/type-map-format.md`.
-
-**Layout convention.** Both plugins use a `definition/` directory that holds `type-map.json` alongside an `endpoints/` subdirectory — fully symmetric:
-
-- Connector side: `{slug}/definition/type-map.json` and `{slug}/definition/endpoints/*.json`.
-- Pipeline side: `connections/{alias}/definition/type-map.json` and `connections/{alias}/definition/endpoints/{schema}-{table}.json`.
-
-The pipeline-side `type-map.json` is an **optional supplement** — used when pipeline-builder discovers private-endpoint natives (e.g., PostGIS `GEOMETRY`, pgvector `vector`) that the base connector's `type-map.json` doesn't cover. Engine resolution order: connection-level supplement → connector-level base → hard error on no match. Pipeline-builder implementation of this layout is tracked separately; the convention is recorded here so both sides follow it.
+Canonical types are Apache Arrow logical types in PascalCase (e.g. `Int32`, `Int64`, `Float64`, `String`, `Boolean`, `Binary`, `Date32`, `Time64`, `Timestamp`, `Decimal128`, `List`, `Struct`, `Map`). The vocabulary is owned by `docs/schema-contracts/shared/canonical-types.json` in `analitiq-infra`. Authoring guidance: `analitiq-connector-builder/skills/connector-spec-db/spec-type-maps.md`.
 
 ## Conventions
 
-- UUIDs are used for all IDs (`connector_id`, `endpoint_id`, `connection_id`, `pipeline_id`, `stream_id`)
-- Stream and pipeline IDs include a version suffix: `{uuid}_v1`
-- JSON Schema draft 2020-12 is used for endpoint schemas
-- Connection refs: `conn_1` = source, `conn_2` = first destination, `conn_3` = second, etc.
-- OAuth connections: `connection_type: "oauth2"` and `host` must be null
-- Test org_id: `d7a11991-2795-49d1-a858-c7e58ee5ecc6`
-- Agents must never create JSON that belongs to another agent's responsibility
+- JSON Schema Draft 2020-12 throughout.
+- `alias` is the stable connector slug; `[a-z0-9_-]+`; immutable.
+- `version` is the connector release semver, bumped per the connector release table (patch/minor/major) by `connector-drift-classifier`. First release: `1.0.0`.
+- Test org_id: `d7a11991-2795-49d1-a858-c7e58ee5ecc6`.
+- Agents must never author JSON that belongs to another agent's responsibility.
 
 ## PR Review Process:
 After creating a PR, follow these steps.

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schemas.analitiq.ai/connector/latest.json",
+  "kind": "api",
+  "alias": "fixture-endpoints-uncovered",
+  "version": "1.0.0",
+  "default_transport": "api",
+  "transports": {
+    "api": {
+      "transport_type": "http",
+      "base_url": "https://api.example.com",
+      "headers": {
+        "Authorization": { "template": "Bearer ${secrets.api_key}" }
+      }
+    }
+  },
+  "auth": { "type": "api_key" },
+  "connection_contract": {
+    "inputs": {
+      "api_key": {
+        "source": "user", "phase": "auth", "storage": "secrets",
+        "type": "string", "required": true, "secret": true
+      }
+    }
+  },
+  "type_maps": {
+    "native_to_arrow": {
+      "rules": [
+        { "method": "exact", "native": "string",  "canonical": "String" },
+        { "method": "exact", "native": "integer", "canonical": "Int64" }
+      ]
+    }
+  }
+}

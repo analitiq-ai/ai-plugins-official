@@ -1,36 +1,28 @@
 ---
 name: connector-spec-storage
+description: Stub for storage-style connector kinds (file, s3, stdout). Schema accepts these kinds but engine support is not yet shipped, so this skill is intentionally minimal. Loaded only by storage-connector-creator (also a stub) when the orchestrator dispatches a storage kind.
 disable-model-invocation: true
-description: >
-  Storage connector specification knowledge for S3, SFTP, and other file-based systems.
-  Contains credentials auth configuration and storage connector examples. Load when creating
-  or modifying a storage connector definition (connector.json).
 ---
 
-# Storage Connector Specification
+# connector-spec-storage (stub)
 
-## Supporting Files
+This skill is a placeholder. The published connector schema accepts
+`kind ∈ {file, s3, stdout}`, but the Analitiq engine does not execute
+these kinds yet. Until engine support lands:
 
-- [spec-form-based-storage.md](spec-form-based-storage.md) — storage form field definitions, credentials auth config
-- `examples/` — complete connector.json examples (s3, sftp)
+- The orchestrator should route `kind = file | s3 | stdout` to the
+  `storage-connector-creator` agent.
+- `storage-connector-creator` declines to author and returns a
+  structured note explaining why.
+- This skill exists so future expansion (auth flows, transports,
+  encoding rules for storage) has a place to live without restructuring
+  the skill tree.
 
-## Step 1: Read the Matching Example
+When engine support arrives, expand this skill with:
 
-Read from `${CLAUDE_PLUGIN_ROOT}/skills/connector-spec-storage/examples/`:
-
-- `s3-connector.json` — Amazon S3 object storage
-- `sftp-connector.json` — SFTP file transfer
-
-## Step 2: Read the Detailed Specification
-
-Read `${CLAUDE_PLUGIN_ROOT}/skills/connector-spec-storage/spec-form-based-storage.md` for the full storage connector schema including:
-- Auth configuration (`auth.type: "credentials"`)
-- Form field conventions (bucket, region, access keys for S3; host, port, username, password for SFTP)
-
-## Step 3: Build the Connector JSON
-
-### Quick Reference — Storage Connector Fields
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `auth.type` | string | yes | Always `"credentials"` for storage connectors |
+- `spec-file-transport.md` — local filesystem path templates and access
+  modes.
+- `spec-s3-transport.md` — S3 endpoint, region, prefix templates;
+  `S3CredentialsBlock` shape; assume-role flows.
+- `spec-stdout-transport.md` — debug sink configuration.
+- `examples/` — one validated example per kind.

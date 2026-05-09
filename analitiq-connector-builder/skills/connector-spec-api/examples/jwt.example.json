@@ -1,0 +1,52 @@
+{
+  "x-comment": "Reference example, not normative. Models a provider that requires a locally signed JWT in the Authorization header.",
+  "$schema": "https://schemas.analitiq.ai/connector/latest.json",
+  "kind": "api",
+  "alias": "jwt-example",
+  "display_name": "JWT Example",
+  "description": "Reference connector demonstrating JWT auth where the connector signs a token with a user-provided private key.",
+  "tags": ["example", "api", "jwt"],
+  "version": "1.0.0",
+  "default_transport": "api",
+  "transports": {
+    "api": {
+      "transport_type": "http",
+      "base_url": "https://api.example.com",
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": {
+          "template": "Bearer ${auth.access_token}"
+        }
+      }
+    }
+  },
+  "auth": {
+    "type": "jwt"
+  },
+  "connection_contract": {
+    "inputs": {
+      "issuer": {
+        "source": "user",
+        "phase": "auth",
+        "storage": "connection.parameters",
+        "type": "string",
+        "required": true
+      },
+      "key_id": {
+        "source": "user",
+        "phase": "auth",
+        "storage": "connection.parameters",
+        "type": "string",
+        "required": true
+      },
+      "private_key": {
+        "source": "user",
+        "phase": "auth",
+        "storage": "secrets",
+        "type": "string",
+        "required": true,
+        "secret": true
+      }
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://schemas.analitiq.ai/connector/latest.json",
+  "kind": "api",
+  "alias": "fixture-reserved",
+  "version": "1.0.0",
+  "connector_id": "should-not-be-here",
+  "default_transport": "api",
+  "transports": {
+    "api": {
+      "transport_type": "http",
+      "base_url": "https://api.example.com"
+    }
+  },
+  "auth": { "type": "api_key" },
+  "connection_contract": {
+    "inputs": {
+      "api_key": {
+        "source": "user",
+        "phase": "auth",
+        "storage": "secrets",
+        "type": "string",
+        "secret": true,
+        "required": true
+      }
+    }
+  }
+}
