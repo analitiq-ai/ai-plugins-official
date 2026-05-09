@@ -1,0 +1,32 @@
+{
+  "$schema": "https://schemas.analitiq.ai/connector/latest.json",
+  "kind": "api",
+  "alias": "fixture-auth-input-in-authorize",
+  "version": "1.0.0",
+  "default_transport": "api",
+  "transports": {
+    "auth": { "transport_type": "http", "base_url": "https://oauth.example.com" },
+    "api":  { "transport_type": "http", "base_url": "https://api.example.com",
+              "headers": { "Authorization": { "template": "Bearer ${auth.access_token}" } } }
+  },
+  "auth": {
+    "type": "oauth2_authorization_code",
+    "authorize": {
+      "transport_ref": "auth",
+      "method": "GET",
+      "path": { "template": "/oauth/authorize?tenant=${connection.parameters.tenant_id}" }
+    },
+    "token_exchange": {
+      "transport_ref": "auth",
+      "method": "POST",
+      "path": "/oauth/token"
+    }
+  },
+  "connection_contract": {
+    "inputs": {
+      "tenant_id":     { "source": "user", "phase": "post_auth", "storage": "connection.parameters", "type": "string", "required": true },
+      "client_id":     { "source": "platform", "phase": "auth", "storage": "connection.parameters", "type": "string", "required": true },
+      "client_secret": { "source": "platform", "phase": "auth", "storage": "secrets",                "type": "string", "required": true, "secret": true }
+    }
+  }
+}

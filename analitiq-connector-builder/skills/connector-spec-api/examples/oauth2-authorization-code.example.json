@@ -1,0 +1,107 @@
+{
+  "x-comment": "Reference example, not normative. Models a Pipedrive-like provider with OAuth2 authorization code, multi-origin transports, and post-auth discovery of an api_domain.",
+  "$schema": "https://schemas.analitiq.ai/connector/latest.json",
+  "kind": "api",
+  "alias": "oauth2-auth-code-example",
+  "display_name": "OAuth2 Authorization Code Example",
+  "description": "Reference connector demonstrating OAuth2 authorization code with multi-origin transports and post-auth api_domain discovery.",
+  "tags": ["example", "api", "oauth2", "post-auth-discovery"],
+  "version": "1.0.0",
+  "default_transport": "api",
+  "transport_defaults": {
+    "transport_type": "http",
+    "headers": {
+      "Accept": "application/json",
+      "Authorization": { "template": "Bearer ${auth.access_token}" }
+    },
+    "timeout_seconds": 30
+  },
+  "transports": {
+    "auth": {
+      "transport_type": "http",
+      "base_url": "https://oauth.example.com",
+      "headers": {
+        "Authorization": {
+          "function": "basic_auth",
+          "input": {
+            "username": { "ref": "connection.parameters.client_id" },
+            "password": { "ref": "secrets.client_secret" }
+          }
+        }
+      }
+    },
+    "discovery": {
+      "transport_type": "http",
+      "base_url": "https://api.example.com"
+    },
+    "api": {
+      "transport_type": "http",
+      "base_url": { "template": "https://${connection.discovered.api_domain}.example.com/api/v1" }
+    }
+  },
+  "auth": {
+    "type": "oauth2_authorization_code",
+    "authorize": {
+      "transport_ref": "auth",
+      "method": "GET",
+      "path": "/oauth/authorize"
+    },
+    "token_exchange": {
+      "transport_ref": "auth",
+      "method": "POST",
+      "path": "/oauth/token",
+      "headers": {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      "body": {
+        "template": "grant_type=authorization_code&code=${runtime.oauth.code}&redirect_uri=${runtime.oauth.redirect_uri}"
+      }
+    },
+    "refresh": {
+      "transport_ref": "auth",
+      "method": "POST",
+      "path": "/oauth/token",
+      "headers": {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      "body": {
+        "template": "grant_type=refresh_token&refresh_token=${auth.refresh_token}"
+      }
+    }
+  },
+  "connection_contract": {
+    "inputs": {
+      "client_id": {
+        "source": "platform",
+        "phase": "auth",
+        "storage": "connection.parameters",
+        "type": "string",
+        "required": true
+      },
+      "client_secret": {
+        "source": "platform",
+        "phase": "auth",
+        "storage": "secrets",
+        "type": "string",
+        "required": true,
+        "secret": true
+      }
+    },
+    "post_auth_outputs": {
+      "api_domain": {
+        "mode": "auto_discovery",
+        "storage": "connection.discovered",
+        "type": "string",
+        "value_path": "connection.discovered.api_domain",
+        "discovery_request": {
+          "transport_ref": "discovery",
+          "method": "GET",
+          "path": "/users/me"
+        }
+      }
+    },
+    "required_for_activation": [
+      "connection.discovered.api_domain"
+    ]
+  }
+}

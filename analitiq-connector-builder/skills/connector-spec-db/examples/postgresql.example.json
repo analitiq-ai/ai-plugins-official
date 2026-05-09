@@ -1,0 +1,89 @@
+{
+  "x-comment": "Reference example, not normative. Models PostgreSQL via SQLAlchemy with full DSN url_template, bindings, and TLS.",
+  "$schema": "https://schemas.analitiq.ai/connector/latest.json",
+  "kind": "database",
+  "alias": "postgresql-example",
+  "display_name": "PostgreSQL Example",
+  "description": "Reference connector for PostgreSQL using the asyncpg driver with TLS support.",
+  "tags": ["example", "database", "postgresql", "sqlalchemy"],
+  "version": "1.0.0",
+  "default_transport": "database",
+  "transports": {
+    "database": {
+      "transport_type": "sqlalchemy",
+      "driver": "postgresql+asyncpg",
+      "dsn": {
+        "kind": "url_template",
+        "template": "postgresql+asyncpg://{username}:{password}@{host}:{port}/{database}",
+        "bindings": {
+          "username": { "value": { "ref": "connection.parameters.username" }, "encoding": "url_userinfo" },
+          "password": { "value": { "ref": "secrets.password" }, "encoding": "url_userinfo" },
+          "host":     { "value": { "ref": "connection.parameters.host" }, "encoding": "host" },
+          "port":     { "value": { "ref": "connection.parameters.port" }, "encoding": "raw" },
+          "database": { "value": { "ref": "connection.parameters.database" }, "encoding": "url_path_segment" }
+        }
+      },
+      "tls": {
+        "mode": { "ref": "connection.parameters.ssl_mode" },
+        "ca_certificate": { "ref": "secrets.ssl_ca_certificate" }
+      },
+      "options": {
+        "pool_size": 5
+      }
+    }
+  },
+  "auth": { "type": "db" },
+  "connection_contract": {
+    "inputs": {
+      "host":     { "source": "user", "phase": "pre_auth", "storage": "connection.parameters", "type": "string", "required": true },
+      "port":     { "source": "user", "phase": "pre_auth", "storage": "connection.parameters", "type": "integer", "required": true, "default": 5432 },
+      "database": { "source": "user", "phase": "pre_auth", "storage": "connection.parameters", "type": "string", "required": true },
+      "username": { "source": "user", "phase": "auth",     "storage": "connection.parameters", "type": "string", "required": true },
+      "password": { "source": "user", "phase": "auth",     "storage": "secrets",                "type": "string", "required": true, "secret": true },
+      "ssl_mode": {
+        "source": "user", "phase": "pre_auth", "storage": "connection.parameters", "type": "string",
+        "required": true,
+        "enum": ["none", "require", "verify-ca", "verify-full"],
+        "default": "require"
+      },
+      "ssl_ca_certificate": {
+        "source": "user", "phase": "pre_auth", "storage": "secrets",
+        "type": "string", "required": false, "secret": true
+      }
+    }
+  },
+  "resource_discovery": {
+    "strategy": "information_schema",
+    "transport_ref": "database",
+    "implementation": { "type": "builtin" },
+    "produces": ["connection.endpoints", "connection.type_map"],
+    "triggers": {
+      "list_resources": "on_activation",
+      "describe_resource": "on_resource_selected"
+    }
+  },
+  "type_maps": {
+    "native_to_arrow": {
+      "rules": [
+        { "method": "exact", "native": "smallint",  "canonical": "Int16" },
+        { "method": "exact", "native": "integer",   "canonical": "Int32" },
+        { "method": "exact", "native": "bigint",    "canonical": "Int64" },
+        { "method": "exact", "native": "real",      "canonical": "Float32" },
+        { "method": "exact", "native": "double precision", "canonical": "Float64" },
+        { "method": "exact", "native": "boolean",   "canonical": "Boolean" },
+        { "method": "exact", "native": "text",      "canonical": "String" },
+        { "method": "regex", "native": "^character varying(\\([0-9]+\\))?$", "canonical": "String" },
+        { "method": "regex", "native": "^character(\\([0-9]+\\))?$", "canonical": "String" },
+        { "method": "exact", "native": "uuid",      "canonical": "String" },
+        { "method": "exact", "native": "date",      "canonical": "Date32" },
+        { "method": "regex", "native": "^time(\\([0-9]+\\))?( without time zone)?$", "canonical": "Time64" },
+        { "method": "regex", "native": "^timestamp(\\([0-9]+\\))?( without time zone)?$", "canonical": "Timestamp" },
+        { "method": "regex", "native": "^timestamp(\\([0-9]+\\))? with time zone$", "canonical": "Timestamp" },
+        { "method": "regex", "native": "^numeric(\\([0-9]+,[0-9]+\\))?$", "canonical": "Decimal128" },
+        { "method": "exact", "native": "bytea",     "canonical": "Binary" },
+        { "method": "exact", "native": "json",      "canonical": "String" },
+        { "method": "exact", "native": "jsonb",     "canonical": "String" }
+      ]
+    }
+  }
+}

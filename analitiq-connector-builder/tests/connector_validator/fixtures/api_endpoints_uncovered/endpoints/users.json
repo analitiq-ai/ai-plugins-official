@@ -1,0 +1,28 @@
+{
+  "$schema": "https://schemas.analitiq.ai/api-endpoint/latest.json",
+  "alias": "users",
+  "operations": {
+    "read": {
+      "request": { "method": "GET", "path": "/users" },
+      "response": {
+        "records": { "ref": "response.body.data" },
+        "schema": {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id":         { "type": "string", "format": "uuid" },
+                  "is_admin":   { "type": "boolean" },
+                  "created_at": { "type": "string", "format": "date-time" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

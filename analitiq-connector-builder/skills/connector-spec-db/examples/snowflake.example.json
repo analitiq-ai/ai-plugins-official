@@ -1,0 +1,78 @@
+{
+  "x-comment": "Reference example, not normative. Models Snowflake via SQLAlchemy with account/warehouse/role connection params.",
+  "$schema": "https://schemas.analitiq.ai/connector/latest.json",
+  "kind": "database",
+  "alias": "snowflake-example",
+  "display_name": "Snowflake Example",
+  "description": "Reference connector for Snowflake using the snowflake driver.",
+  "tags": ["example", "database", "snowflake", "warehouse"],
+  "version": "1.0.0",
+  "default_transport": "database",
+  "transports": {
+    "database": {
+      "transport_type": "sqlalchemy",
+      "driver": "snowflake",
+      "dsn": {
+        "kind": "url_template",
+        "template": "snowflake://{username}:{password}@{account}/{database}/{schema}?warehouse={warehouse}&role={role}",
+        "bindings": {
+          "username":  { "value": { "ref": "connection.parameters.username" }, "encoding": "url_userinfo" },
+          "password":  { "value": { "ref": "secrets.password" }, "encoding": "url_userinfo" },
+          "account":   { "value": { "ref": "connection.parameters.account" }, "encoding": "host" },
+          "database":  { "value": { "ref": "connection.parameters.database" }, "encoding": "url_path_segment" },
+          "schema":    { "value": { "ref": "connection.parameters.schema" }, "encoding": "url_path_segment" },
+          "warehouse": { "value": { "ref": "connection.parameters.warehouse" }, "encoding": "url_query_value" },
+          "role":      { "value": { "ref": "connection.parameters.role" }, "encoding": "url_query_value" }
+        }
+      }
+    }
+  },
+  "auth": { "type": "db" },
+  "connection_contract": {
+    "inputs": {
+      "account":   { "source": "user", "phase": "pre_auth", "storage": "connection.parameters", "type": "string", "required": true },
+      "database":  { "source": "user", "phase": "pre_auth", "storage": "connection.parameters", "type": "string", "required": true },
+      "schema":    { "source": "user", "phase": "pre_auth", "storage": "connection.parameters", "type": "string", "required": true, "default": "PUBLIC" },
+      "warehouse": { "source": "user", "phase": "pre_auth", "storage": "connection.parameters", "type": "string", "required": true },
+      "role":      { "source": "user", "phase": "pre_auth", "storage": "connection.parameters", "type": "string", "required": false },
+      "username":  { "source": "user", "phase": "auth",     "storage": "connection.parameters", "type": "string", "required": true },
+      "password":  { "source": "user", "phase": "auth",     "storage": "secrets",                "type": "string", "required": true, "secret": true }
+    }
+  },
+  "resource_discovery": {
+    "strategy": "snowflake_account_usage",
+    "transport_ref": "database",
+    "implementation": { "type": "builtin" },
+    "produces": ["connection.endpoints", "connection.type_map"],
+    "triggers": {
+      "list_resources": "on_activation",
+      "describe_resource": "on_resource_selected"
+    }
+  },
+  "type_maps": {
+    "native_to_arrow": {
+      "rules": [
+        { "method": "exact", "native": "NUMBER",         "canonical": "Decimal128" },
+        { "method": "exact", "native": "DECIMAL",        "canonical": "Decimal128" },
+        { "method": "exact", "native": "INT",            "canonical": "Int64" },
+        { "method": "exact", "native": "INTEGER",        "canonical": "Int64" },
+        { "method": "exact", "native": "BIGINT",         "canonical": "Int64" },
+        { "method": "exact", "native": "FLOAT",          "canonical": "Float64" },
+        { "method": "exact", "native": "DOUBLE",         "canonical": "Float64" },
+        { "method": "exact", "native": "BOOLEAN",        "canonical": "Boolean" },
+        { "method": "exact", "native": "VARCHAR",        "canonical": "String" },
+        { "method": "exact", "native": "STRING",         "canonical": "String" },
+        { "method": "exact", "native": "TEXT",           "canonical": "String" },
+        { "method": "exact", "native": "DATE",           "canonical": "Date32" },
+        { "method": "exact", "native": "TIME",           "canonical": "Time64" },
+        { "method": "exact", "native": "TIMESTAMP_NTZ",  "canonical": "Timestamp" },
+        { "method": "exact", "native": "TIMESTAMP_LTZ",  "canonical": "Timestamp" },
+        { "method": "exact", "native": "TIMESTAMP_TZ",   "canonical": "Timestamp" },
+        { "method": "exact", "native": "BINARY",         "canonical": "Binary" },
+        { "method": "exact", "native": "VARIANT",        "canonical": "String" },
+        { "method": "exact", "native": "OBJECT",         "canonical": "String" },
+        { "method": "exact", "native": "ARRAY",          "canonical": "String" }
+      ]
+    }
+  }
+}

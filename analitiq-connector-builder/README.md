@@ -1,50 +1,117 @@
 # Analitiq Connector Builder Plugin
 
-Claude Code plugin for creating data integration connectors and endpoints that comply with the [Analitiq Data Integration Protocols](https://github.com/analitiq-dip-registry) (DIP). Supports API (REST/HTTP), database (PostgreSQL, MySQL), and storage (S3, SFTP) systems.
+Claude Code plugin that authors connector JSON documents conforming to the
+published Analitiq schema contract at
+[`schemas.analitiq.work`](https://schemas.analitiq.work) (dev) /
+`schemas.analitiq.ai` (production). Supports API and database connectors;
+storage kinds (`file`, `s3`, `stdout`) are accepted by the schema but the
+engine doesn't yet execute them — those are stubbed.
 
-## What It Does
+## What it does
 
-The plugin interviews you about the target system, researches its documentation, and generates the full connector definition — no coding required. Connectors are published to the [`analitiq-dip-registry`](https://github.com/analitiq-dip-registry) GitHub org as individual repos named `{slug}`.
+Given a provider name and an official documentation URL, the plugin:
 
-**Usage:** Launch Claude Code and say *"I want to create a connector for [system name]"*
+1. Researches the provider's auth model, transports, and endpoints.
+2. Classifies kind, auth type, and transport types.
+3. Dispatches a kind-specific creator agent that authors the connector body.
+4. Authors endpoint files alongside (API connectors only — DB endpoints are
+   discovered at runtime).
+5. Validates everything against the published JSON schemas plus a layer of
+   semantic validators (DSN bindings, auth shape, TLS consistency, etc.).
+6. Classifies version drift against the previous release and bumps `version`
+   accordingly.
+7. Writes the connector and endpoint files to disk at predictable paths.
 
-## Agent Chain
+**Usage:** Launch Claude Code and say *"build a connector for &lt;provider&gt;"*
+or *"/connector-builder &lt;provider&gt;"*.
+
+## Architecture
 
 ```
-connector-wizard (orchestrator)
-  ├── connector-researcher        # Researches system docs (auth, endpoints, drivers)
-  ├── api-connector-creator       # Builds API connector definitions
-  ├── db-connector-creator        # Builds database connector definitions
-  ├── storage-connector-creator   # Builds storage connector definitions
-  └── endpoint-creator            # Builds API endpoint definitions
+connector-builder (skill, orchestrator)
+├── connector-provider-researcher   # extracts ProviderFacts from official docs (no WebSearch)
+├── api-connector-creator           # authors kind=api connectors (loads connector-spec-api)
+├── db-connector-creator            # authors kind=database connectors (loads connector-spec-db)
+├── endpoint-creator                # authors API endpoint documents
+├── storage-connector-creator       # stub for kind ∈ {file, s3, stdout}
+├── connector-schema-validator      # JSON Schema + semantic validation
+└── connector-drift-classifier      # patch/minor/major bump from diff
 ```
 
-1. **connector-wizard** — interviews the user, checks for duplicates in the registry, dispatches research and creation agents, collects results, and optionally validates
-2. **connector-researcher** — researches official documentation for auth details, connection parameters, or endpoint schemas
-3. **{type}-connector-creator** — builds the connector definition (`connector.json`, repo scaffolding, docs). The placeholder registry and endpoint index are layered onto `connector.json` by the orchestrator after endpoint creation
-4. **endpoint-creator** — builds individual endpoint JSON files (API connectors only)
+The orchestrator owns classification and cross-cutting steps. Each creator
+agent owns the authoring vocabulary for its kind via a dedicated spec skill
+(`connector-spec-api`, `connector-spec-db`, `connector-spec-storage`).
 
-## Supported Connector Types
+## Supported kinds
 
-| Type | `connector_type` | Auth | Examples |
-|------|-------------------|------|----------|
-| API | `api` | `api_key`, `basic_auth`, `oauth2_authorization_code`, `oauth2_client_credentials`, `jwt` | Wise, Xero, Shopify |
-| Database | `database` | `db` | PostgreSQL, MySQL, MongoDB |
-| Storage | `other` | `credentials` | S3, SFTP |
+| Kind | Status | Auth types | Examples |
+|---|---|---|---|
+| `api` | shipped | `api_key`, `basic_auth`, `oauth2_authorization_code`, `oauth2_client_credentials`, `jwt`, `credentials`, `aws_iam`, `none` | Stripe, Pipedrive, Wise, Xero |
+| `database` | shipped | `db` | PostgreSQL, MySQL, Snowflake, MongoDB |
+| `file` / `s3` / `stdout` | stubbed | n/a | Recognized by schema; engine support pending. |
 
-## Placeholder Source Categories
+## Validation
 
-Every named value the runtime needs is registered in the `placeholders` array inside `connector.json` with a source category describing where the value comes from. The array covers (1) every `${placeholder}` token in the auth/runtime body or endpoint files, (2) every name listed in any `derived_from` array, and (3) auth-protocol inputs the runtime needs but does not template (e.g. JWT signing key + claim inputs).
+The plugin includes a Python validator script
+(`scripts/validate_connector.py`) that runs:
 
-| Source | Description | Examples |
-|--------|-------------|----------|
-| `user_defined` | Values provided by the user via form fields or credential files | `api_key`, `username`, `password`, `site`, `company_domain` |
-| `system_defined` | Values returned by the target system during authentication | `access_token`, `refresh_token`, `code` |
-| `post_auth` | Values resolved via post-authentication steps | `tenant_id`, `server_url`, `session_token`, `account_id` |
-| `protocol` | OAuth2/auth protocol parameters from app registration or flow setup | `client_id`, `client_secret`, `redirect_uri`, `state`, `code_verifier` |
-| `derived` | Values computed from other registered names (the inputs do not need to appear as `${...}` tokens themselves) | `basic_auth`, `base64_credentials`, `jwt_token`, `code_challenge` |
+1. **JSON Schema validation** (Draft 2020-12) against the published schema:
+   - Connector → `https://schemas.analitiq.work/connector/latest.json`
+   - API endpoint → `https://schemas.analitiq.work/api-endpoint/latest.json`
+   - Database endpoint → `https://schemas.analitiq.work/database-endpoint/latest.json`
+2. **Semantic validators** for rules JSON Schema can't express:
+   - `reserved-field`, `expression-resolver`, `phase-resolvability`,
+     `transport-ref`, `dsn-binding`, `auth-shape`, `tls-consistency`,
+     `type-map-coverage`.
 
-Derived placeholders include a `derived_from` field listing the names they're computed from. Those names must be entries in the same `placeholders` array, but they are resolution inputs, not necessarily template tokens. See the `connector-assembly` skill for the full inclusion rule and source-category guidance.
+Run directly:
+
+```bash
+python scripts/validate_connector.py \
+  --schema-url https://schemas.analitiq.work/connector/latest.json \
+  --document path/to/connector.json
+```
+
+Output is a single `Diagnostics` JSON object. Exit 0 iff `passed: true`.
+
+Tests live under `tests/connector_validator/`. Run with `pytest`.
+
+## Schema host (dev → prod)
+
+- The validator currently *fetches* schemas from
+  `https://schemas.analitiq.work` (dev).
+- Authored documents declare `$schema` with the production host
+  `https://schemas.analitiq.ai/...` — that URL is locked by a `const` inside
+  the published schema.
+- When production cuts over, the validator's fetch host flips to `.ai`.
+
+## File output
+
+For each successfully built connector:
+
+```
+{alias}/
+├── definition/
+│   ├── connector.json              # the connector body
+│   └── endpoints/                  # api connectors only
+│       └── {endpoint-alias}.json
+└── README.md
+```
+
+Server-managed fields (`connector_id`, `connector_schema_version`,
+`created_at`, `updated_at`) are NEVER written to disk — the registry
+stamps them on insert/update.
+
+### Existing directories are not overwritten
+
+If a directory matching the connector's `{alias}` already exists in
+the current working directory, the orchestrator halts and asks the
+user to remove it manually before re-running. The plugin does not
+migrate legacy-shape connectors — pre-existing files (with
+`placeholders` arrays, separate `manifest.json` / `type-map.json` /
+`ssl-mode-map.json`) must be deleted first so the rebuild can produce
+a clean schema-aligned connector from scratch. The orchestrator never
+deletes files on the user's behalf.
 
 ## Installation
 
@@ -52,39 +119,12 @@ Derived placeholders include a `derived_from` field listing the names they're co
 claude plugin add ./analitiq-connector-builder
 ```
 
-Or point Claude Code to the local directory:
-
-```bash
-claude --plugin-dir /path/to/analitiq-connector-builder
-```
-
-## Optional: Validation API
-
-If you have an `ANALITIQ_API_KEY`, the plugin validates all generated JSON against the Analitiq validation API to ensure 100% compliance with the DIP schema. You can get a free key at [analitiq-app.com](https://analitiq-app.com).
-
-## Playwright (Recommended)
-
-The [Playwright MCP server](https://github.com/anthropics/mcp-playwright) is essential for efficient reading of online API documentation. The connector-researcher agent relies on it to navigate and extract auth details, endpoint schemas, and connection parameters directly from official docs pages. Without Playwright, the agent falls back to less reliable methods that may miss important details or require manual copy-pasting of documentation content.
-
-Add the following to `.mcp.json` in the project root:
-
-```json
-{
-  "mcpServers": {
-    "playwright": {
-      "command": "npx",
-      "args": ["@playwright/mcp@latest"]
-    }
-  }
-}
-```
-
 ## Links
 
-- [Analitiq DIP Registry](https://github.com/analitiq-dip-registry) — all available connectors
-- [Analitiq Cloud](https://analitiq-app.com) — managed data integration platform
-- [Analitiq](https://analitiq.ai) — learn more
+- [Analitiq DIP Registry](https://github.com/analitiq-ai/analitiq-dip-registry) — community connector submissions.
+- [Schema contracts](https://github.com/analitiq-ai/analitiq-infra/tree/main/docs/schema-contracts) — authoritative shape specs.
+- [Published schemas](https://schemas.analitiq.work) — the JSON Schemas the validator runs against.
 
 ## License
 
-Apache 2.0 — see [LICENSE](LICENSE) for details.
+Apache 2.0 — see [LICENSE](LICENSE).
