@@ -81,6 +81,9 @@ sub-agents own those skills.
    passes, halt and surface the diagnostics; do not write partial
    files. The validator script itself is single-shot — iteration
    discipline lives in the orchestrator's prose, not in the script.
+   The cap is best-effort and not runtime-enforced; runtime
+   enforcement is tracked at
+   https://github.com/analitiq-ai/ai-plugins-official/issues/26.
 6. **Drift** — if `previous_release_path` was supplied, invoke
    `connector-drift-classifier` and apply the bump to top-level
    `version`. Otherwise this is a first release; set `version: "1.0.0"`.

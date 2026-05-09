@@ -97,7 +97,9 @@ re-dispatch the matching creator with the validator's findings,
 re-validate, repeat. If `error`-severity findings persist after 5
 passes, halt and surface the diagnostics; do not write partial files.
 The validator script is single-shot; iteration discipline lives in
-the orchestrator's prose, not in the script.
+the orchestrator's prose, not in the script. The cap is best-effort
+and not runtime-enforced; runtime enforcement is tracked at
+https://github.com/analitiq-ai/ai-plugins-official/issues/26.
 
 ### 6. Drift
 
