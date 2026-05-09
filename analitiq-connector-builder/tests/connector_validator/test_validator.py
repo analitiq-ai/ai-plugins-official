@@ -166,6 +166,46 @@ def test_phase_resolvability_caught():
     assert not any("/t/" in e["path"] for e in errs), f"finding path leaked '/t/' wrapper: {errs}"
 
 
+def test_runtime_oauth_in_refresh_caught():
+    result = run_validator(FIXTURES / "invalid_phase_runtime_oauth_in_refresh.json", "--semantic-only")
+    errs = errors_of(result, "phase-resolvability")
+    assert any("auth.refresh" in e["message"].lower() or "/auth/refresh" in e["path"] for e in errs), \
+        f"expected runtime.oauth.* in auth.refresh to be caught; got {errs}"
+
+
+def test_oauth_runtime_on_non_oauth_connector_caught():
+    result = run_validator(FIXTURES / "invalid_phase_oauth_runtime_on_apikey.json", "--semantic-only")
+    errs = errors_of(result, "phase-resolvability")
+    assert any("oauth2_authorization_code" in e["message"] for e in errs), \
+        f"expected oauth-only-on-oauth-connector finding; got {errs}"
+
+
+def test_unknown_runtime_key_caught():
+    result = run_validator(FIXTURES / "invalid_phase_unknown_runtime.json", "--semantic-only")
+    errs = errors_of(result, "phase-resolvability")
+    assert any("bogus_key" in e["message"] or "closed set" in e["message"] for e in errs), \
+        f"expected unknown runtime key finding; got {errs}"
+
+
+def test_undeclared_connection_input_caught():
+    result = run_validator(FIXTURES / "invalid_phase_undeclared_input.json", "--semantic-only")
+    errs = errors_of(result, "phase-resolvability")
+    assert any("connection.parameters.region" in e["message"] for e in errs), \
+        f"expected undeclared input finding; got {errs}"
+
+
+def test_post_auth_input_referenced_in_auth_caught():
+    """connection.parameters.tenant_id is phase=post_auth; auth.authorize is phase=auth.
+
+    The validator must flag the cross-phase reference because the input
+    isn't yet collected when authorize fires.
+    """
+    result = run_validator(FIXTURES / "invalid_phase_auth_input_in_authorize.json", "--semantic-only")
+    errs = errors_of(result, "phase-resolvability")
+    assert any("tenant_id" in e["message"] and "auth" in e["message"] for e in errs), \
+        f"expected cross-phase finding for tenant_id in auth.authorize; got {errs}"
+
+
 def test_type_map_coverage_warns_on_empty_rules():
     result = run_validator(FIXTURES / "invalid_type_map_empty_rules.json", "--semantic-only")
     warns = warnings_of(result, "type-map-coverage")

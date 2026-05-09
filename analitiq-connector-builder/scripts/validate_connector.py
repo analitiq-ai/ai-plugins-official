@@ -490,88 +490,375 @@ def check_tls_consistency(doc: dict) -> list[dict]:
     return findings
 
 
-def check_phase_resolvability(doc: dict) -> list[dict]:
-    """Flag refs to `connection.discovered.*` that no post_auth_outputs entry produces.
+# Lifecycle phase ordering. Anything available in an earlier phase is also
+# available in later ones. Index = phase rank (higher = later).
+_PHASE_ORDER = ["pre_auth", "auth", "post_auth", "active"]
 
-    Other phase-resolvability rules from `shared/lifecycle-phases.md`
-    (e.g. flagging `auth.*` refs that appear in pre_auth-phase transports)
-    are not yet implemented — see follow-up issue.
 
-    Also emits a warning when a `post_auth_outputs` entry is malformed
-    (missing `storage`, or `storage = "connection.discovered"` with no /
-    invalid `value_path`) so a producer-side bug doesn't masquerade as a
-    consumer-side one downstream.
+def _phase_le(a: str, b: str) -> bool:
+    """Return True iff phase `a` is reachable in phase `b` (a runs no later than b)."""
+    try:
+        return _PHASE_ORDER.index(a) <= _PHASE_ORDER.index(b)
+    except ValueError:
+        return False
+
+
+# Closed `runtime.*` set per `shared/lifecycle-phases.md`.
+_GENERIC_RUNTIME_KEYS = {"run_id", "current_time", "batch_size"}
+_OPERATION_LOCAL_RUNTIME_KEYS = {"pagination"}  # `runtime.pagination.offset` etc.
+_OAUTH_RUNTIME_KEYS = {"code", "state", "redirect_uri", "pkce_verifier"}
+
+
+def _index_inputs(doc: dict) -> dict[str, dict]:
+    """Map storage-scoped reference path -> input record, for declared inputs.
+
+    Keys are like `connection.parameters.host` and `secrets.password`.
+    Values carry the `phase` so the resolvability check can assert it.
+    """
+    out: dict[str, dict] = {}
+    inputs = doc.get("connection_contract", {}).get("inputs") or {}
+    if not isinstance(inputs, dict):
+        return out
+    for name, spec in inputs.items():
+        if not isinstance(spec, dict):
+            continue
+        storage = spec.get("storage")
+        phase = spec.get("phase", "pre_auth")
+        if storage in ("connection.parameters", "secrets"):
+            out[f"{storage}.{name}"] = {"phase": phase, "input_name": name, "via": "input"}
+    return out
+
+
+def _index_post_auth_outputs(doc: dict) -> tuple[dict[str, dict], list[dict]]:
+    """Map produced reference paths to their post-auth output, plus warnings.
+
+    Returns (index, warnings). The index keys are the produced paths (e.g.
+    `connection.discovered.api_domain`); values describe the producing
+    output. Warnings catch malformed entries.
     """
     findings: list[dict] = []
-    contract = doc.get("connection_contract", {})
-    post_auth = contract.get("post_auth_outputs") or {}
-    discovered_keys = set()
-    if isinstance(post_auth, dict):
-        for name, out in post_auth.items():
-            if not isinstance(out, dict):
-                continue
-            storage = out.get("storage")
-            value_path = out.get("value_path")
-            if storage != "connection.discovered":
-                continue
-            if not isinstance(value_path, str) or not value_path.startswith("connection.discovered."):
+    out: dict[str, dict] = {}
+    post_auth = doc.get("connection_contract", {}).get("post_auth_outputs") or {}
+    if not isinstance(post_auth, dict):
+        return out, findings
+    valid_storage = {"connection.discovered", "connection.selections", "secrets"}
+    for name, spec in post_auth.items():
+        if not isinstance(spec, dict):
+            continue
+        storage = spec.get("storage")
+        value_path = spec.get("value_path")
+        if storage not in valid_storage:
+            findings.append(
+                finding(
+                    "phase-resolvability",
+                    "warning",
+                    f"/connection_contract/post_auth_outputs/{name}",
+                    f"post_auth_outputs.{name} has unrecognized storage {storage!r}.",
+                    rule_doc="shared/lifecycle-phases.md",
+                )
+            )
+            continue
+        if not isinstance(value_path, str) or not value_path.startswith(f"{storage}."):
+            findings.append(
+                finding(
+                    "phase-resolvability",
+                    "warning",
+                    f"/connection_contract/post_auth_outputs/{name}",
+                    (
+                        f"post_auth_outputs.{name} declares storage={storage!r} "
+                        f"but value_path is missing or does not start with '{storage}.': {value_path!r}"
+                    ),
+                    rule_doc="shared/lifecycle-phases.md",
+                )
+            )
+            continue
+        out[value_path] = {"storage": storage, "output_name": name}
+    return out, findings
+
+
+def _ref_phase_problem(
+    dotted: str,
+    phase: str,
+    auth_op: str | None,
+    auth_type: str | None,
+    in_operation: bool,
+    input_idx: dict[str, dict],
+    output_idx: dict[str, dict],
+) -> str | None:
+    """Return a human-readable error for `dotted` referenced in `phase`, or None.
+
+    `auth_op` is one of "authorize", "token_exchange", "refresh", or None.
+    `in_operation` is True for refs inside an endpoint operation context
+    (request/response/pagination/cursor expressions), where operation-local
+    runtime subkeys are available.
+    """
+    head = dotted.split(".", 1)[0]
+    if head == "runtime":
+        return _runtime_phase_problem(dotted, phase, auth_op, auth_type, in_operation)
+    if head == "auth":
+        if not _phase_le("post_auth", phase):
+            return f"'auth.*' is not available before post_auth (current phase: {phase})."
+        return None
+    if head == "stream":
+        if not _phase_le("active", phase):
+            return f"'stream.*' is only available in the active phase (current phase: {phase})."
+        return None
+    if head == "state":
+        if not _phase_le("active", phase):
+            return f"'state.*' is only available in the active phase (current phase: {phase})."
+        return None
+    if head != "connection":
+        return None  # secrets are handled below as a top-level scope
+    return None
+
+
+def _runtime_phase_problem(
+    dotted: str,
+    phase: str,
+    auth_op: str | None,
+    auth_type: str | None,
+    in_operation: bool,
+) -> str | None:
+    parts = dotted.split(".", 2)
+    if len(parts) < 2:
+        return f"'runtime' must be followed by a key (e.g. 'runtime.run_id')."
+    sub = parts[1]
+    if sub in _GENERIC_RUNTIME_KEYS:
+        return None  # generic runtime is always available
+    if sub in _OPERATION_LOCAL_RUNTIME_KEYS:
+        if not in_operation:
+            return f"'runtime.{sub}.*' is operation-local and not available outside an endpoint operation."
+        return None
+    if sub == "oauth":
+        if auth_type != "oauth2_authorization_code":
+            return (
+                f"'runtime.oauth.*' is only available when auth.type is "
+                f"'oauth2_authorization_code' (current: {auth_type!r})."
+            )
+        oauth_key = parts[2].split(".", 1)[0] if len(parts) >= 3 else ""
+        if oauth_key not in _OAUTH_RUNTIME_KEYS:
+            return f"'runtime.oauth.{oauth_key}' is not in the closed set {sorted(_OAUTH_RUNTIME_KEYS)}."
+        if auth_op == "refresh":
+            return f"'runtime.oauth.*' must not be referenced inside auth.refresh."
+        if oauth_key == "code" and auth_op != "token_exchange":
+            return f"'runtime.oauth.code' is only available inside auth.token_exchange (current op: {auth_op!r})."
+        if auth_op not in ("authorize", "token_exchange", None):
+            # None means "outside the auth.* block" — which is also wrong for runtime.oauth.*
+            return f"'runtime.oauth.*' is only available in auth.authorize and auth.token_exchange."
+        if auth_op is None:
+            return f"'runtime.oauth.*' is only available in auth.authorize and auth.token_exchange."
+        return None
+    return f"'runtime.{sub}' is not in the registered closed set."
+
+
+def _connection_or_secrets_phase_problem(
+    dotted: str,
+    phase: str,
+    input_idx: dict[str, dict],
+    output_idx: dict[str, dict],
+) -> str | None:
+    """Resolve refs into connection.parameters / connection.* / secrets."""
+    head = dotted.split(".", 1)[0]
+    if head == "secrets":
+        # Could be a declared input OR produced by a post-auth output
+        key2 = ".".join(dotted.split(".", 2)[:2]) + "." + dotted.split(".", 2)[2].split(".", 1)[0] \
+            if len(dotted.split(".")) >= 3 else dotted
+        # Simpler: check exact key like `secrets.password`
+        primary = ".".join(dotted.split(".", 2)[:2])  # `secrets.password`
+        record = input_idx.get(primary)
+        if record is not None:
+            if not _phase_le(record["phase"], phase):
+                return (
+                    f"'{primary}' is declared in phase '{record['phase']}' "
+                    f"and is not available in '{phase}'."
+                )
+            return None
+        # Or produced by post_auth_outputs
+        if primary in output_idx:
+            if not _phase_le("post_auth", phase):
+                return f"'{primary}' is produced post-auth and is not available in '{phase}'."
+            return None
+        return f"'{primary}' is not declared as an input nor produced by a post_auth_output."
+    if head != "connection":
+        return None
+    sub = dotted.split(".", 2)
+    if len(sub) < 2:
+        return "'connection' must be followed by a sub-scope."
+    scope = ".".join(sub[:2])  # `connection.parameters` etc
+    primary = ".".join(sub[:3]) if len(sub) >= 3 else scope  # `connection.parameters.host`
+    if scope == "connection.parameters":
+        record = input_idx.get(primary)
+        if record is None:
+            return f"'{primary}' is not declared in connection_contract.inputs."
+        if not _phase_le(record["phase"], phase):
+            return (
+                f"'{primary}' is declared in phase '{record['phase']}' "
+                f"and is not available in '{phase}'."
+            )
+        return None
+    if scope in ("connection.discovered", "connection.selections"):
+        if not _phase_le("post_auth", phase):
+            return f"'{scope}.*' is only available from post_auth onward (current phase: {phase})."
+        if primary not in output_idx:
+            return f"'{primary}' is not produced by any post_auth_output."
+        return None
+    return None
+
+
+def _walk_refs_with_phase(
+    container: Any,
+    base_path: str,
+    phase: str,
+    auth_op: str | None,
+    auth_type: str | None,
+    in_operation: bool,
+    input_idx: dict[str, dict],
+    output_idx: dict[str, dict],
+) -> list[dict]:
+    """Walk a sub-tree, validating every ref/template var against the phase model."""
+    findings: list[dict] = []
+    template_var = re.compile(r"\$\{([^}]+)\}")
+    for path, node in _walk(container, base_path):
+        if not isinstance(node, dict):
+            continue
+        ref = node.get("ref")
+        if isinstance(ref, str):
+            problem = _ref_phase_problem(ref, phase, auth_op, auth_type, in_operation, input_idx, output_idx) \
+                or _connection_or_secrets_phase_problem(ref, phase, input_idx, output_idx)
+            if problem:
                 findings.append(
                     finding(
                         "phase-resolvability",
-                        "warning",
-                        f"/connection_contract/post_auth_outputs/{name}",
-                        (
-                            f"post_auth_outputs.{name} declares storage='connection.discovered' "
-                            f"but value_path is missing or does not start with 'connection.discovered.': "
-                            f"{value_path!r}"
-                        ),
+                        "error",
+                        path,
+                        f"ref '{ref}': {problem}",
                         rule_doc="shared/lifecycle-phases.md",
                     )
                 )
-                continue
-            discovered_keys.add(value_path.split(".", 2)[2])
-    transports = doc.get("transports") or {}
-    template_var = re.compile(r"\$\{([^}]+)\}")
-    for tname, tspec in transports.items() if isinstance(transports, dict) else []:
-        for path, node in _walk(tspec, f"/transports/{tname}"):
-            if not isinstance(node, dict):
-                continue
-            # ref form
-            ref = node.get("ref")
-            if isinstance(ref, str) and ref.startswith("connection.discovered."):
-                key = ref.split(".", 2)[2].split(".", 1)[0]
-                if key not in discovered_keys:
+        tmpl = node.get("template")
+        if isinstance(tmpl, str):
+            for var in template_var.findall(tmpl):
+                problem = _ref_phase_problem(var, phase, auth_op, auth_type, in_operation, input_idx, output_idx) \
+                    or _connection_or_secrets_phase_problem(var, phase, input_idx, output_idx)
+                if problem:
                     findings.append(
                         finding(
                             "phase-resolvability",
                             "error",
                             path,
-                            (
-                                f"transport '{tname}' references 'connection.discovered.{key}' "
-                                "but no post-auth output produces it."
-                            ),
+                            f"template '${{{var}}}': {problem}",
                             rule_doc="shared/lifecycle-phases.md",
                         )
                     )
-            # template form
-            tmpl = node.get("template")
-            if isinstance(tmpl, str):
-                for var in template_var.findall(tmpl):
-                    if var.startswith("connection.discovered."):
-                        key = var.split(".", 2)[2].split(".", 1)[0]
-                        if key not in discovered_keys:
-                            findings.append(
-                                finding(
-                                    "phase-resolvability",
-                                    "error",
-                                    path,
-                                    (
-                                        f"transport '{tname}' template references "
-                                        f"'connection.discovered.{key}' but no post-auth output produces it."
-                                    ),
-                                    rule_doc="shared/lifecycle-phases.md",
-                                )
-                            )
+    return findings
+
+
+def check_phase_resolvability(doc: dict) -> list[dict]:
+    """Validate every templated reference against `shared/lifecycle-phases.md`.
+
+    Builds two indexes — declared inputs (from connection_contract.inputs)
+    and produced outputs (from connection_contract.post_auth_outputs) —
+    then walks the document at known phase-anchored sites and asserts each
+    ref/template var targets a scope available in that phase.
+
+    Anchored sites and their phases:
+
+    | Site | Phase | Auth-op context |
+    |---|---|---|
+    | `auth.authorize.*` | auth | authorize |
+    | `auth.token_exchange.*` | auth | token_exchange |
+    | `auth.refresh.*` | auth | refresh |
+    | `auth.test.*` | active | None |
+    | `connection_contract.post_auth_outputs.*.options_request` | post_auth | None |
+    | `connection_contract.post_auth_outputs.*.discovery_request` | post_auth | None |
+    | `transports.*` | varies — assumed `active` (most permissive) by default |
+
+    For transports we conservatively validate against the `active` phase.
+    Transport phase inference (assigning each transport its earliest
+    phase based on which auth/discovery/data ops reference it) is a
+    deeper analysis tracked separately.
+
+    Also emits a warning when a `post_auth_outputs` entry is malformed
+    (bad storage, missing/invalid value_path).
+    """
+    findings: list[dict] = []
+    auth = doc.get("auth") or {}
+    auth_type = auth.get("type") if isinstance(auth, dict) else None
+    input_idx = _index_inputs(doc)
+    output_idx, malformed = _index_post_auth_outputs(doc)
+    findings.extend(malformed)
+
+    # Auth ops. Phase assignment notes:
+    # - authorize / token_exchange run in the auth phase proper.
+    # - refresh runs *after* the in-flight authorization-code workflow has
+    #   completed, so it has access to persisted auth state (auth.access_token,
+    #   auth.refresh_token). We model that as post_auth-level scope
+    #   availability while keeping the spec's "no runtime.oauth.* in refresh"
+    #   rule via the auth_op context flag.
+    # - test runs against an established connection; treat as active.
+    if isinstance(auth, dict):
+        for op_name, op_phase in [
+            ("authorize", "auth"),
+            ("token_exchange", "auth"),
+            ("refresh", "post_auth"),
+            ("test", "active"),
+        ]:
+            op = auth.get(op_name)
+            if isinstance(op, dict):
+                findings.extend(
+                    _walk_refs_with_phase(
+                        op,
+                        f"/auth/{op_name}",
+                        phase=op_phase,
+                        auth_op=op_name if op_name != "test" else None,
+                        auth_type=auth_type,
+                        in_operation=False,
+                        input_idx=input_idx,
+                        output_idx=output_idx,
+                    )
+                )
+
+    # Post-auth output ops
+    post_auth = doc.get("connection_contract", {}).get("post_auth_outputs") or {}
+    if isinstance(post_auth, dict):
+        for name, spec in post_auth.items():
+            if not isinstance(spec, dict):
+                continue
+            for op_name in ("options_request", "discovery_request"):
+                op = spec.get(op_name)
+                if isinstance(op, dict):
+                    findings.extend(
+                        _walk_refs_with_phase(
+                            op,
+                            f"/connection_contract/post_auth_outputs/{name}/{op_name}",
+                            phase="post_auth",
+                            auth_op=None,
+                            auth_type=auth_type,
+                            in_operation=False,
+                            input_idx=input_idx,
+                            output_idx=output_idx,
+                        )
+                    )
+
+    # Transports — conservatively validated against the active phase.
+    transports = doc.get("transports") or {}
+    if isinstance(transports, dict):
+        for tname, tspec in transports.items():
+            if not isinstance(tspec, dict):
+                continue
+            findings.extend(
+                _walk_refs_with_phase(
+                    tspec,
+                    f"/transports/{tname}",
+                    phase="active",
+                    auth_op=None,
+                    auth_type=auth_type,
+                    in_operation=False,
+                    input_idx=input_idx,
+                    output_idx=output_idx,
+                )
+            )
+
     return findings
 
 

@@ -95,6 +95,40 @@
   network access; one explicit `network`-marked test exercises the
   Layer 1 fetch path against the live schema.
 
+### Phase resolvability — full lifecycle model
+- `check_phase_resolvability` now implements the full availability
+  matrix from `shared/lifecycle-phases.md`. Builds an input index
+  from `connection_contract.inputs` and an output index from
+  `post_auth_outputs`, then walks every phase-anchored site
+  (`auth.authorize/token_exchange/refresh/test`,
+  `post_auth_outputs.*.{options_request,discovery_request}`,
+  transports) and validates each ref / template variable against
+  the matrix.
+- Catches:
+  - `connection.parameters.X` / `secrets.X` references to undeclared
+    inputs.
+  - References to inputs whose declared `phase` is later than the
+    referencing template's phase (e.g. a `phase: post_auth` input
+    referenced in `auth.authorize`).
+  - `connection.selections.*` / `connection.discovered.*` references
+    to keys no `post_auth_output` produces.
+  - `runtime.*` keys outside the closed set
+    (`run_id`, `current_time`, `batch_size`, `pagination.*`,
+    `oauth.{code,state,redirect_uri,pkce_verifier}`).
+  - `runtime.oauth.*` referenced when `auth.type` is not
+    `oauth2_authorization_code`.
+  - `runtime.oauth.code` referenced outside `auth.token_exchange`.
+  - `runtime.oauth.*` referenced inside `auth.refresh`.
+  - `runtime.pagination.*` referenced outside an operation context.
+- `auth.refresh` is modeled with `post_auth`-equivalent scope
+  availability (it runs after the in-flight authorization-code
+  workflow, so persisted `auth.refresh_token` is accessible) while
+  keeping the spec's `runtime.oauth.*` exclusion.
+- 5 new negative fixtures + tests covering: unknown runtime key,
+  oauth-runtime on non-OAuth connector, runtime.oauth.code in
+  refresh, undeclared connection.parameters input, post-auth input
+  referenced in auth.authorize.
+
 ## [2.0.0] - 2026-03-28
 
 ### Added
