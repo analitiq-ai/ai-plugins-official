@@ -95,6 +95,23 @@
   network access; one explicit `network`-marked test exercises the
   Layer 1 fetch path against the live schema.
 
+### Type-map coverage — API connector endpoint enforcement
+- For API connectors with sibling endpoint files at
+  `{alias}/definition/endpoints/`, the `type-map-coverage` validator
+  now walks every endpoint document, collects `(type, format)` pairs
+  from `response.schema` (recursively) and from `params[*]`, and
+  emits an **error** for every uncovered native.
+- Native-string convention: `format` if present, else `type`.
+  Recurse into `object` / `array` / `oneOf` / `anyOf` / `allOf`.
+- Database connectors keep the existing "warn on missing/empty rules"
+  behavior — per-native coverage at authoring time is a runtime
+  concern (discovery reconciles against the user's actual database).
+- The validator now accepts an optional `doc_path` so the
+  type-map-coverage check can locate the sibling `endpoints/` dir.
+  Wired through from CLI; other validators ignore it.
+- Documented the API native convention and example mappings in
+  `skills/connector-spec-db/spec-type-maps.md`.
+
 ### Phase resolvability — full lifecycle model
 - `check_phase_resolvability` now implements the full availability
   matrix from `shared/lifecycle-phases.md`. Builds an input index

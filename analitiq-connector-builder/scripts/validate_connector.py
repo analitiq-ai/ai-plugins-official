@@ -862,47 +862,212 @@ def check_phase_resolvability(doc: dict) -> list[dict]:
     return findings
 
 
-def check_type_map_coverage(doc: dict) -> list[dict]:
-    """Warn when a database connector ships no usable type_maps rules.
+def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dict]:
+    """Validate connector `type_maps` coverage.
 
-    Per-native-type coverage analysis (every native type encountered at
-    discovery time has a matching rule) is intentionally deferred to a
-    separate engine-side check — this validator only catches the common
-    bug where the field is absent, an empty object, or a rule list with
-    no entries.
+    For database connectors: warn when `type_maps` is missing or has zero
+    rules. Per-native coverage at the connector level is intentionally
+    not enforced — the runtime reconciles native types via discovery
+    against the actual user database.
+
+    For API connectors with sibling endpoint files (under
+    `<connector_dir>/endpoints/`): walk every endpoint document, collect
+    every JSON Schema `(type, format)` pair from `response.schema`
+    properties and from `params[*]`, and verify the connector's
+    `type_maps` rules cover each one. The native-string convention is
+    `format` if present, else `type` (e.g. `"uuid"`, `"date-time"`,
+    `"integer"`, `"boolean"`). Coverage matches via `exact` or `regex`
+    rules just like DB type maps.
+
+    `doc_path` is the absolute path to the connector document on disk;
+    used to locate the sibling `endpoints/` directory. When omitted,
+    API endpoint coverage is skipped (the validator was invoked without
+    a filesystem-anchored connector).
     """
     findings: list[dict] = []
-    if doc.get("kind") != "database":
-        return findings
+    kind = doc.get("kind")
     tm = doc.get("type_maps")
-    if not _has_usable_rules(tm):
+
+    if kind == "database":
+        if not _has_usable_rules(tm):
+            findings.append(
+                finding(
+                    "type-map-coverage",
+                    "warning",
+                    "/type_maps",
+                    "database connector has no usable type_maps rules; native types will not be mapped to canonical Arrow types.",
+                    rule_doc="shared/type-maps.md",
+                )
+            )
+        return findings
+
+    if kind != "api":
+        return findings
+
+    if doc_path is None:
+        return findings
+
+    endpoint_dir = doc_path.parent / "endpoints"
+    if not endpoint_dir.is_dir():
+        return findings
+
+    endpoint_files = sorted(endpoint_dir.glob("*.json"))
+    if not endpoint_files:
+        return findings
+
+    natives: dict[str, list[str]] = {}  # native_string -> list of "endpoint_file:json_pointer" sites
+    for ep_path in endpoint_files:
+        try:
+            ep_doc = json.loads(ep_path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue  # Layer 1 / endpoint validation will surface this
+        for native, json_pointer in _collect_endpoint_natives(ep_doc):
+            natives.setdefault(native, []).append(f"{ep_path.name}{json_pointer}")
+
+    if not natives:
+        return findings
+
+    rules = _extract_type_map_rules(tm)
+    if not rules:
         findings.append(
             finding(
                 "type-map-coverage",
                 "warning",
                 "/type_maps",
-                "database connector has no usable type_maps rules; native types will not be mapped to canonical Arrow types.",
+                (
+                    f"api connector has {len(natives)} native types across endpoint files "
+                    f"({sorted(natives.keys())}) but no type_maps rules to cover them."
+                ),
                 rule_doc="shared/type-maps.md",
             )
         )
+        return findings
+
+    for native, sites in sorted(natives.items()):
+        if not _native_is_covered(native, rules):
+            findings.append(
+                finding(
+                    "type-map-coverage",
+                    "error",
+                    "/type_maps",
+                    (
+                        f"native type {native!r} appears in endpoint(s) "
+                        f"{sites[:3]}{' ...' if len(sites) > 3 else ''} "
+                        f"but is not covered by any type_maps rule."
+                    ),
+                    rule_doc="shared/type-maps.md",
+                )
+            )
     return findings
+
+
+def _extract_type_map_rules(tm: Any) -> list[dict]:
+    """Pull the rule list out of a `type_maps` block, regardless of nesting."""
+    if not isinstance(tm, dict):
+        return []
+    if isinstance(tm.get("rules"), list):
+        return [r for r in tm["rules"] if isinstance(r, dict)]
+    for v in tm.values():
+        if isinstance(v, dict) and isinstance(v.get("rules"), list):
+            return [r for r in v["rules"] if isinstance(r, dict)]
+    return []
+
+
+def _native_is_covered(native: str, rules: list[dict]) -> bool:
+    """Return True iff at least one rule matches `native`."""
+    for rule in rules:
+        method = rule.get("method")
+        rule_native = rule.get("native")
+        if not isinstance(rule_native, str):
+            continue
+        if method == "exact" and rule_native == native:
+            return True
+        if method == "regex":
+            try:
+                if re.match(rule_native, native):
+                    return True
+            except re.error:
+                continue
+    return False
+
+
+def _collect_endpoint_natives(endpoint_doc: dict) -> list[tuple[str, str]]:
+    """Walk an api-endpoint document and yield (native_string, json_pointer).
+
+    Sources:
+    - operations.read.response.schema (JSON Schema, recursive into properties / items / *Of branches)
+    - operations.read.params[*] and operations.write.params[*]
+    """
+    out: list[tuple[str, str]] = []
+    operations = endpoint_doc.get("operations") or {}
+    if not isinstance(operations, dict):
+        return out
+    for op_name in ("read", "write"):
+        op = operations.get(op_name)
+        if not isinstance(op, dict):
+            continue
+        # response.schema (read only — write usually has no records-style response)
+        response = op.get("response")
+        if isinstance(response, dict):
+            schema = response.get("schema")
+            if isinstance(schema, dict):
+                _collect_natives_from_jsonschema(
+                    schema, f"/operations/{op_name}/response/schema", out
+                )
+        # params
+        params = op.get("params")
+        if isinstance(params, dict):
+            for pname, pspec in params.items():
+                if not isinstance(pspec, dict):
+                    continue
+                native = _native_from_type_format(pspec.get("type"), pspec.get("format"))
+                if native:
+                    out.append((native, f"/operations/{op_name}/params/{pname}"))
+    return out
+
+
+def _native_from_type_format(t: Any, f: Any) -> str | None:
+    """Apply the convention: native = format if present, else type."""
+    if isinstance(f, str) and f:
+        return f
+    if isinstance(t, str) and t and t not in ("object", "array", "null"):
+        return t
+    return None
+
+
+def _collect_natives_from_jsonschema(node: Any, pointer: str, out: list[tuple[str, str]]) -> None:
+    """Recursively walk a JSON Schema, collecting (native, pointer) pairs at leaves."""
+    if not isinstance(node, dict):
+        return
+    t = node.get("type")
+    f = node.get("format")
+    native = _native_from_type_format(t, f)
+    if native:
+        out.append((native, pointer))
+    # Recurse: object → properties; array → items; oneOf/anyOf/allOf → branches
+    props = node.get("properties")
+    if isinstance(props, dict):
+        for k, v in props.items():
+            _collect_natives_from_jsonschema(v, f"{pointer}/properties/{k}", out)
+    items = node.get("items")
+    if isinstance(items, dict):
+        _collect_natives_from_jsonschema(items, f"{pointer}/items", out)
+    elif isinstance(items, list):
+        for i, v in enumerate(items):
+            _collect_natives_from_jsonschema(v, f"{pointer}/items/{i}", out)
+    for combiner in ("oneOf", "anyOf", "allOf"):
+        branches = node.get(combiner)
+        if isinstance(branches, list):
+            for i, branch in enumerate(branches):
+                _collect_natives_from_jsonschema(branch, f"{pointer}/{combiner}/{i}", out)
 
 
 def _has_usable_rules(tm: Any) -> bool:
     """Return True iff `tm` is a non-empty mapping with at least one rule."""
-    if not isinstance(tm, dict) or not tm:
-        return False
-    # Direct shape: {"rules": [...]}
-    if "rules" in tm:
-        return isinstance(tm["rules"], list) and len(tm["rules"]) > 0
-    # Nested shape: {"native_to_arrow": {"rules": [...]}, ...}
-    for v in tm.values():
-        if isinstance(v, dict) and isinstance(v.get("rules"), list) and len(v["rules"]) > 0:
-            return True
-    return False
+    return len(_extract_type_map_rules(tm)) > 0
 
 
-SEMANTIC_VALIDATORS: dict[str, Callable[[dict], list[dict]]] = {
+SEMANTIC_VALIDATORS: dict[str, Callable[..., list[dict]]] = {
     "reserved-field": check_reserved_fields,
     "expression-resolver": check_expressions,
     "transport-ref": check_transport_refs,
@@ -913,18 +1078,24 @@ SEMANTIC_VALIDATORS: dict[str, Callable[[dict], list[dict]]] = {
     "type-map-coverage": check_type_map_coverage,
 }
 
+# Validators that accept an optional `doc_path` second positional argument.
+_PATH_AWARE_VALIDATORS = {"type-map-coverage"}
+
 
 def is_connector_doc(doc: dict) -> bool:
     return "kind" in doc and isinstance(doc.get("transports"), dict)
 
 
-def run_semantic_validators(doc: dict) -> list[dict]:
+def run_semantic_validators(doc: dict, doc_path: Path | None = None) -> list[dict]:
     findings: list[dict] = []
     for vid, fn in SEMANTIC_VALIDATORS.items():
         # Skip validators that don't apply to non-connector docs
         if vid in {"transport-ref", "dsn-binding", "auth-shape", "tls-consistency", "type-map-coverage"} and not is_connector_doc(doc):
             continue
-        findings.extend(fn(doc))
+        if vid in _PATH_AWARE_VALIDATORS:
+            findings.extend(fn(doc, doc_path))
+        else:
+            findings.extend(fn(doc))
     return findings
 
 
@@ -981,7 +1152,7 @@ def main() -> int:
         findings.extend(layer1_jsonschema(document, schema))
 
     if not args.json_only:
-        findings.extend(run_semantic_validators(document))
+        findings.extend(run_semantic_validators(document, doc_path=document_path.resolve()))
 
     passed = all(f["severity"] != "error" for f in findings)
     print(json.dumps({"passed": passed, "findings": findings}, indent=2))

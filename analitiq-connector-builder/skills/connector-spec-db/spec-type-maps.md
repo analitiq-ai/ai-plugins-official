@@ -1,7 +1,39 @@
-# Type maps (databases)
+# Type maps
 
-How to author connector-level `type_maps` mapping native database types
-to Arrow canonical types.
+How to author connector-level `type_maps` mapping native types to Arrow
+canonical types. The same `type_maps` block serves both database
+connectors (mapping native database types) and API connectors (mapping
+JSON Schema types/formats from endpoint response bodies).
+
+## API connector convention
+
+For API connectors, the `native` field of each rule is the **JSON
+Schema `format` if present, otherwise the JSON Schema `type`**. The
+validator walks every endpoint document under
+`{alias}/definition/endpoints/`, collects `(type, format)` pairs from
+each `response.schema` (recursively into properties / items / *Of
+branches) and from each `params[*]`, and verifies the connector's
+`type_maps` rules cover every native string. Coverage is enforced —
+uncovered natives are validation **errors**, not warnings.
+
+Common API natives:
+
+| Native | Source | Typical canonical |
+|---|---|---|
+| `uuid` | `{"type":"string", "format":"uuid"}` | `String` |
+| `date-time` | `{"type":"string", "format":"date-time"}` | `Timestamp` |
+| `date` | `{"type":"string", "format":"date"}` | `Date32` |
+| `email` / `uri` | `{"type":"string", "format":"…"}` | `String` |
+| `string` | `{"type":"string"}` | `String` |
+| `integer` | `{"type":"integer"}` | `Int64` |
+| `int32` / `int64` | `{"type":"integer", "format":"…"}` | `Int32` / `Int64` |
+| `number` | `{"type":"number"}` | `Float64` |
+| `boolean` | `{"type":"boolean"}` | `Boolean` |
+
+Object / array / null types are *not* collected as natives — the
+walker recurses into them instead.
+
+## Database connector convention
 
 ## Shape
 

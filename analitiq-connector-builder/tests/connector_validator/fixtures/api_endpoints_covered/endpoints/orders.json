@@ -1,0 +1,31 @@
+{
+  "$schema": "https://schemas.analitiq.ai/api-endpoint/latest.json",
+  "alias": "orders",
+  "operations": {
+    "read": {
+      "request": { "method": "GET", "path": "/orders" },
+      "params": {
+        "limit": { "in": "query", "type": "integer", "required": false, "default": 50 }
+      },
+      "response": {
+        "records": { "ref": "response.body.orders" },
+        "schema": {
+          "type": "object",
+          "properties": {
+            "orders": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id":     { "type": "string", "format": "uuid" },
+                  "amount": { "type": "number" },
+                  "placed_at": { "type": "string", "format": "date-time" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

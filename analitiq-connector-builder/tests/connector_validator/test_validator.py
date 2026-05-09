@@ -212,6 +212,31 @@ def test_type_map_coverage_warns_on_empty_rules():
     assert warns, f"expected a type-map-coverage warning for empty rules; got {result['findings']}"
 
 
+def test_api_endpoint_coverage_passes_when_all_natives_covered():
+    """API connector with type_maps covering every (type, format) pair from sibling endpoints."""
+    result = run_validator(
+        FIXTURES / "api_endpoints_covered" / "connector.json",
+        "--semantic-only",
+    )
+    errs = errors_of(result, "type-map-coverage")
+    assert not errs, f"expected no coverage errors when fully covered; got {errs}"
+
+
+def test_api_endpoint_coverage_flags_uncovered_natives():
+    """API connector missing rules for natives present in sibling endpoints."""
+    result = run_validator(
+        FIXTURES / "api_endpoints_uncovered" / "connector.json",
+        "--semantic-only",
+    )
+    errs = errors_of(result, "type-map-coverage")
+    messages = " ".join(e["message"] for e in errs)
+    # The uncovered fixture's endpoint references uuid, boolean, date-time —
+    # the connector only declares string + integer.
+    assert "'uuid'" in messages, f"expected uncovered 'uuid' to be flagged; got {errs}"
+    assert "'boolean'" in messages, f"expected uncovered 'boolean' to be flagged; got {errs}"
+    assert "'date-time'" in messages, f"expected uncovered 'date-time' to be flagged; got {errs}"
+
+
 # ---------------------------------------------------------------------------
 # Edge cases
 # ---------------------------------------------------------------------------
