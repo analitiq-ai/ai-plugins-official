@@ -12,8 +12,9 @@ Schema `format` if present, otherwise the JSON Schema `type`**. The
 validator walks every endpoint document under
 `{alias}/definition/endpoints/`, collects `(type, format)` pairs from
 each `response.schema` (recursively into properties / items / *Of
-branches) and from each `params[*]`, and verifies the connector's
-`type_maps` rules cover every native string. Coverage is enforced —
+branches) and from each entry of `params` (which is an object keyed by
+parameter name), and verifies the connector's `type_maps` rules cover
+every native string. Coverage is enforced —
 uncovered natives are validation **errors**, not warnings.
 
 Common API natives:

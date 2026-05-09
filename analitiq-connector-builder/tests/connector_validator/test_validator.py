@@ -222,6 +222,61 @@ def test_api_endpoint_coverage_passes_when_all_natives_covered():
     assert not errs, f"expected no coverage errors when fully covered; got {errs}"
 
 
+def test_oauth_code_in_authorize_caught():
+    """runtime.oauth.code is only available in auth.token_exchange, not authorize."""
+    result = run_validator(FIXTURES / "invalid_phase_oauth_code_in_authorize.json", "--semantic-only")
+    errs = errors_of(result, "phase-resolvability")
+    assert any("runtime.oauth.code" in e["message"] and "token_exchange" in e["message"] for e in errs), \
+        f"expected oauth.code-in-authorize finding; got {errs}"
+
+
+def test_stream_scope_in_auth_phase_caught():
+    """stream.* is only available in the active phase; auth.authorize is at auth phase."""
+    result = run_validator(FIXTURES / "invalid_phase_stream_in_authorize.json", "--semantic-only")
+    errs = errors_of(result, "phase-resolvability")
+    assert any("stream" in e["message"].lower() and "active" in e["message"] for e in errs), \
+        f"expected stream-only-in-active finding; got {errs}"
+
+
+def test_auth_scope_in_pre_post_auth_phase_caught():
+    """auth.* is only available from post_auth onward; auth.authorize runs at auth phase."""
+    result = run_validator(FIXTURES / "invalid_phase_auth_in_authorize.json", "--semantic-only")
+    errs = errors_of(result, "phase-resolvability")
+    assert any("auth.*" in e["message"] and "post_auth" in e["message"] for e in errs), \
+        f"expected auth-scope-not-before-post_auth finding; got {errs}"
+
+
+def test_pagination_outside_operation_caught():
+    """runtime.pagination.* is operation-local; connector-level transport refs to it must error."""
+    result = run_validator(FIXTURES / "invalid_phase_pagination_outside_op.json", "--semantic-only")
+    errs = errors_of(result, "phase-resolvability")
+    assert any("operation-local" in e["message"] for e in errs), \
+        f"expected operation-local pagination finding; got {errs}"
+
+
+def test_malformed_post_auth_outputs_warned():
+    """post_auth_outputs entries with bad value_path should produce warnings."""
+    result = run_validator(FIXTURES / "invalid_post_auth_outputs_malformed.json", "--semantic-only")
+    warns = warnings_of(result, "phase-resolvability")
+    assert any("value_path" in w["message"] for w in warns), \
+        f"expected malformed-value_path warning; got {warns}"
+
+
+def test_api_endpoint_coverage_walks_combiners_and_array_items():
+    """oneOf/anyOf/allOf and tuple-style items[] must be recursed into."""
+    result = run_validator(
+        FIXTURES / "api_endpoints_combiners" / "connector.json",
+        "--semantic-only",
+    )
+    errs = errors_of(result, "type-map-coverage")
+    messages = " ".join(e["message"] for e in errs)
+    # The endpoint declares ipv6 (oneOf branch), email + uri (items as list).
+    # The connector only covers string + integer, so all three formats must be flagged.
+    assert "'ipv6'" in messages, f"expected ipv6 from oneOf to be flagged; got {messages}"
+    assert "'email'" in messages, f"expected email from items[0] to be flagged; got {messages}"
+    assert "'uri'" in messages, f"expected uri from items[1] to be flagged; got {messages}"
+
+
 def test_api_endpoint_coverage_flags_uncovered_natives():
     """API connector missing rules for natives present in sibling endpoints."""
     result = run_validator(

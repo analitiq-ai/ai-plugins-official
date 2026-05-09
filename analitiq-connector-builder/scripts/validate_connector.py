@@ -505,7 +505,14 @@ def _phase_le(a: str, b: str) -> bool:
 
 # Closed `runtime.*` set per `shared/lifecycle-phases.md`.
 _GENERIC_RUNTIME_KEYS = {"run_id", "current_time", "batch_size"}
-_OPERATION_LOCAL_RUNTIME_KEYS = {"pagination"}  # `runtime.pagination.offset` etc.
+# Operation-local subkeys that can only be referenced inside an endpoint
+# operation (request/response/pagination/cursor expressions). Connector-level
+# templates cannot reach them. The validator does not currently walk endpoint
+# operation templates, so any reference to these keys at the sites we *do*
+# walk (transports, auth ops, post-auth ops) is an error.
+_OPERATION_LOCAL_RUNTIME_KEYS = {"pagination"}
+# `runtime.pagination.*` is itself a closed set per the spec.
+_PAGINATION_RUNTIME_KEYS = {"offset"}
 _OAUTH_RUNTIME_KEYS = {"code", "state", "redirect_uri", "pkce_verifier"}
 
 
@@ -581,20 +588,19 @@ def _ref_phase_problem(
     phase: str,
     auth_op: str | None,
     auth_type: str | None,
-    in_operation: bool,
     input_idx: dict[str, dict],
     output_idx: dict[str, dict],
 ) -> str | None:
     """Return a human-readable error for `dotted` referenced in `phase`, or None.
 
+    Handles every top-level scope (`runtime`, `auth`, `stream`, `state`,
+    `connection`, `secrets`) directly — no caller-side OR-chaining.
+
     `auth_op` is one of "authorize", "token_exchange", "refresh", or None.
-    `in_operation` is True for refs inside an endpoint operation context
-    (request/response/pagination/cursor expressions), where operation-local
-    runtime subkeys are available.
     """
     head = dotted.split(".", 1)[0]
     if head == "runtime":
-        return _runtime_phase_problem(dotted, phase, auth_op, auth_type, in_operation)
+        return _runtime_phase_problem(dotted, auth_op, auth_type)
     if head == "auth":
         if not _phase_le("post_auth", phase):
             return f"'auth.*' is not available before post_auth (current phase: {phase})."
@@ -607,28 +613,35 @@ def _ref_phase_problem(
         if not _phase_le("active", phase):
             return f"'state.*' is only available in the active phase (current phase: {phase})."
         return None
-    if head != "connection":
-        return None  # secrets are handled below as a top-level scope
+    if head in ("secrets", "connection"):
+        return _connection_or_secrets_phase_problem(dotted, phase, input_idx, output_idx)
     return None
 
 
 def _runtime_phase_problem(
     dotted: str,
-    phase: str,
     auth_op: str | None,
     auth_type: str | None,
-    in_operation: bool,
 ) -> str | None:
     parts = dotted.split(".", 2)
     if len(parts) < 2:
-        return f"'runtime' must be followed by a key (e.g. 'runtime.run_id')."
+        return "'runtime' must be followed by a key (e.g. 'runtime.run_id')."
     sub = parts[1]
     if sub in _GENERIC_RUNTIME_KEYS:
         return None  # generic runtime is always available
     if sub in _OPERATION_LOCAL_RUNTIME_KEYS:
-        if not in_operation:
-            return f"'runtime.{sub}.*' is operation-local and not available outside an endpoint operation."
-        return None
+        sub_key = parts[2].split(".", 1)[0] if len(parts) >= 3 else ""
+        if sub == "pagination" and sub_key not in _PAGINATION_RUNTIME_KEYS:
+            return (
+                f"'runtime.pagination.{sub_key}' is not in the closed set "
+                f"{sorted(_PAGINATION_RUNTIME_KEYS)}."
+            )
+        # The validator does not currently walk endpoint operation templates,
+        # so any reference at sites we *do* walk is out-of-context.
+        return (
+            f"'runtime.{sub}.*' is operation-local; "
+            "it can only be referenced inside an endpoint operation template."
+        )
     if sub == "oauth":
         if auth_type != "oauth2_authorization_code":
             return (
@@ -639,14 +652,11 @@ def _runtime_phase_problem(
         if oauth_key not in _OAUTH_RUNTIME_KEYS:
             return f"'runtime.oauth.{oauth_key}' is not in the closed set {sorted(_OAUTH_RUNTIME_KEYS)}."
         if auth_op == "refresh":
-            return f"'runtime.oauth.*' must not be referenced inside auth.refresh."
+            return "'runtime.oauth.*' must not be referenced inside auth.refresh."
         if oauth_key == "code" and auth_op != "token_exchange":
             return f"'runtime.oauth.code' is only available inside auth.token_exchange (current op: {auth_op!r})."
-        if auth_op not in ("authorize", "token_exchange", None):
-            # None means "outside the auth.* block" — which is also wrong for runtime.oauth.*
-            return f"'runtime.oauth.*' is only available in auth.authorize and auth.token_exchange."
-        if auth_op is None:
-            return f"'runtime.oauth.*' is only available in auth.authorize and auth.token_exchange."
+        if auth_op not in ("authorize", "token_exchange"):
+            return "'runtime.oauth.*' is only available in auth.authorize and auth.token_exchange."
         return None
     return f"'runtime.{sub}' is not in the registered closed set."
 
@@ -660,10 +670,6 @@ def _connection_or_secrets_phase_problem(
     """Resolve refs into connection.parameters / connection.* / secrets."""
     head = dotted.split(".", 1)[0]
     if head == "secrets":
-        # Could be a declared input OR produced by a post-auth output
-        key2 = ".".join(dotted.split(".", 2)[:2]) + "." + dotted.split(".", 2)[2].split(".", 1)[0] \
-            if len(dotted.split(".")) >= 3 else dotted
-        # Simpler: check exact key like `secrets.password`
         primary = ".".join(dotted.split(".", 2)[:2])  # `secrets.password`
         record = input_idx.get(primary)
         if record is not None:
@@ -673,7 +679,6 @@ def _connection_or_secrets_phase_problem(
                     f"and is not available in '{phase}'."
                 )
             return None
-        # Or produced by post_auth_outputs
         if primary in output_idx:
             if not _phase_le("post_auth", phase):
                 return f"'{primary}' is produced post-auth and is not available in '{phase}'."
@@ -711,7 +716,6 @@ def _walk_refs_with_phase(
     phase: str,
     auth_op: str | None,
     auth_type: str | None,
-    in_operation: bool,
     input_idx: dict[str, dict],
     output_idx: dict[str, dict],
 ) -> list[dict]:
@@ -723,8 +727,7 @@ def _walk_refs_with_phase(
             continue
         ref = node.get("ref")
         if isinstance(ref, str):
-            problem = _ref_phase_problem(ref, phase, auth_op, auth_type, in_operation, input_idx, output_idx) \
-                or _connection_or_secrets_phase_problem(ref, phase, input_idx, output_idx)
+            problem = _ref_phase_problem(ref, phase, auth_op, auth_type, input_idx, output_idx)
             if problem:
                 findings.append(
                     finding(
@@ -738,8 +741,7 @@ def _walk_refs_with_phase(
         tmpl = node.get("template")
         if isinstance(tmpl, str):
             for var in template_var.findall(tmpl):
-                problem = _ref_phase_problem(var, phase, auth_op, auth_type, in_operation, input_idx, output_idx) \
-                    or _connection_or_secrets_phase_problem(var, phase, input_idx, output_idx)
+                problem = _ref_phase_problem(var, phase, auth_op, auth_type, input_idx, output_idx)
                 if problem:
                     findings.append(
                         finding(
@@ -767,11 +769,18 @@ def check_phase_resolvability(doc: dict) -> list[dict]:
     |---|---|---|
     | `auth.authorize.*` | auth | authorize |
     | `auth.token_exchange.*` | auth | token_exchange |
-    | `auth.refresh.*` | auth | refresh |
+    | `auth.refresh.*` | post_auth | refresh |
     | `auth.test.*` | active | None |
     | `connection_contract.post_auth_outputs.*.options_request` | post_auth | None |
     | `connection_contract.post_auth_outputs.*.discovery_request` | post_auth | None |
     | `transports.*` | varies — assumed `active` (most permissive) by default |
+
+    `auth.refresh` is modeled at `post_auth`-equivalent scope availability
+    (rather than the spec table's `auth` phase) because it runs *after*
+    the in-flight authorization-code workflow has completed, so persisted
+    `auth.access_token` / `auth.refresh_token` are accessible. The spec's
+    "no runtime.oauth.* inside refresh" rule is preserved via the
+    `auth_op="refresh"` context flag.
 
     For transports we conservatively validate against the `active` phase.
     Transport phase inference (assigning each transport its earliest
@@ -812,7 +821,6 @@ def check_phase_resolvability(doc: dict) -> list[dict]:
                         phase=op_phase,
                         auth_op=op_name if op_name != "test" else None,
                         auth_type=auth_type,
-                        in_operation=False,
                         input_idx=input_idx,
                         output_idx=output_idx,
                     )
@@ -834,7 +842,6 @@ def check_phase_resolvability(doc: dict) -> list[dict]:
                             phase="post_auth",
                             auth_op=None,
                             auth_type=auth_type,
-                            in_operation=False,
                             input_idx=input_idx,
                             output_idx=output_idx,
                         )
@@ -853,7 +860,6 @@ def check_phase_resolvability(doc: dict) -> list[dict]:
                     phase="active",
                     auth_op=None,
                     auth_type=auth_type,
-                    in_operation=False,
                     input_idx=input_idx,
                     output_idx=output_idx,
                 )
@@ -919,8 +925,21 @@ def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dic
     for ep_path in endpoint_files:
         try:
             ep_doc = json.loads(ep_path.read_text())
-        except (OSError, json.JSONDecodeError):
-            continue  # Layer 1 / endpoint validation will surface this
+        except (OSError, json.JSONDecodeError) as exc:
+            findings.append(
+                finding(
+                    "type-map-coverage",
+                    "warning",
+                    "/type_maps",
+                    (
+                        f"endpoint file '{ep_path.name}' could not be read or parsed ({exc}); "
+                        "skipped from type-map coverage analysis. Validate the endpoint file "
+                        "directly for the parse error."
+                    ),
+                    rule_doc="shared/type-maps.md",
+                )
+            )
+            continue
         for native, json_pointer in _collect_endpoint_natives(ep_doc):
             natives.setdefault(native, []).append(f"{ep_path.name}{json_pointer}")
 
@@ -1027,7 +1046,12 @@ def _collect_endpoint_natives(endpoint_doc: dict) -> list[tuple[str, str]]:
 
 
 def _native_from_type_format(t: Any, f: Any) -> str | None:
-    """Apply the convention: native = format if present, else type."""
+    """Apply the convention: native = format if present, else type.
+
+    Returns None for `object` / `array` / `null` types — those are
+    structural rather than terminal natives. The walker recurses into
+    them via their `properties` / `items` / `*Of` branches instead.
+    """
     if isinstance(f, str) and f:
         return f
     if isinstance(t, str) and t and t not in ("object", "array", "null"):

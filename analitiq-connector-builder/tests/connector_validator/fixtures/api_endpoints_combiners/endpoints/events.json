@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schemas.analitiq.ai/api-endpoint/latest.json",
+  "alias": "events",
+  "operations": {
+    "read": {
+      "request": { "method": "GET", "path": "/events" },
+      "response": {
+        "records": { "ref": "response.body.events" },
+        "schema": {
+          "type": "object",
+          "properties": {
+            "events": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string" },
+                  "amount": {
+                    "oneOf": [
+                      { "type": "string", "format": "ipv6" },
+                      { "type": "integer" }
+                    ]
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": [
+                      { "type": "string", "format": "email" },
+                      { "type": "string", "format": "uri" }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

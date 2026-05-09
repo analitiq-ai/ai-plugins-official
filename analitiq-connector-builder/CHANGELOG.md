@@ -95,6 +95,42 @@
   network access; one explicit `network`-marked test exercises the
   Layer 1 fetch path against the live schema.
 
+### Round-2 PR review polish
+- `_ref_phase_problem` now handles every top-level scope inline
+  (runtime, auth, stream, state, connection, secrets) instead of
+  delegating via fragile OR-chain at call sites. The `connection.*` /
+  `secrets.*` paths are checked inside the function, not "below."
+- `_runtime_phase_problem` now closed-set-validates
+  `runtime.pagination.*` subkeys (only `offset` is registered).
+  Removed dead double-`auth_op is None` check; collapsed to a single
+  allowlist.
+- The validator no longer accepts `runtime.pagination.*` at any of
+  the sites it walks (transports, auth ops, post-auth ops) — those
+  are connector-level, and `runtime.pagination.*` is operation-local.
+  Removed the unused `in_operation` parameter from the walker; when
+  endpoint operation templates are walked in a future change, the
+  parameter can return.
+- `check_type_map_coverage` now emits a warning when an endpoint file
+  cannot be read or parsed (was: silently skipped).
+- Removed dead `key2` variable in
+  `_connection_or_secrets_phase_problem`.
+- `check_phase_resolvability` docstring table corrected: `auth.refresh`
+  is modeled at `post_auth`, not `auth`. Added an explanatory
+  paragraph about why.
+- `_native_from_type_format` docstring now documents the
+  object/array/null exclusion explicitly.
+- `spec-type-maps.md` no longer uses `params[*]` shorthand (`params`
+  is an object keyed by parameter name, not an array).
+- `pytest.ini` adds `addopts = --strict-markers` so a typo'd marker
+  fails immediately instead of being silently treated as no marker.
+- Test suite expanded from 34 → 40 offline cases. New negative
+  fixtures + tests for: `runtime.oauth.code` referenced inside
+  `auth.authorize` (must be flagged); `stream.*` referenced at the
+  auth phase; `auth.*` referenced before post_auth;
+  `runtime.pagination.*` referenced outside an operation context;
+  malformed `post_auth_outputs` warnings; oneOf/anyOf/allOf and
+  tuple-style `items` walking in API endpoint type-map coverage.
+
 ### Type-map coverage — API connector endpoint enforcement
 - For API connectors with sibling endpoint files at
   `{alias}/definition/endpoints/`, the `type-map-coverage` validator
