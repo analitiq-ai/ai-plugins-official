@@ -8,7 +8,6 @@ validator (see `scripts/validate_pipeline.py`) enforces this.
 
 - `pipeline_id`
 - `version`
-- `pipeline_schema_version`
 - `org_id`
 - `created_at`
 - `updated_at`
@@ -17,7 +16,6 @@ validator (see `scripts/validate_pipeline.py`) enforces this.
 
 - `stream_id`
 - `version`
-- `stream_schema_version`
 - `org_id`
 - `created_at`
 - `updated_at`
@@ -44,7 +42,6 @@ The registry computes the rest.
 
 - `connection_id`
 - `version`
-- `connection_schema_version`
 - `org_id`
 - `connector_id`
 - `connector_version`
@@ -58,7 +55,6 @@ The registry resolves `connector_alias` → `connector_id` at save time.
 ## Database endpoint
 
 - `endpoint_id` (the catalog stamps it equal to `alias`)
-- `endpoint_schema_version`
 - `connector_id`
 - `connector_version`
 - `connection_id`

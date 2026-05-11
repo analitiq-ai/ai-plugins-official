@@ -40,8 +40,8 @@ Every authored document must:
 1. Declare `$schema: "https://schemas.analitiq.ai/pipeline/latest.json"`.
 2. Include `alias` (`[a-z0-9][a-z0-9_-]*`) and a non-empty `connections`
    object.
-3. Omit every reserved field (`pipeline_id`, `version`,
-   `pipeline_schema_version`, `org_id`, `created_at`, `updated_at`).
+3. Omit every reserved field (`pipeline_id`, `version`, `org_id`,
+   `created_at`, `updated_at`).
 4. Use **versioned** connection IDs in `connections.source` and
    `connections.destinations[]` — `<uuid>_v<positive integer>`.
 5. Use **versioned** stream IDs in `streams[]`.

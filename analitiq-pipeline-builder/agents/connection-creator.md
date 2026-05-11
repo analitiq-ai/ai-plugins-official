@@ -99,9 +99,9 @@ The orchestrator passes:
 - Never embed real secrets in `secret_refs`. Always emit a reference
   string matching one of the allowed prefixes (see
   `connection-spec/spec-secrets.md`).
-- Never author `connection_id`, `version`, `connection_schema_version`,
-  `org_id`, `connector_id`, `connector_version`, `auth_state`,
-  `created_at`, `updated_at`. Server-managed.
+- Never author `connection_id`, `version`, `org_id`, `connector_id`,
+  `connector_version`, `auth_state`, `created_at`, `updated_at`.
+  Server-managed.
 - Never fall back to legacy shapes (`host` at top-level outside
   `parameters`, `secrets` as inline values, etc.).
 - `parameters` values use the JSON type declared by the connector

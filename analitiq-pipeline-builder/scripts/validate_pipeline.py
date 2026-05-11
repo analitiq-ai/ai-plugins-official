@@ -229,7 +229,6 @@ RESERVED_FIELDS_BY_ENTITY: dict[str, set[str]] = {
     "pipeline": {
         "pipeline_id",
         "version",
-        "pipeline_schema_version",
         "org_id",
         "created_at",
         "updated_at",
@@ -237,7 +236,6 @@ RESERVED_FIELDS_BY_ENTITY: dict[str, set[str]] = {
     "stream": {
         "stream_id",
         "version",
-        "stream_schema_version",
         "org_id",
         "created_at",
         "updated_at",
@@ -254,7 +252,6 @@ RESERVED_FIELDS_BY_ENTITY: dict[str, set[str]] = {
     "connection": {
         "connection_id",
         "version",
-        "connection_schema_version",
         "org_id",
         "connector_id",
         "connector_version",
@@ -264,7 +261,6 @@ RESERVED_FIELDS_BY_ENTITY: dict[str, set[str]] = {
     },
     "database_endpoint": {
         "endpoint_id",
-        "endpoint_schema_version",
         "connector_id",
         "connector_version",
         "connection_id",

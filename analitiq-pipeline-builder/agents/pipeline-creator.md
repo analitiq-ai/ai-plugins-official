@@ -60,8 +60,8 @@ stitches in real stream IDs in phase 9.
 
 ## Hard rules
 
-- Never author `pipeline_id`, `version`, `pipeline_schema_version`,
-  `org_id`, `created_at`, `updated_at`. Server-managed.
+- Never author `pipeline_id`, `version`, `org_id`, `created_at`,
+  `updated_at`. Server-managed.
 - Never use positional connection refs (`conn_1`, `conn_2`, …). The
   orchestrator's placeholder versioned UUIDs are the only legal values.
 - Always emit `streams: []` — stitching happens later.

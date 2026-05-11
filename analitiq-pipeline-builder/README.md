@@ -141,16 +141,14 @@ pipelines/
 
 Server-managed fields are **never** written to disk:
 
-- Pipeline: `pipeline_id`, `version`, `pipeline_schema_version`, `org_id`,
-  `created_at`, `updated_at`.
+- Pipeline: `pipeline_id`, `version`, `org_id`, `created_at`, `updated_at`.
 - Stream: above plus `stream_id`, `schema_hash`, `assignments_hash`,
   `source_schema_*`, `target_schema_*`, `source_to_generic`,
   `generic_to_destination`, `type_mapping_assignments_hash`.
-- Connection: `connection_id`, `version`, `connection_schema_version`,
-  `org_id`, `connector_id`, `connector_version`, `auth_state`, `created_at`,
-  `updated_at`.
-- Database endpoint: `endpoint_id`, `endpoint_schema_version`, `connector_id`,
-  `connector_version`, `connection_id`, `schema_hash`.
+- Connection: `connection_id`, `version`, `org_id`, `connector_id`,
+  `connector_version`, `auth_state`, `created_at`, `updated_at`.
+- Database endpoint: `endpoint_id`, `connector_id`, `connector_version`,
+  `connection_id`, `schema_hash`.
 
 The registry / catalog stamps these on insert.
 
