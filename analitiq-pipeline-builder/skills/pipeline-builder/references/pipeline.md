@@ -37,11 +37,18 @@ The orchestrator must halt (and surface a clear message) when:
   `connector_alias` does not match the side's connector. The user is
   asked to pick a different `connection_alias` or remove the existing
   file themselves.
+- Phase 5's reuse-validation of an existing `connection.json` against
+  `connection/latest.json` fails. The user is asked to fix or remove
+  the existing file; the orchestrator does not overwrite user-owned
+  connection files.
 - Phase 5's `connection-creator` returns a structured refusal (e.g.
   unsupported auth type for the chosen connector).
 - Phase 6's database introspection fails (credentials wrong, network
   unreachable). The orchestrator surfaces the underlying error verbatim
   and waits for the user to fix it.
+- Phase 6's reuse-validation of an existing endpoint file against
+  `database-endpoint/latest.json` fails. The user is asked to fix or
+  remove it; introspection is not rerun against a half-broken file.
 - Phase 10 still has `error`-severity findings after 5 fix passes.
 
 Halting means: do not write partial files, do not advance to a later

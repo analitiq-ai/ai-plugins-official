@@ -40,7 +40,6 @@ Always load:
 - `references/enum-mappers.md`
 - `references/io-contracts.md`
 - `references/identity-and-versioning.md`
-- `references/reserved-fields.md`
 
 Read on demand:
 
@@ -48,6 +47,10 @@ Read on demand:
   metadata.
 - `references/schema-hosts.md` — when explaining or troubleshooting the
   published schema host.
+- `references/reserved-fields.md` — only when debugging a
+  `reserved-field` finding from the validator. The spec skills and
+  examples define what IS authored; this file enumerates what the
+  validator catches if it leaks in.
 
 Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
 `endpoint-spec` here — the creator sub-agents own those.
@@ -85,9 +88,11 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
    parses as valid JSON:
    - **If yes** → reuse it. Read it directly; do not re-fetch from
      the registry. Record this in the final summary as "Reused
-     existing connector at `connectors/{alias}/`."
-   - **If no** (missing, unparseable, or schema-invalid) → invoke
-     `registry-browser` to fetch it.
+     existing connector at `connectors/{alias}/`." Any schema-shape
+     issues with the on-disk connector are surfaced by phase 10,
+     which is the authoritative validation gate.
+   - **If no** (missing or unparseable) → invoke `registry-browser`
+     to fetch it.
    When both sides need fetching, invoke `registry-browser` twice in
    parallel (single message, two tool calls). The connector files are
    read-only inputs regardless of whether they were just downloaded or
@@ -112,11 +117,14 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
    `connections/{alias}/connection.json` already exists:
    - **If yes** and its `connector_alias` matches the side's
      connector → reuse it. Validate the existing file against
-     `connection/latest.json` (so a stale shape is caught early).
-     Read its `secret_refs` for downstream use. The user's existing
-     `.secrets/credentials.json` is left untouched. Record this in
-     the final summary as "Reused existing connection at
-     `connections/{alias}/`."
+     `connection/latest.json` so a stale shape is caught early. If
+     validation passes, read its `secret_refs` for downstream use,
+     leave the user's `.secrets/credentials.json` untouched, and
+     record "Reused existing connection at `connections/{alias}/`"
+     in the final summary. If validation **fails**, halt and ask
+     the user to either fix the existing `connection.json` or
+     remove it themselves so phase 5 can re-author from scratch.
+     Never overwrite a user-owned connection file silently.
    - **If yes** but its `connector_alias` does **not** match the
      side's connector → halt and ask the user to either pick a
      different `connection_alias` for this pipeline or confirm they
@@ -141,8 +149,13 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
    `connections/{alias}/endpoints/{database_object.schema}_{database_object.name}.json`
    already exists:
    - **If yes** → reuse it. Validate it against
-     `database-endpoint/latest.json` and record reuse in the final
-     summary. Do **not** re-introspect or rewrite it.
+     `database-endpoint/latest.json` so a stale shape is caught
+     early. If validation passes, record reuse in the final summary
+     and do **not** re-introspect or rewrite the file. If validation
+     **fails**, halt and ask the user to either fix the existing
+     endpoint file or remove it themselves so introspection can
+     re-author it. Never overwrite a user-owned endpoint file
+     silently.
    - **If no** → invoke `create-endpoints` for that table.
 
    This avoids re-running introspection against the user's database
@@ -200,9 +213,6 @@ Report to the user:
 
 ## Hard rules
 
-- Never author server-managed fields. The per-entity reserved-field list
-  lives in `references/reserved-fields.md`; the `reserved-field` Layer 2
-  validator enforces it.
 - Never call any Analitiq registration / submission API. This is a local
   authoring tool only.
 - Never author connector documents. Those belong to the
@@ -210,10 +220,6 @@ Report to the user:
   *downloads* connector files from the DIP registry.
 - Never invent positional connection refs like `conn_1` / `conn_2`. Use
   the versioned placeholder UUIDs minted in phase 4.
-- Never emit the legacy server-managed mapping fields (`source_to_generic`,
-  `generic_to_destination`, `assignments_hash`, `type_mapping_assignments_hash`).
-  The authored `mapping` block is `assignments`-only; the registry computes
-  the rest.
 - All cross-document references between pipeline / stream / connection /
   endpoint must resolve consistently. The `pipeline-stream-consistency`
   validator enforces this; pass `--bundle-root .` when validating the
