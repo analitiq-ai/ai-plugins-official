@@ -1,162 +1,53 @@
 ---
 name: stream-spec
+description: Stream authoring vocabulary — endpoint refs, source filters/replication/pagination, destinations write modes, mapping assignments, validation rules. Loaded by stream-creator only. Not invoked directly by users.
 disable-model-invocation: true
-description: >
-  Stream specification for creating individual stream definitions within a pipeline.
-  Contains the stream JSON format including source configuration, destination configuration,
-  write modes, replication methods, and field mapping structure. This skill should be loaded
-  when creating or modifying a stream definition.
 ---
 
-# Stream Specification
+# stream-spec
 
-## Supporting Files
+This skill is loaded by `stream-creator` when authoring a stream
+document conforming to `https://schemas.analitiq.ai/stream/latest.json`.
 
-- `${CLAUDE_PLUGIN_ROOT}/skills/mapping-spec/spec-field-mapping.md` — detailed field mapping rules, assignment types, three-way sync
+## Required reading (load on demand)
 
-Read the mapping specification from `${CLAUDE_PLUGIN_ROOT}/skills/mapping-spec/spec-field-mapping.md` before creating stream mappings.
+- `spec-endpoint-refs.md` — scope=connector vs scope=connection rules.
+- `spec-source.md` — selected_columns, filters, replication, database_pagination, primary_keys.
+- `spec-destinations.md` — write modes, conflict_keys, execution overrides.
+- `spec-mapping.md` — assignments shape; what the registry computes.
+- `spec-validation-rules.md` — assignment-level validation.
+- `spec-filter-operators.md` — DB vs API operator vocabularies.
+- At least one of `examples/*.example.json` for the source/destination kind you're authoring.
 
-## Stream JSON Structure
+## What this skill covers
 
-Each stream connects one source endpoint to one or more destination endpoints with field-level
-mapping.
+- Top-level shape: `$schema`, `alias`, `display_name`, `description`,
+  `pipeline_id` (base UUID), `source`, `destinations`, `mapping`,
+  `status`, `tags`, `documentation_url`.
+- The minimal v1 mapping expression vocabulary: `{op: "get", path: "<source field>"}`
+  and `{arrow_type, value}` constants.
+- The closed source-filter operator vocabularies per endpoint kind.
 
-```json
-{
-  "version": 1,
-  "source": {
-    "connection_ref": "conn_1",
-    "primary_key": ["id"],
-    "replication": {
-      "method": "full"
-    }
-  },
-  "destinations": [
-    {
-      "connection_ref": "conn_2",
-      "write": {
-        "mode": "upsert",
-        "conflict_keys": [["id"]]
-      }
-    }
-  ],
-  "mapping": {
-    "assignments": [],
-    "source_to_generic": {},
-    "generic_to_destination": {},
-    "assignments_hash": "",
-    "type_mapping_assignments_hash": ""
-  },
-  "is_enabled": true,
-  "status": "draft"
-}
-```
+## What this skill does NOT cover
 
-## Source Configuration
+- The full registry-side type vocabulary expansion. Authored mapping
+  declares one assignment per destination field; the registry computes
+  `source_to_generic` / `generic_to_destination` / hashes.
+- Endpoint bodies. The stream **references** endpoints by ref; it does
+  not embed them.
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `connection_ref` | string | yes | Connection alias (e.g., `conn_1`) |
-| `primary_key` | array of strings | no | Primary key column(s) for the source |
-| `replication` | object | no | Replication configuration |
-| `parameters` | object | no | Connector-specific parameters/filters |
+## Output rules
 
-### Replication Config
+Every authored document must:
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `method` | string | yes | `"full"` or `"incremental"` |
-| `cursor_field` | array of strings | incremental only | Path to cursor field (required for incremental) |
-| `safety_window_seconds` | integer | no | Safety window for late-arriving data |
-
-## Destination Configuration
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `connection_ref` | string | yes | Connection alias (e.g., `conn_2`) |
-| `write` | object | no | Write mode configuration |
-| `batching` | object | no | Batching overrides |
-
-### Write Mode Config
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `mode` | string | yes | `"insert"` or `"upsert"` |
-| `conflict_keys` | array of arrays | upsert only | Composite conflict resolution keys (required for upsert) |
-
-When `mode` is `"upsert"`, `conflict_keys` is required and must contain at least one non-empty
-key set. Each inner array is a set of field paths forming one unique constraint.
-
-## Mapping
-
-The `mapping` object contains:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `assignments` | array | Ordered assignment rules (source field → target field) |
-| `source_to_generic` | object | Source field paths mapped to `GenericTypeMapping` objects |
-| `generic_to_destination` | object | Destination fields mapped to `DestinationTypeMapping` objects, keyed by connection_ref |
-| `assignments_hash` | string | SHA256 hash of assignments (required when assignments is non-empty) |
-| `type_mapping_assignments_hash` | string | Hash tracking when type mappings were generated |
-
-### Type Mapping Shapes
-
-**`source_to_generic`** — each value is a `GenericTypeMapping` object, not a plain string:
-
-```json
-"source_to_generic": {
-  "id": { "generic_type": "integer" },
-  "name": { "generic_type": "string" },
-  "amount": { "generic_type": "decimal" },
-  "created_at": { "generic_type": "datetime" }
-}
-```
-
-**`generic_to_destination`** — keyed by connection_ref, each value maps field paths to
-`DestinationTypeMapping` objects:
-
-```json
-"generic_to_destination": {
-  "conn_2": {
-    "id": { "destination_type": "BIGINT", "nullable": false },
-    "name": { "destination_type": "VARCHAR(255)", "nullable": false },
-    "amount": { "destination_type": "NUMERIC(12,2)", "nullable": true },
-    "created_at": { "destination_type": "TIMESTAMP WITH TIME ZONE", "nullable": true }
-  }
-}
-```
-
-See the `mapping-spec` skill for the full assignment structure, type matching rules, and
-three-way consistency requirements.
-
-## Valid Enums
-
-**Replication methods:** `full`, `incremental`
-
-**Write modes:** `insert`, `upsert`
-
-**Stream statuses:** `draft`, `active`, `paused`, `error`
-
-**Error actions:** `retry`, `dlq`, `retry_with_backoff`, `skip`, `fail`
-
-**Data types:** `string`, `integer`, `decimal`, `boolean`, `date`, `datetime`, `timestamp`,
-`object`, `array`, `json`
-
-## Key Rules
-
-- Each stream-builder creates exactly one stream file
-- `conflict_keys` is required when write mode is `upsert`
-- `cursor_field` is required when replication method is `incremental`
-- `assignments_hash` is required when assignments is non-empty
-- Three-way consistency must hold between `assignments`, `source_to_generic`, and `generic_to_destination`
-
-## Output
-
-Save each stream as an individual JSON file:
-```
-pipelines/{pipeline-name}/streams/{stream-name}.json
-```
-
-Use a descriptive filename derived from the source endpoint. For example:
-- Source `/v1/transfers` → `transfers.json`
-- Source `public/users` → `public-users.json`
+1. Declare `$schema: "https://schemas.analitiq.ai/stream/latest.json"`.
+2. Include `alias`, `pipeline_id` (a **base** UUID, no `_v<n>` suffix),
+   `source`, and at least one `destinations[]` entry.
+3. Omit every reserved field (see
+   `../pipeline-builder/references/reserved-fields.md`). In particular:
+   no `assignments_hash`, `source_to_generic`, `generic_to_destination`,
+   `type_mapping_assignments_hash`, `schema_hash`, or any
+   `*_schema_fingerprint`.
+4. Use **versioned** connection IDs in every `endpoint_ref.connection_id`.
+5. Pass `python scripts/validate_pipeline.py --entity stream
+   --document <path>` with zero error findings.

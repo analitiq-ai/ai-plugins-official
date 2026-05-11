@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schemas.analitiq.ai/pipeline/latest.json",
+  "alias": "stripe_to_warehouse_and_lake",
+  "display_name": "Stripe to warehouse + lake",
+  "description": "Replicates Stripe events to PostgreSQL and S3 daily at 02:00 Berlin time.",
+  "status": "draft",
+  "connections": {
+    "source": "55555555-5555-4555-8555-555555555555_v1",
+    "destinations": [
+      "66666666-6666-4666-8666-666666666666_v1",
+      "77777777-7777-4777-8777-777777777777_v1"
+    ]
+  },
+  "streams": [
+    "88888888-8888-4888-8888-888888888888_v2"
+  ],
+  "schedule": {
+    "type": "cron",
+    "timezone": "Europe/Berlin",
+    "cron_expression": "cron(0 2 * * ? *)"
+  },
+  "engine": {
+    "vcpu": 2,
+    "memory": 16384
+  },
+  "runtime": {
+    "buffer_size": 10000,
+    "batching": {
+      "batch_size": 1000,
+      "max_concurrent_batches": 5
+    },
+    "logging": {
+      "log_level": "INFO",
+      "metrics_enabled": true
+    },
+    "error_handling": {
+      "strategy": "dlq",
+      "max_retries": 3,
+      "retry_delay_seconds": 10
+    }
+  },
+  "tags": ["billing"]
+}

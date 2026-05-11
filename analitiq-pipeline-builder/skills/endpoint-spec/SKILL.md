@@ -1,129 +1,59 @@
 ---
 name: endpoint-spec
+description: Database endpoint authoring vocabulary — database_object identity, columns with native_type and Arrow type, primary_keys. Loaded by private-endpoint-creator only. Not invoked directly by users.
 disable-model-invocation: true
-description: >
-  Private endpoint specification for database connections. Contains the DB endpoint schema
-  format including column definitions and primary keys. Used by the private-endpoint-creator
-  agent to create endpoint files after discovering schemas and tables from a live database
-  connection. Not applicable to API connectors (their endpoints are public and pre-defined
-  in the connector repo).
 ---
 
-# Private Endpoint Specification
+# endpoint-spec
 
-Private endpoints are database schemas/tables discovered from a live connection. Unlike API
-endpoints (which are pre-defined in connector repos), private endpoints are specific to each
-user's database and are created inside the connection directory after the connection is set up.
+This skill is loaded by `private-endpoint-creator` when authoring a
+database endpoint document conforming to
+`https://schemas.analitiq.ai/database-endpoint/latest.json`.
 
-## DB Endpoint JSON Structure
+## Required reading (load on demand)
 
-```json
-{
-  "endpoint": "public/users",
-  "method": "DATABASE",
-  "version": 1,
-  "endpoint_schema": {
-    "columns": [
-      {
-        "name": "id",
-        "type": "integer",
-        "nullable": false,
-        "autoincrement": true
-      },
-      {
-        "name": "email",
-        "type": "character varying",
-        "nullable": false
-      },
-      {
-        "name": "created_at",
-        "type": "timestamp with time zone",
-        "nullable": true
-      }
-    ],
-    "primary_keys": ["id"]
-  }
-}
-```
+- `spec-database-object.md` — catalog/schema/name/object_type rules; no
+  identifier normalization.
+- `spec-columns.md` — `name`, `native_type` (required), `arrow_type`
+  (optional PascalCase), `nullable`, `default`, `comment`,
+  `ordinal_position`.
+- At least one of `examples/*.example.json` for the database dialect
+  you're authoring.
 
-## Fields
+## Scope
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `endpoint` | string | yes | Logical endpoint name: `{schema}/{table}` (e.g., `public/users`) |
-| `method` | string | yes | Always `"DATABASE"` for DB endpoints |
-| `version` | integer | yes | Schema version, starts at `1` |
-| `endpoint_schema` | object | yes | Schema metadata (columns + primary keys) |
+API endpoints come from the connector document, not from here. This
+skill is **database-only**. API endpoints in stream `endpoint_ref`s use
+`scope: connector` and point at the connector's `definition/endpoints/`.
+Database endpoints use `scope: connection` and live under
+`connections/{alias}/endpoints/`.
 
-### endpoint_schema
+## What this skill covers
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `columns` | array | yes | Column definitions for the table/view |
-| `primary_keys` | array of strings | no | Column names forming the primary key |
+- The structural identity of a database object: catalog, schema, name,
+  object_type. Identifier strings stored **verbatim** from
+  introspection — no case-folding, quoting, or normalization.
+- The column shape per table/view/collection.
+- Primary keys: optional declared list, must reference existing columns.
 
-### Column Definition
+## What this skill does NOT cover
 
-Each column in the `columns` array:
+- The connection that owns this endpoint — see `connection-spec`.
+- Stream-level concerns (filters, replication, pagination, mapping) —
+  those belong to `stream-spec`.
+- Discovery mechanics (how to query `information_schema` etc.) — that's
+  agent logic, encoded in `private-endpoint-creator`.
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | yes | Column name |
-| `type` | string | yes | Native database type (e.g., `integer`, `character varying`, `timestamp with time zone`) |
-| `nullable` | boolean | no | Whether the column allows NULL values |
-| `default` | any | no | Default value if defined |
-| `autoincrement` | boolean | no | Whether the column auto-increments |
-| `comment` | string | no | Column comment from the database |
+## Output rules
 
-## Endpoint Naming
+Every authored document must:
 
-The `endpoint` field uses the format `{schema}/{table}`:
-- PostgreSQL: `public/users`, `analytics/events`
-- MySQL: `mydb/orders` (MySQL uses database name as schema)
-
-## API Endpoint Filters with Placeholders
-
-API endpoints (pre-defined in connector repos) may include a `filters` object. Filters can
-reference connection parameters using `${param_name}` syntax in their `default` field. At
-runtime, the engine resolves these from `connection.parameters`.
-
-```json
-{
-  "filters": {
-    "profile": {
-      "type": "integer",
-      "required": true,
-      "default": "${profile_id}"
-    }
-  }
-}
-```
-
-The filter key (`profile`) becomes the query parameter name. The `${profile_id}` references
-the connection parameter name. These are often different — the filter key is the API query
-parameter name, while the placeholder references the `field_name` from `post_auth_steps`
-stored in `connection.parameters`.
-
-The engine resolves these placeholders automatically at runtime: it reads the source
-connection's `parameters` dict, stringifies all non-dict values into a flat lookup, and
-runs placeholder expansion on the endpoint's filters and fields. No stream-side
-`source.parameters` config is needed for this — unresolved placeholders are left as-is.
-
-## Discovery Process
-
-1. Connect to the database using connection parameters + credentials from `.secrets/`
-2. Query `information_schema.tables` (or equivalent) to list schemas and tables
-3. For each selected table, query `information_schema.columns` for column metadata
-4. Query primary key constraints
-5. Create one endpoint JSON file per table
-
-## Output
-
-Save each endpoint in the connection's `endpoints/` directory:
-```
-connections/{connection-name}/endpoints/{schema}-{table}.json
-```
-
-Use the schema-table combination as the filename with a hyphen separator:
-- `public/users` → `public-users.json`
-- `analytics/events` → `analytics-events.json`
+1. Declare `$schema: "https://schemas.analitiq.ai/database-endpoint/latest.json"`
+   (the schema marks this as a `const`-required field).
+2. Include `alias` (`[a-z0-9][a-z0-9_-]*`), `database_object`, and a
+   non-empty `columns[]`.
+3. Omit every reserved field — especially `endpoint_id`, `connection_id`,
+   `schema_hash`, `endpoint_schema_version`.
+4. Preserve identifier strings verbatim from introspection.
+5. Pass `python scripts/validate_pipeline.py --entity database_endpoint
+   --document <path>` with zero error findings.

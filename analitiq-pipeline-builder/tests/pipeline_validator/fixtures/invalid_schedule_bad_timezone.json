@@ -1,0 +1,14 @@
+{
+  "$schema": "https://schemas.analitiq.ai/pipeline/latest.json",
+  "alias": "wise_to_postgresql",
+  "connections": {
+    "source": "00000000-0000-4000-8000-000000000003_v1",
+    "destinations": ["00000000-0000-4000-8000-000000000002_v1"]
+  },
+  "streams": [],
+  "schedule": {
+    "type": "interval",
+    "timezone": "Mars/Olympus",
+    "interval_minutes": 30
+  }
+}

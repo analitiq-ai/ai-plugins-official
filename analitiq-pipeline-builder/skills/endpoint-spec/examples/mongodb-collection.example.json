@@ -1,0 +1,16 @@
+{
+  "$schema": "https://schemas.analitiq.ai/database-endpoint/latest.json",
+  "alias": "orders",
+  "display_name": "MongoDB analytics.orders",
+  "database_object": {
+    "catalog": "analytics",
+    "name": "orders",
+    "object_type": "collection"
+  },
+  "columns": [
+    {"name": "_id", "native_type": "BSON.ObjectId", "arrow_type": "Utf8", "nullable": false},
+    {"name": "created_at", "native_type": "BSON.Date", "arrow_type": "Timestamp", "nullable": true},
+    {"name": "payload", "native_type": "BSON.Document", "arrow_type": "Struct", "nullable": true}
+  ],
+  "primary_keys": ["_id"]
+}

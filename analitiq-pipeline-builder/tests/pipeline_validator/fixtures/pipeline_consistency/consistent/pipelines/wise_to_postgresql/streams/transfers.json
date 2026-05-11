@@ -1,0 +1,24 @@
+{
+  "$schema": "https://schemas.analitiq.ai/stream/latest.json",
+  "alias": "transfers",
+  "pipeline_id": "b4904c77-0a4a-4a8d-a768-4a8b5f2f2414",
+  "source": {
+    "endpoint_ref": {
+      "scope": "connector",
+      "connection_id": "00000000-0000-4000-8000-000000000003_v1",
+      "alias": "transfers"
+    },
+    "replication": {"method": "full_refresh"}
+  },
+  "destinations": [
+    {
+      "endpoint_ref": {
+        "scope": "connection",
+        "connection_id": "00000000-0000-4000-8000-000000000002_v1",
+        "alias": "warehouse_transfers"
+      },
+      "write": {"mode": "insert"}
+    }
+  ],
+  "status": "draft"
+}
