@@ -1,0 +1,81 @@
+{
+  "$schema": "https://schemas.analitiq.ai/stream/latest.json",
+  "alias": "orders_to_warehouse",
+  "display_name": "Orders to warehouse",
+  "pipeline_id": "b4904c77-0a4a-4a8d-a768-4a8b5f2f2414",
+  "source": {
+    "endpoint_ref": {
+      "scope": "connection",
+      "connection_id": "00000000-0000-4000-8000-000000000001_v1",
+      "alias": "public_orders"
+    },
+    "selected_columns": ["id", "amount", "updated_at"],
+    "filters": [
+      {
+        "field": "status",
+        "operator": "eq",
+        "value": "paid"
+      }
+    ],
+    "replication": {
+      "method": "incremental",
+      "cursor_field": "updated_at",
+      "safety_window_seconds": 300,
+      "tie_breaker_fields": ["id"]
+    },
+    "database_pagination": {
+      "type": "offset",
+      "page_size": 1000
+    }
+  },
+  "destinations": [
+    {
+      "endpoint_ref": {
+        "scope": "connection",
+        "connection_id": "00000000-0000-4000-8000-000000000002_v1",
+        "alias": "warehouse_orders"
+      },
+      "write": {
+        "mode": "upsert",
+        "conflict_keys": [["id"]]
+      },
+      "execution": {
+        "batch_size": 1000,
+        "max_concurrent_batches": 3
+      }
+    }
+  ],
+  "mapping": {
+    "assignments": [
+      {
+        "target": {
+          "path": "id",
+          "arrow_type": "Utf8",
+          "nullable": false
+        },
+        "value": {
+          "expression": {
+            "op": "get",
+            "path": "id"
+          }
+        }
+      },
+      {
+        "target": {
+          "path": "amount",
+          "arrow_type": "Decimal128",
+          "native_type": "NUMERIC(12,2)",
+          "nullable": false
+        },
+        "value": {
+          "expression": {
+            "op": "get",
+            "path": "amount"
+          }
+        }
+      }
+    ]
+  },
+  "status": "draft",
+  "tags": ["orders", "warehouse"]
+}

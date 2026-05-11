@@ -1,0 +1,11 @@
+{
+  "$schema": "https://schemas.analitiq.ai/connection/latest.json",
+  "alias": "xero_org_acme",
+  "connector_alias": "xero",
+  "display_name": "Xero — Acme Corp",
+  "parameters": {},
+  "secret_refs": {
+    "client_id": "secrets/xero_org_acme/client_id",
+    "client_secret": "secrets/xero_org_acme/client_secret"
+  }
+}

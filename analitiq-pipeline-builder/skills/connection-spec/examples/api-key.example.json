@@ -1,0 +1,10 @@
+{
+  "$schema": "https://schemas.analitiq.ai/connection/latest.json",
+  "alias": "wise_production",
+  "connector_alias": "wise",
+  "display_name": "Wise Production",
+  "parameters": {},
+  "secret_refs": {
+    "api_key": "secrets/wise_production/api_key"
+  }
+}

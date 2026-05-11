@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schemas.analitiq.ai/connection/latest.json",
+  "alias": "internal_api",
+  "connector_alias": "internal-api",
+  "display_name": "Internal API (basic auth)",
+  "parameters": {
+    "username": "service_account"
+  },
+  "secret_refs": {
+    "password": "secrets/internal_api/password"
+  }
+}

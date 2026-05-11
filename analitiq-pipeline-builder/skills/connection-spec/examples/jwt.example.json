@@ -1,0 +1,15 @@
+{
+  "$schema": "https://schemas.analitiq.ai/connection/latest.json",
+  "alias": "snowflake_warehouse",
+  "connector_alias": "snowflake",
+  "display_name": "Snowflake warehouse (JWT)",
+  "parameters": {
+    "account": "abc12345.eu-central-1",
+    "username": "ETL_USER",
+    "warehouse": "ANALYTICS_WH",
+    "role": "ETL_ROLE"
+  },
+  "secret_refs": {
+    "private_key": "secrets/snowflake_warehouse/private_key"
+  }
+}

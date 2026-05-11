@@ -1,0 +1,42 @@
+{
+  "$schema": "https://schemas.analitiq.ai/stream/latest.json",
+  "alias": "orders_to_warehouse",
+  "pipeline_id": "b4904c77-0a4a-4a8d-a768-4a8b5f2f2414",
+  "source": {
+    "endpoint_ref": {
+      "scope": "connection",
+      "connection_id": "00000000-0000-4000-8000-000000000001_v1",
+      "alias": "public_orders"
+    },
+    "replication": {"method": "full_refresh"}
+  },
+  "destinations": [
+    {
+      "endpoint_ref": {
+        "scope": "connection",
+        "connection_id": "00000000-0000-4000-8000-000000000002_v1",
+        "alias": "warehouse_orders"
+      },
+      "write": {"mode": "insert"}
+    }
+  ],
+  "mapping": {
+    "assignments": [
+      {
+        "target": {"path": "id", "arrow_type": "Utf8", "nullable": false},
+        "value": {
+          "expression": {"op": "get", "path": "id"},
+          "constant": {"arrow_type": "Utf8", "value": "x"}
+        }
+      },
+      {
+        "target": {"path": "id", "arrow_type": "Utf8", "nullable": false},
+        "value": {"expression": {"op": "get", "path": "id"}}
+      },
+      {
+        "target": {"path": "status", "arrow_type": "Utf8", "nullable": false},
+        "value": {"expression": {"op": "concat", "path": "status"}}
+      }
+    ]
+  }
+}

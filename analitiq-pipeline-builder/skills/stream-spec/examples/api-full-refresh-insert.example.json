@@ -1,0 +1,29 @@
+{
+  "$schema": "https://schemas.analitiq.ai/stream/latest.json",
+  "alias": "transfers_to_warehouse",
+  "display_name": "Transfers to warehouse",
+  "pipeline_id": "b4904c77-0a4a-4a8d-a768-4a8b5f2f2414",
+  "source": {
+    "endpoint_ref": {
+      "scope": "connector",
+      "connection_id": "5e6c4f1c-3b1a-5a8d-89fa-1f2e0b8a4c01_v1",
+      "alias": "transfers"
+    },
+    "filters": [
+      {"field": "status", "operator": "eq", "value": "completed"}
+    ],
+    "replication": {"method": "full_refresh"},
+    "primary_keys": ["id"]
+  },
+  "destinations": [
+    {
+      "endpoint_ref": {
+        "scope": "connection",
+        "connection_id": "9a3b2c1d-4e5f-5a6b-87cd-2f3e0a1b2c03_v1",
+        "alias": "public_transfers"
+      },
+      "write": {"mode": "insert"}
+    }
+  ],
+  "status": "draft"
+}

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://schemas.analitiq.ai/pipeline/latest.json",
+  "alias": "wise_to_postgresql",
+  "display_name": "Wise to PostgreSQL",
+  "description": "Replicates Wise transfers to PostgreSQL.",
+  "status": "draft",
+  "connections": {
+    "source": "00000000-0000-4000-8000-000000000003_v1",
+    "destinations": [
+      "00000000-0000-4000-8000-000000000002_v1"
+    ]
+  },
+  "streams": [
+    "10000000-0000-4000-8000-000000000010_v1"
+  ],
+  "schedule": {
+    "type": "manual",
+    "timezone": "UTC"
+  },
+  "engine": {
+    "vcpu": 1,
+    "memory": 8192
+  },
+  "runtime": {
+    "buffer_size": 5000,
+    "batching": {
+      "batch_size": 200,
+      "max_concurrent_batches": 3
+    },
+    "logging": {
+      "log_level": "INFO",
+      "metrics_enabled": true
+    },
+    "error_handling": {
+      "strategy": "dlq",
+      "max_retries": 3,
+      "retry_delay_seconds": 5
+    }
+  },
+  "tags": ["finance", "warehouse"]
+}
