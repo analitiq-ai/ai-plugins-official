@@ -32,8 +32,10 @@ and you do not author anything.
    https://raw.githubusercontent.com/analitiq-ai/analitiq-dip-registry/main/{connector_alias}/definition/connector.json
    ```
 
-   Fetch via `WebFetch`. If the fetch fails, halt and surface the HTTP
-   error verbatim.
+   Fetch via `WebFetch`. If the fetch fails, return a structured
+   refusal (see "Refusal shape" below) — do **not** halt with a
+   free-text error; the orchestrator needs the discriminator to
+   decide how to surface it.
 3. **Parse `connector.json`.** Read `kind`. For `kind = "api"`, read
    the `endpoints` array (if present) to get the list of endpoint
    aliases.
@@ -42,6 +44,11 @@ and you do not author anything.
    ```
    https://raw.githubusercontent.com/analitiq-ai/analitiq-dip-registry/main/{connector_alias}/definition/endpoints/{endpoint-alias}.json
    ```
+
+   On any endpoint-fetch failure, return a structured refusal with
+   the same shape as step 2 — `connector.json` may have been fetched
+   successfully but the endpoint set is incomplete, which downstream
+   agents cannot work around.
 
 5. **Write to disk:**
 
@@ -76,9 +83,12 @@ and you do not author anything.
 
 ### Refusal shape
 
-When step 1 trips (target directory already present) or step 2's
-`WebFetch` fails, return a structured refusal instead of the success
-summary above:
+Return a structured refusal instead of the success summary above
+whenever any of the following trips:
+
+- **Step 1** — `target_dir` already exists on disk.
+- **Step 2** — fetching `connector.json` fails.
+- **Step 4** — fetching any per-endpoint JSON fails (API connectors).
 
 ```jsonc
 {
@@ -86,13 +96,22 @@ summary above:
   "reason": "target_exists" | "fetch_failed" | "registry_missing",
   "connector_alias": "<alias>",
   "target_dir": "connectors/<alias>",
-  "detail": "<human-readable single sentence — e.g. the HTTP error verbatim, or the on-disk path that already exists>"
+  "detail": "<human-readable single sentence — e.g. the HTTP status+body verbatim, or the on-disk path that already exists>"
 }
 ```
 
-The orchestrator distinguishes `target_exists` (route around: reuse
-on-disk connector) from `fetch_failed` / `registry_missing` (surface
-to the user).
+`reason` discriminator (normative):
+
+- `target_exists` — step 1: the target directory is already on disk.
+- `registry_missing` — HTTP 404 on any fetch. The alias does not
+  exist in the registry (or the endpoint file is missing for an
+  API connector).
+- `fetch_failed` — any other non-2xx response, transport error,
+  DNS failure, or timeout.
+
+The orchestrator routes around `target_exists` (reuse the on-disk
+connector). `registry_missing` and `fetch_failed` are both halts —
+the orchestrator surfaces `detail` verbatim to the user.
 
 ## Hard rules
 

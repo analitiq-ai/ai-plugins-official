@@ -86,17 +86,37 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
 2. **Connectors** — for each side, check whether
    `connectors/{alias}/definition/connector.json` already exists and
    parses as valid JSON:
-   - **If yes** → reuse it. Read it directly; do not re-fetch from
-     the registry. Record this in the final summary as "Reused
-     existing connector at `connectors/{alias}/`." Any schema-shape
-     issues with the on-disk connector are surfaced by phase 10,
-     which is the authoritative validation gate.
-   - **If no** (missing or unparseable) → invoke `registry-browser`
-     to fetch it.
+   - **If present and parses** → reuse it. Read it directly; do not
+     re-fetch from the registry. Record "Reused existing connector
+     at `connectors/{alias}/`" in the final summary. Connector files
+     are trusted as registry-owned artifacts — neither this plugin
+     nor phase 10 schema-validates them; downstream creator failures
+     will surface any stale-shape issues.
+   - **If present but does not parse** → halt and ask the user to
+     fix or remove the file themselves. Do not invoke
+     `registry-browser` against an existing-but-broken directory; it
+     will refuse with `target_exists` and the user will get an
+     unhelpful error.
+   - **If absent** → invoke `registry-browser` to fetch it.
+
    When both sides need fetching, invoke `registry-browser` twice in
-   parallel (single message, two tool calls). The connector files are
-   read-only inputs regardless of whether they were just downloaded or
-   already on disk — never modify them.
+   parallel (single message, two tool calls).
+
+   `registry-browser` returns one of two shapes:
+   - `status: "downloaded"` → continue.
+   - `status: "refused"` → branch on `reason`:
+     - `target_exists` → defensive net (orchestrator's existence
+       check should have prevented this call). Read the on-disk
+       connector and continue, but flag the inconsistency for the
+       user.
+     - `registry_missing` → halt and surface `detail` verbatim.
+       Suggest the user check the alias or author it via the
+       `analitiq-connector-builder` plugin.
+     - `fetch_failed` → halt and surface `detail` verbatim. The
+       registry is reachable but the fetch did not succeed.
+
+   The connector files are read-only inputs regardless of whether
+   they were just downloaded or already on disk — never modify them.
 
 3. **Classify** — run the closed-enum mappers inline (see
    `references/enum-mappers.md`):
@@ -121,10 +141,12 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
      validation passes, read its `secret_refs` for downstream use,
      leave the user's `.secrets/credentials.json` untouched, and
      record "Reused existing connection at `connections/{alias}/`"
-     in the final summary. If validation **fails**, halt and ask
-     the user to either fix the existing `connection.json` or
-     remove it themselves so phase 5 can re-author from scratch.
-     Never overwrite a user-owned connection file silently.
+     in the final summary. If validation **fails**, halt and
+     surface the validator's findings (`path`, `message`,
+     `rule_doc`) verbatim — the user needs to see what's broken to
+     fix it. The orchestrator does not re-author the file (that
+     would overwrite the user's `.secrets/`); the user must fix
+     `connection.json` or remove it themselves before re-running.
    - **If yes** but its `connector_alias` does **not** match the
      side's connector → halt and ask the user to either pick a
      different `connection_alias` for this pipeline or confirm they
@@ -152,10 +174,11 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
      `database-endpoint/latest.json` so a stale shape is caught
      early. If validation passes, record reuse in the final summary
      and do **not** re-introspect or rewrite the file. If validation
-     **fails**, halt and ask the user to either fix the existing
-     endpoint file or remove it themselves so introspection can
-     re-author it. Never overwrite a user-owned endpoint file
-     silently.
+     **fails**, halt and surface the validator's findings (`path`,
+     `message`, `rule_doc`) verbatim — the user needs to see what's
+     broken to fix it. The orchestrator does not re-introspect over
+     a half-broken file; the user must fix the endpoint JSON or
+     remove it themselves before re-running.
    - **If no** → invoke `create-endpoints` for that table.
 
    This avoids re-running introspection against the user's database

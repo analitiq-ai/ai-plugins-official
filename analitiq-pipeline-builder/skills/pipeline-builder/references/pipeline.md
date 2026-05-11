@@ -29,8 +29,15 @@ The orchestrator must halt (and surface a clear message) when:
   not blocked.)
 - Phase 1's required inputs are missing (`source_connector_alias`,
   `destination_connector_alias`, `pipeline_alias`).
-- Phase 2 cannot resolve a connector alias in the DIP registry **and**
-  no usable connector is already on disk for that side.
+- Phase 2 finds an on-disk `connectors/{alias}/definition/connector.json`
+  that fails to parse as JSON. The user is asked to fix or remove
+  the file themselves.
+- Phase 2's `registry-browser` returns `status: "refused"` with
+  `reason ∈ {registry_missing, fetch_failed}`. The orchestrator
+  surfaces `detail` verbatim to the user. `target_exists` is a
+  defensive net — the orchestrator's own existence check should
+  have prevented the call; if it fires anyway, read the on-disk
+  connector and flag the inconsistency.
 - Phase 3's enum mappers fail to map an input (the user supplied
   something outside the closed set).
 - Phase 5 finds an existing `connections/{alias}/connection.json` whose
@@ -38,17 +45,21 @@ The orchestrator must halt (and surface a clear message) when:
   asked to pick a different `connection_alias` or remove the existing
   file themselves.
 - Phase 5's reuse-validation of an existing `connection.json` against
-  `connection/latest.json` fails. The user is asked to fix or remove
-  the existing file; the orchestrator does not overwrite user-owned
-  connection files.
+  `connection/latest.json` fails. The orchestrator surfaces the
+  validator's findings (`path`, `message`, `rule_doc`) verbatim and
+  asks the user to fix or remove the existing file. The orchestrator
+  does not overwrite user-owned connection files (including
+  `.secrets/`).
 - Phase 5's `connection-creator` returns a structured refusal (e.g.
   unsupported auth type for the chosen connector).
 - Phase 6's database introspection fails (credentials wrong, network
   unreachable). The orchestrator surfaces the underlying error verbatim
   and waits for the user to fix it.
 - Phase 6's reuse-validation of an existing endpoint file against
-  `database-endpoint/latest.json` fails. The user is asked to fix or
-  remove it; introspection is not rerun against a half-broken file.
+  `database-endpoint/latest.json` fails. The orchestrator surfaces
+  the validator's findings (`path`, `message`, `rule_doc`) verbatim
+  and asks the user to fix or remove the file; introspection is not
+  rerun against a half-broken file.
 - Phase 10 still has `error`-severity findings after 5 fix passes.
 
 Halting means: do not write partial files, do not advance to a later
