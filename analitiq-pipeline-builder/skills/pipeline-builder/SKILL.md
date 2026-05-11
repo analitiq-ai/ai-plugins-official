@@ -168,9 +168,10 @@ Report to the user:
   *downloads* connector files from the DIP registry.
 - Never invent positional connection refs like `conn_1` / `conn_2`. Use
   the versioned placeholder UUIDs minted in phase 4.
-- Never emit the legacy three-section mapping (`source_to_generic`,
+- Never emit the legacy server-managed mapping fields (`source_to_generic`,
   `generic_to_destination`, `assignments_hash`, `type_mapping_assignments_hash`).
-  Authored mapping is `assignments`-only; the registry computes the rest.
+  The authored `mapping` block is `assignments`-only; the registry computes
+  the rest.
 - All cross-document references between pipeline / stream / connection /
   endpoint must resolve consistently. The `pipeline-stream-consistency`
   validator enforces this; pass `--bundle-root .` when validating the
