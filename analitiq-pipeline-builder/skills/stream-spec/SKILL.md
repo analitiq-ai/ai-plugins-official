@@ -43,11 +43,6 @@ Every authored document must:
 1. Declare `$schema: "https://schemas.analitiq.ai/stream/latest.json"`.
 2. Include `alias`, `pipeline_id` (a **base** UUID, no `_v<n>` suffix),
    `source`, and at least one `destinations[]` entry.
-3. Omit every reserved field (see
-   `../pipeline-builder/references/reserved-fields.md`). In particular:
-   no `assignments_hash`, `source_to_generic`, `generic_to_destination`,
-   `type_mapping_assignments_hash`, `schema_hash`, or any
-   `*_schema_fingerprint`.
-4. Use **versioned** connection IDs in every `endpoint_ref.connection_id`.
-5. Pass `python scripts/validate_pipeline.py --entity stream
+3. Use **versioned** connection IDs in every `endpoint_ref.connection_id`.
+4. Pass `python scripts/validate_pipeline.py --entity stream
    --document <path>` with zero error findings.

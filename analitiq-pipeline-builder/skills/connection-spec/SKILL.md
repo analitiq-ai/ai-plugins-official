@@ -30,7 +30,6 @@ document conforming to `https://schemas.analitiq.ai/connection/latest.json`.
 
 ## What this skill does NOT cover
 
-- `auth_state` — server-managed; the plugin never authors it.
 - The connector's `connection_contract` itself — that lives in the
   connector document, authored by the `analitiq-connector-builder` plugin.
 - Endpoint discovery — see `endpoint-spec`.
@@ -42,12 +41,9 @@ Every authored document must:
 1. Declare `$schema: "https://schemas.analitiq.ai/connection/latest.json"`.
 2. Include `alias` (`[a-z0-9][a-z0-9_-]*`) and `connector_alias` (the
    slug of the connector being instantiated).
-3. Omit every reserved field — especially `connection_id`, `connector_id`,
-   `connector_version`, `auth_state` (see
-   `../pipeline-builder/references/reserved-fields.md`).
-4. Route every contract input declared with `storage: "connection.parameters"`
+3. Route every contract input declared with `storage: "connection.parameters"`
    into `parameters`, and every input declared with `storage: "secrets"`
    into `secret_refs` (the value is a reference string, never the
    secret value itself).
-5. Pass `python scripts/validate_pipeline.py --entity connection
+4. Pass `python scripts/validate_pipeline.py --entity connection
    --document <path>` with zero error findings.

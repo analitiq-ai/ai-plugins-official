@@ -20,7 +20,6 @@ Load on demand:
   approach).
 - The matching `skills/stream-spec/examples/*.example.json` for the
   source × destination kind combination.
-- `skills/pipeline-builder/references/reserved-fields.md`
 - `skills/pipeline-builder/references/identity-and-versioning.md` for
   `pipeline_id` (base UUID, not versioned).
 
@@ -86,11 +85,6 @@ If the destination kind is one the engine doesn't yet run
 
 ## Hard rules
 
-- Never author server-managed fields. The forbidden list lives in
-  `pipeline-builder/references/reserved-fields.md`. In particular:
-  no `stream_id`, no `assignments_hash`, no `schema_hash`, no
-  `source_to_generic`, no `generic_to_destination`, no
-  `type_mapping_assignments_hash`.
 - `pipeline_id` is a **base** UUID — strip any `_v<n>` suffix the
   orchestrator might have accidentally passed.
 - Every `endpoint_ref.connection_id` is a **versioned** ID — the same

@@ -17,7 +17,6 @@ Load on demand:
 - `skills/pipeline-spec/SKILL.md` and every `spec-*.md` under it.
 - The matching `skills/pipeline-spec/examples/*.example.json` for the
   schedule style being authored.
-- `skills/pipeline-builder/references/reserved-fields.md`
 - `skills/pipeline-builder/references/identity-and-versioning.md`
 
 ## Inputs
@@ -42,9 +41,7 @@ stitches in real stream IDs in phase 9.
 3. Set `status: "draft"`. Do not set `active` — promotion is a later
    step (typically post-submission).
 4. Set `$schema: "https://schemas.analitiq.ai/pipeline/latest.json"`.
-5. Omit every reserved field listed in
-   `pipeline-builder/references/reserved-fields.md`.
-6. Return a `CreatorOutput` (`entity: pipeline`).
+5. Return a `CreatorOutput` (`entity: pipeline`).
 
 ## Output format
 
@@ -60,8 +57,6 @@ stitches in real stream IDs in phase 9.
 
 ## Hard rules
 
-- Never author `pipeline_id`, `version`, `org_id`, `created_at`,
-  `updated_at`. Server-managed.
 - Never use positional connection refs (`conn_1`, `conn_2`, …). The
   orchestrator's placeholder versioned UUIDs are the only legal values.
 - Always emit `streams: []` — stitching happens later.

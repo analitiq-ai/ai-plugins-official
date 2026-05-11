@@ -23,8 +23,6 @@ document conforming to `https://schemas.analitiq.ai/pipeline/latest.json`.
   `status`, `connections`, `streams`, `schedule`, `engine`, `runtime`,
   `tags`.
 - Defaults the registry applies when fields are omitted.
-- Which fields the **plugin** must omit because they are server-managed
-  (see `../pipeline-builder/references/reserved-fields.md`).
 
 ## What this skill does NOT cover
 
@@ -40,10 +38,8 @@ Every authored document must:
 1. Declare `$schema: "https://schemas.analitiq.ai/pipeline/latest.json"`.
 2. Include `alias` (`[a-z0-9][a-z0-9_-]*`) and a non-empty `connections`
    object.
-3. Omit every reserved field (`pipeline_id`, `version`, `org_id`,
-   `created_at`, `updated_at`).
-4. Use **versioned** connection IDs in `connections.source` and
+3. Use **versioned** connection IDs in `connections.source` and
    `connections.destinations[]` — `<uuid>_v<positive integer>`.
-5. Use **versioned** stream IDs in `streams[]`.
-6. Pass `python scripts/validate_pipeline.py --entity pipeline
+4. Use **versioned** stream IDs in `streams[]`.
+5. Pass `python scripts/validate_pipeline.py --entity pipeline
    --document <path>` with zero error findings.

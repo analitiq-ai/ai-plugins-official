@@ -52,8 +52,6 @@ Every authored document must:
    (the schema marks this as a `const`-required field).
 2. Include `alias` (`[a-z0-9][a-z0-9_-]*`), `database_object`, and a
    non-empty `columns[]`.
-3. Omit every reserved field — especially `endpoint_id`, `connection_id`,
-   `schema_hash`.
-4. Preserve identifier strings verbatim from introspection.
-5. Pass `python scripts/validate_pipeline.py --entity database_endpoint
+3. Preserve identifier strings verbatim from introspection.
+4. Pass `python scripts/validate_pipeline.py --entity database_endpoint
    --document <path>` with zero error findings.

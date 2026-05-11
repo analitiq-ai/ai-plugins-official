@@ -113,7 +113,6 @@ Load on demand:
 - `skills/endpoint-spec/SKILL.md` + `spec-database-object.md` + `spec-columns.md`.
 - A matching `skills/endpoint-spec/examples/*.example.json` for the
   database dialect (`postgres`, `mysql`, `bigquery`, `mongodb`).
-- `skills/pipeline-builder/references/reserved-fields.md`
 
 ## Hard rules
 
@@ -124,8 +123,6 @@ Load on demand:
   / slug-ify (from `<schema>_<name>`), because alias is a slug
   (`^[a-z0-9][a-z0-9_-]*$`). The underlying `database_object.{schema,
   name}` keep their original case.
-- Never author `endpoint_id`, `connector_id`, `connector_version`,
-  `connection_id`, `schema_hash`. Server-managed.
 - Never run DDL. Discovery is read-only. No `CREATE`, `ALTER`, `DROP`.
 - Never embed credentials. The driver reads them from the
   `.secrets/credentials.json` file the user already populated.
