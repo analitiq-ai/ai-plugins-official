@@ -161,15 +161,29 @@ embeds them into `pipeline.json` and stream `endpoint_ref.connection_id`.
 The user (or the registry) replaces them with real IDs at submission time.
 The plugin makes no API calls.
 
-### Existing directories are not overwritten
+### Reusing existing connectors and connections
 
-If `pipelines/{alias}/`, `connections/{alias}/`, or `connectors/{alias}/`
-already exists, the orchestrator halts and asks the user to remove it
-manually before re-running. The plugin does not migrate legacy-shape
-artifacts — pre-existing files from earlier plugin versions
-(with positional `conn_1` refs or three-section mapping blocks) must be
-deleted first so the rebuild produces clean schema-aligned documents
-from scratch. The orchestrator never deletes files on the user's behalf.
+Adding a new pipeline to systems the user has already wired up is a
+very common case. The orchestrator reuses what's already on disk:
+
+- **`connectors/{alias}/`** — if `definition/connector.json` is
+  already present and parses, it is reused (no registry re-fetch).
+- **`connections/{alias}/`** — if `connection.json` is already
+  present and its `connector_alias` matches the side's connector,
+  the connection (and its existing `.secrets/credentials.json`) is
+  reused as-is. If the `connector_alias` doesn't match, the
+  orchestrator halts and asks the user to pick a different
+  `connection_alias` or remove the existing file themselves.
+- **`connections/{alias}/endpoints/*.json`** — endpoint files for
+  tables already discovered in a prior run are reused; only newly
+  selected tables run database introspection.
+
+The only directory that blocks the orchestrator is
+`pipelines/{pipeline_alias}/` itself. If it exists, the user is asked
+to pick a different `pipeline_alias` or remove the directory
+themselves first — pipelines are per-build artifacts, not shared
+state. The orchestrator never deletes files on the user's behalf and
+never overwrites a connection's `.secrets/`.
 
 ## Installation
 

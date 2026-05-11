@@ -54,27 +54,44 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
 
 ## Pipeline (full contract: `references/pipeline.md`)
 
-0. **Pre-flight: collision check** — before any research or authoring,
-   check whether `pipelines/{pipeline_alias}/`, `connections/{alias}/`
-   for either side, or `connectors/{alias}/` for either side already
-   exist in the current working directory. If any do, **halt** and ask
-   the user to remove them before re-running. Do not migrate legacy-shape
-   files.
+0. **Pre-flight: pipeline directory check** — before any research or
+   authoring, check whether `pipelines/{pipeline_alias}/` already
+   exists in the current working directory. If it does, **halt** and
+   ask the user whether to pick a different `pipeline_alias` or to
+   remove the existing directory themselves first. Do not migrate
+   legacy-shape pipeline files.
 
-   The user-facing message must include:
-   - The full paths of the existing directories.
-   - The exact `rm -rf <path>` commands they can run.
-   - A note that re-running after removal will produce fresh, schema-
-     aligned artifacts from scratch.
+   Existing `connectors/{alias}/` and `connections/{alias}/`
+   directories are **not** collisions. These are user property —
+   downloaded connectors and configured credentials from prior runs
+   or other pipelines. The orchestrator reuses them in phases 2, 5,
+   and 6 rather than asking the user to delete them. Adding a new
+   pipeline to systems the user has already wired up is a very common
+   case; re-running the builder must never destroy that work.
+
+   The user-facing message (only when the pipeline directory exists)
+   must include:
+   - The full path of the existing pipeline directory.
+   - The suggestion of choosing a different `pipeline_alias`.
+   - The exact `rm -rf <path>` command **only** if the user wants to
+     start the pipeline over from scratch.
 
 1. **Research** — invoke `pipeline-provider-researcher`. Receive
    `PipelineFacts` (discriminated by `source_kind` and `destination_kind`).
    If the user did not supply required inputs, halt and ask.
 
-2. **Connectors** — invoke `registry-browser` once for source and once
-   for destination, in parallel (single message, two tool calls). Each
-   call writes `connectors/{alias}/` from the DIP registry. The
-   downloaded `connector.json` is read-only — never modify it.
+2. **Connectors** — for each side, check whether
+   `connectors/{alias}/definition/connector.json` already exists and
+   parses as valid JSON:
+   - **If yes** → reuse it. Read it directly; do not re-fetch from
+     the registry. Record this in the final summary as "Reused
+     existing connector at `connectors/{alias}/`."
+   - **If no** (missing, unparseable, or schema-invalid) → invoke
+     `registry-browser` to fetch it.
+   When both sides need fetching, invoke `registry-browser` twice in
+   parallel (single message, two tool calls). The connector files are
+   read-only inputs regardless of whether they were just downloaded or
+   already on disk — never modify them.
 
 3. **Classify** — run the closed-enum mappers inline (see
    `references/enum-mappers.md`):
@@ -91,21 +108,46 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
    real registry-stamped IDs at submission time; the plugin makes **no
    API calls**.
 
-5. **Connections** — invoke `connection-creator` once per side, in
-   parallel. Each writes:
-   - `connections/{alias}/connection.json` — validates against
-     `connection/latest.json`.
-   - `connections/{alias}/.secrets/credentials.json` — template the user
-     fills in. Reference each secret as `secrets/{alias}/{key}` in
-     `connection.secret_refs`.
+5. **Connections** — for each side, check whether
+   `connections/{alias}/connection.json` already exists:
+   - **If yes** and its `connector_alias` matches the side's
+     connector → reuse it. Validate the existing file against
+     `connection/latest.json` (so a stale shape is caught early).
+     Read its `secret_refs` for downstream use. The user's existing
+     `.secrets/credentials.json` is left untouched. Record this in
+     the final summary as "Reused existing connection at
+     `connections/{alias}/`."
+   - **If yes** but its `connector_alias` does **not** match the
+     side's connector → halt and ask the user to either pick a
+     different `connection_alias` for this pipeline or confirm they
+     want to remove the existing connection themselves first. Do not
+     overwrite.
+   - **If no** → invoke `connection-creator`. It writes:
+     - `connections/{alias}/connection.json` — validates against
+       `connection/latest.json`.
+     - `connections/{alias}/.secrets/credentials.json` — template the
+       user fills in. Reference each secret as `secrets/{alias}/{key}`
+       in `connection.secret_refs`.
+   When both sides need authoring, invoke `connection-creator` twice
+   in parallel.
 
-6. **Endpoint discovery (database connections only)** — invoke
-   `private-endpoint-creator` once per database connection. Three sub-
-   modes, sequential per connection but parallel across connections:
-   `discover-schemas` → user picks → `discover-tables` → user picks →
-   `create-endpoints`. Each created endpoint validates against
-   `database-endpoint/latest.json`. Output:
-   `connections/{alias}/endpoints/{database_object.schema}_{database_object.name}.json`.
+6. **Endpoint discovery (database connections only)** — for each
+   database connection, run the three-mode discovery flow with
+   `private-endpoint-creator`: `discover-schemas` → user picks →
+   `discover-tables` → user picks → `create-endpoints`. Sub-modes
+   are sequential per connection but parallel across connections.
+
+   For each table the user selects, check whether
+   `connections/{alias}/endpoints/{database_object.schema}_{database_object.name}.json`
+   already exists:
+   - **If yes** → reuse it. Validate it against
+     `database-endpoint/latest.json` and record reuse in the final
+     summary. Do **not** re-introspect or rewrite it.
+   - **If no** → invoke `create-endpoints` for that table.
+
+   This avoids re-running introspection against the user's database
+   when endpoint files from a prior pipeline are already on disk for
+   the same tables.
 
 7. **Pipeline shell** — invoke `pipeline-creator`. Receives the alias→id
    map, schedule classification, and engine/runtime defaults. Writes
@@ -179,7 +221,11 @@ Report to the user:
 - Authored documents declare `$schema` with the published host
   (`https://schemas.analitiq.ai/...`). The validator fetches from the
   same host. See `references/schema-hosts.md`.
-- Never overwrite an existing `pipelines/{alias}/`, `connections/{alias}/`,
-  or `connectors/{alias}/` directory. The pre-flight check (phase 0) halts
-  and asks the user to remove the directory manually. Never delete files
-  on the user's behalf.
+- Never overwrite an existing `pipelines/{alias}/` directory. The
+  pre-flight check (phase 0) halts and asks the user to pick a
+  different alias or remove the directory themselves.
+- Reuse existing `connectors/{alias}/` and `connections/{alias}/`
+  directories when they are valid for the requested connector — these
+  are user property (downloaded connectors, configured credentials,
+  prior endpoint selections). Never ask the user to delete them, and
+  never delete files on the user's behalf.

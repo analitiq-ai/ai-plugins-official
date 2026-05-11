@@ -7,13 +7,13 @@ the next phase relies on.
 
 | # | Phase | Agent | Postcondition |
 |---|---|---|---|
-| 0 | Pre-flight collision check | _orchestrator_ | No conflicting directories exist on disk. |
+| 0 | Pre-flight pipeline-directory check | _orchestrator_ | `pipelines/{pipeline_alias}/` does not exist on disk. Existing `connectors/` and `connections/` directories are reused, not blocked. |
 | 1 | Research | `pipeline-provider-researcher` | A `PipelineFacts` JSON object is captured (see `io-contracts.md`). |
-| 2 | Connector download | `registry-browser` × 2 (parallel) | `connectors/{source}/` and `connectors/{destination}/` exist with `definition/connector.json` + (api only) `definition/endpoints/`. |
+| 2 | Connector download or reuse | `registry-browser` × {0,1,2} (parallel per missing side) | `connectors/{source}/` and `connectors/{destination}/` exist with `definition/connector.json` + (api only) `definition/endpoints/`. Sides that were already on disk are reused as-is. |
 | 3 | Classify | _orchestrator_ | `schedule.type`, `replication.method`, `write.mode` resolved against closed enums. |
 | 4 | Mint placeholder IDs | _orchestrator_ | Stable alias → versioned-UUID map exists for both connections and the pipeline. |
-| 5 | Connections | `connection-creator` × N (parallel per side) | One `connections/{alias}/connection.json` plus `connections/{alias}/.secrets/credentials.json` per side, each validating against `connection/latest.json`. |
-| 6 | Endpoint discovery | `private-endpoint-creator` × M (DB only) | `connections/{alias}/endpoints/*.json` for selected tables, each validating against `database-endpoint/latest.json`. |
+| 5 | Connections (author or reuse) | `connection-creator` × {0,1,2} (parallel per side missing on disk) | One `connections/{alias}/connection.json` plus `connections/{alias}/.secrets/credentials.json` per side, each validating against `connection/latest.json`. Sides already present (with matching `connector_alias`) are reused, including their existing `.secrets/`. |
+| 6 | Endpoint discovery | `private-endpoint-creator` × M (DB only, parallel across connections) | `connections/{alias}/endpoints/*.json` for selected tables, each validating against `database-endpoint/latest.json`. Endpoint files already on disk for the chosen tables are reused; only new tables run introspection. |
 | 7 | Pipeline shell | `pipeline-creator` | `pipelines/{alias}/pipeline.json` with `streams: []`, validating against `pipeline/latest.json`. |
 | 8 | Streams | `stream-creator` × K (parallel) | `pipelines/{alias}/streams/{stream-alias}.json` per selected endpoint, each validating against `stream/latest.json`. |
 | 9 | Stitch | _orchestrator_ | `pipeline.json#/streams` is populated with the K versioned stream IDs; bundle validates with `--bundle-root .`. |
@@ -24,12 +24,19 @@ the next phase relies on.
 
 The orchestrator must halt (and surface a clear message) when:
 
-- Phase 0 finds a conflicting directory.
+- Phase 0 finds an existing `pipelines/{pipeline_alias}/` directory.
+  (Existing `connectors/` and `connections/` directories are reused,
+  not blocked.)
 - Phase 1's required inputs are missing (`source_connector_alias`,
   `destination_connector_alias`, `pipeline_alias`).
-- Phase 2 cannot resolve a connector alias in the DIP registry.
+- Phase 2 cannot resolve a connector alias in the DIP registry **and**
+  no usable connector is already on disk for that side.
 - Phase 3's enum mappers fail to map an input (the user supplied
   something outside the closed set).
+- Phase 5 finds an existing `connections/{alias}/connection.json` whose
+  `connector_alias` does not match the side's connector. The user is
+  asked to pick a different `connection_alias` or remove the existing
+  file themselves.
 - Phase 5's `connection-creator` returns a structured refusal (e.g.
   unsupported auth type for the chosen connector).
 - Phase 6's database introspection fails (credentials wrong, network
