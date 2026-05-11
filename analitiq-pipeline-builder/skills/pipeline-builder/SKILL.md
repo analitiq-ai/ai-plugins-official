@@ -123,10 +123,10 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
 
 10. **Validate** — invoke `pipeline-schema-validator` against every
     artifact:
-    - Pipeline → `https://schemas.analitiq.work/pipeline/latest.json`.
-    - Stream → `https://schemas.analitiq.work/stream/latest.json`.
-    - Connection → `https://schemas.analitiq.work/connection/latest.json`.
-    - Database endpoint → `https://schemas.analitiq.work/database-endpoint/latest.json`.
+    - Pipeline → `https://schemas.analitiq.ai/pipeline/latest.json`.
+    - Stream → `https://schemas.analitiq.ai/stream/latest.json`.
+    - Connection → `https://schemas.analitiq.ai/connection/latest.json`.
+    - Database endpoint → `https://schemas.analitiq.ai/database-endpoint/latest.json`.
 
     The orchestrator should attempt at most **5 fix passes per artifact**
     — re-dispatch the matching creator with the validator's findings,
@@ -173,10 +173,9 @@ Report to the user:
   endpoint must resolve consistently. The `pipeline-stream-consistency`
   validator enforces this; pass `--bundle-root .` when validating the
   stitched pipeline.
-- Authored documents declare `$schema` with the **production** host
-  (`https://schemas.analitiq.ai/...`). The validator currently *fetches*
-  from the **dev** host (`https://schemas.analitiq.work/...`). See
-  `references/schema-hosts.md`.
+- Authored documents declare `$schema` with the published host
+  (`https://schemas.analitiq.ai/...`). The validator fetches from the
+  same host. See `references/schema-hosts.md`.
 - Never overwrite an existing `pipelines/{alias}/`, `connections/{alias}/`,
   or `connectors/{alias}/` directory. The pre-flight check (phase 0) halts
   and asks the user to remove the directory manually. Never delete files

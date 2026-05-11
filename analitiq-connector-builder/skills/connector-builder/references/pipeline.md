@@ -85,12 +85,12 @@ combinations are connection-scoped and discovered at runtime via
 ### 5. Validate
 
 Invoke `connector-schema-validator` with the connector document and
-`schema_url=https://schemas.analitiq.work/connector/latest.json`. For each
+`schema_url=https://schemas.analitiq.ai/connector/latest.json`. For each
 endpoint document, invoke the validator with the kind-specific URL:
 
-- API endpoint → `https://schemas.analitiq.work/api-endpoint/latest.json`.
+- API endpoint → `https://schemas.analitiq.ai/api-endpoint/latest.json`.
 - Database endpoint (when applicable in future) →
-  `https://schemas.analitiq.work/database-endpoint/latest.json`.
+  `https://schemas.analitiq.ai/database-endpoint/latest.json`.
 
 The orchestrator should attempt at most 5 fix passes per artifact —
 re-dispatch the matching creator with the validator's findings,

@@ -2,8 +2,7 @@
 
 Claude Code plugin that authors **pipeline**, **stream**, **connection**, and
 **database-endpoint** JSON documents conforming to the published Analitiq schema
-contract at [`schemas.analitiq.work`](https://schemas.analitiq.work) (dev) /
-`schemas.analitiq.ai` (production). Downloads connectors from the
+contract at [`schemas.analitiq.ai`](https://schemas.analitiq.ai). Downloads connectors from the
 [Analitiq DIP Registry](https://github.com/analitiq-ai/analitiq-dip-registry)
 and wires them into complete pipelines. Does **not** create connectors and does
 **not** call any registration APIs — it is a local authoring tool only.
@@ -105,14 +104,11 @@ Output is a single `Diagnostics` JSON object. Exit `0` iff `passed: true`.
 
 Tests live under `tests/pipeline_validator/`. Run with `pytest`.
 
-## Schema host (dev → prod)
+## Schema host
 
-- The validator currently *fetches* schemas from
-  `https://schemas.analitiq.work` (dev).
-- Authored documents declare `$schema` with the production host
-  `https://schemas.analitiq.ai/...` — that URL is locked by a `const` inside
-  the published schema.
-- When production cuts over, the validator's fetch host flips to `.ai`.
+- The validator fetches schemas from `https://schemas.analitiq.ai`.
+- Authored documents declare `$schema` with the same host — the URL is
+  locked by a `const` inside the published schema.
 
 ## File output
 
@@ -187,7 +183,7 @@ claude plugin add ./analitiq-pipeline-builder
 
 - [Analitiq DIP Registry](https://github.com/analitiq-ai/analitiq-dip-registry) — connectors authored by the sibling `analitiq-connector-builder` plugin.
 - [Schema contracts](https://github.com/analitiq-ai/analitiq-infra/tree/main/docs/schema-contracts) — authoritative shape specs.
-- [Published schemas](https://schemas.analitiq.work) — the JSON Schemas the validator runs against.
+- [Published schemas](https://schemas.analitiq.ai) — the JSON Schemas the validator runs against.
 
 ## License
 

@@ -22,7 +22,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "validate_connector.py"
 FIXTURES = Path(__file__).parent / "fixtures"
 EXAMPLES_GLOB = list(REPO_ROOT.glob("skills/connector-spec-*/examples/*.example.json"))
-SCHEMA_URL = "https://schemas.analitiq.work/connector/latest.json"
+SCHEMA_URL = "https://schemas.analitiq.ai/connector/latest.json"
 
 
 def run_validator(document_path: Path, *extra: str, schema_url: str = SCHEMA_URL) -> dict:

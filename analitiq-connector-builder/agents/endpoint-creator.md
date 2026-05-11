@@ -1,6 +1,6 @@
 ---
 name: endpoint-creator
-description: Author an endpoint JSON document for an API connector package, conforming to https://schemas.analitiq.work/api-endpoint/latest.json. Invoked by the connector-builder orchestrator only when the connector kind is api. Multiple endpoint creators may run in parallel — each authors one endpoint file. Inputs are ProviderFacts, the assembled connector document (for transport refs), and one resource descriptor. Output is an EndpointCreatorOutput JSON object containing one endpoint document.
+description: Author an endpoint JSON document for an API connector package, conforming to https://schemas.analitiq.ai/api-endpoint/latest.json. Invoked by the connector-builder orchestrator only when the connector kind is api. Multiple endpoint creators may run in parallel — each authors one endpoint file. Inputs are ProviderFacts, the assembled connector document (for transport refs), and one resource descriptor. Output is an EndpointCreatorOutput JSON object containing one endpoint document.
 tools: Read, Glob, Grep
 ---
 

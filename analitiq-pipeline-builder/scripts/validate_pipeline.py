@@ -6,11 +6,9 @@ Layer 2: Semantic validators encoding rules that JSON Schema can't express.
 
 Output: a single Diagnostics JSON object on stdout. Exit 0 iff `passed` is true.
 
-The fetch URL (--schema-url) and the document's own `$schema` field are
-deliberately decoupled: schemas are served from the dev host
-(schemas.analitiq.work) while authored documents declare the production
-host (schemas.analitiq.ai) — the `$schema` const inside each schema
-locks that.
+Schemas are fetched from the published host (schemas.analitiq.ai), and
+authored documents declare the same host in their `$schema` field — the
+`$schema` const inside each schema locks that.
 """
 
 from __future__ import annotations
@@ -60,10 +58,10 @@ except ImportError:  # Python < 3.9 — not supported by the plugin but fail cle
 CACHE_DIR = Path.home() / ".cache" / "analitiq" / "schemas"
 
 ENTITY_SCHEMAS = {
-    "pipeline": "https://schemas.analitiq.work/pipeline/latest.json",
-    "stream": "https://schemas.analitiq.work/stream/latest.json",
-    "connection": "https://schemas.analitiq.work/connection/latest.json",
-    "database_endpoint": "https://schemas.analitiq.work/database-endpoint/latest.json",
+    "pipeline": "https://schemas.analitiq.ai/pipeline/latest.json",
+    "stream": "https://schemas.analitiq.ai/stream/latest.json",
+    "connection": "https://schemas.analitiq.ai/connection/latest.json",
+    "database_endpoint": "https://schemas.analitiq.ai/database-endpoint/latest.json",
 }
 
 

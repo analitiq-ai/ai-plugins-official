@@ -208,7 +208,7 @@ Returned by `api-connector-creator` and `db-connector-creator`.
   "properties": {
     "connector": {
       "anyOf": [
-        { "type": "object", "description": "Assembled connector body, ready for validation against https://schemas.analitiq.work/connector/latest.json." },
+        { "type": "object", "description": "Assembled connector body, ready for validation against https://schemas.analitiq.ai/connector/latest.json." },
         { "type": "null", "description": "Returned by stub agents (e.g. storage-connector-creator) that decline to author." }
       ]
     },
@@ -238,7 +238,7 @@ Returned by `api-connector-creator` and `db-connector-creator`.
           "alias": { "type": "string" },
           "document": {
             "type": "object",
-            "description": "One endpoint document body. Must validate against https://schemas.analitiq.work/api-endpoint/latest.json."
+            "description": "One endpoint document body. Must validate against https://schemas.analitiq.ai/api-endpoint/latest.json."
           }
         }
       }
