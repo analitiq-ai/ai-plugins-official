@@ -22,7 +22,7 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 try:
     from jsonschema import Draft202012Validator
@@ -52,8 +52,11 @@ except ImportError:  # Python < 3.9 — not supported by the plugin
 
 # Detect "tzdata missing" on Python ≥ 3.9 — `ZoneInfo` imports fine but every
 # lookup raises because the system has no tzdata. We probe once at startup so
-# `check_schedule_shape` can degrade to "syntax-only" instead of false-
-# flagging every legitimate timezone.
+# `check_schedule_shape` can skip the IANA-name check entirely instead of
+# false-flagging every legitimate timezone. The stderr warning below tells the
+# user the check was skipped; we do not fall back to a regex-style "looks like
+# a timezone" check, because tzdata-less environments are rare in practice and
+# a partial check would be more confusing than no check at all.
 _TZDATA_AVAILABLE = False
 if ZoneInfo is not None:
     try:
@@ -171,9 +174,13 @@ def _strip_required_server_fields(schema: dict, entity: str) -> dict:
     can pass Layer 1. The `reserved-field` Layer 2 validator still catches the
     inverse case (an authored doc that *does* contain a server-managed field).
 
-    The clone is deep so callers can't mutate the cached schema held by
-    `fetch_schema`. A shallow clone would alias nested dicts and a future
-    in-place edit would poison the cache.
+    The clone is deep so this helper never mutates its input. `fetch_schema`
+    re-parses from disk on every call, so there's no in-memory cache to
+    poison today — but a shallow clone would still leak edits into the input
+    object the caller holds (e.g., the schema dict parsed once at the top of
+    `main()` and reused for multiple validation passes in a long-running
+    embedder). Deep-clone is the cheapest way to make the helper safe to
+    compose.
     """
     server_fields = RESERVED_FIELDS_BY_ENTITY.get(entity, set())
     if not server_fields:
@@ -620,7 +627,7 @@ def check_runtime_ranges(doc: dict) -> list[dict]:
 def check_endpoint_ref_shape(doc: dict) -> list[dict]:
     findings: list[dict] = []
 
-    def _check_ref(ref: Any, path: str, side: str) -> None:
+    def _check_ref(ref: Any, path: str) -> None:
         if not isinstance(ref, dict):
             return
         scope = ref.get("scope")
@@ -637,7 +644,7 @@ def check_endpoint_ref_shape(doc: dict) -> list[dict]:
 
     source = doc.get("source")
     if isinstance(source, dict):
-        _check_ref(source.get("endpoint_ref"), "/source/endpoint_ref", "source")
+        _check_ref(source.get("endpoint_ref"), "/source/endpoint_ref")
     destinations = doc.get("destinations")
     seen: set[tuple[str, str, str]] = set()
     if isinstance(destinations, list):
@@ -645,7 +652,7 @@ def check_endpoint_ref_shape(doc: dict) -> list[dict]:
             if not isinstance(dest, dict):
                 continue
             ref = dest.get("endpoint_ref")
-            _check_ref(ref, f"/destinations/{i}/endpoint_ref", "destination")
+            _check_ref(ref, f"/destinations/{i}/endpoint_ref")
             if isinstance(ref, dict):
                 key = (
                     str(ref.get("scope")),
@@ -956,7 +963,7 @@ def _load_stream_files(
     out: list[tuple[Path, dict]] = []
     for sf in stream_files:
         try:
-            sdoc = json.loads(sf.read_text())
+            raw = sf.read_text()
         except OSError as exc:
             findings.append(
                 finding(
@@ -968,6 +975,19 @@ def _load_stream_files(
                 )
             )
             continue
+        except UnicodeDecodeError as exc:
+            findings.append(
+                finding(
+                    validator_id,
+                    "error",
+                    "/streams",
+                    f"stream file {sf.name} is not UTF-8: {exc}",
+                    rule_doc="pipelines/pipeline-schema-parameterization.md#cross-doc-consistency",
+                )
+            )
+            continue
+        try:
+            sdoc = json.loads(raw)
         except json.JSONDecodeError as exc:
             findings.append(
                 finding(

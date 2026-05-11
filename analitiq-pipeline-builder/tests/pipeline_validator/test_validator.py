@@ -647,6 +647,23 @@ def test_malformed_stream_file_in_bundle_caught(tmp_path):
     )
 
 
+def test_non_utf8_stream_file_in_bundle_caught(tmp_path):
+    """A non-UTF-8 stream file must emit a finding, not crash the validator."""
+    import shutil
+    bundle_src = FIXTURES / "pipeline_consistency" / "consistent"
+    bundle = tmp_path / "bundle"
+    shutil.copytree(bundle_src, bundle)
+    # Write raw bytes that aren't valid UTF-8.
+    binary = bundle / "pipelines" / "wise_to_postgresql" / "streams" / "binary.json"
+    binary.write_bytes(b"\xff\xfe\x00\x01not valid utf-8")
+    pipeline_doc = bundle / "pipelines" / "wise_to_postgresql" / "pipeline.json"
+    result = run_validator(pipeline_doc, "pipeline", "--semantic-only", "--bundle-root", str(bundle))
+    errs = errors_of(result, "pipeline-stream-consistency")
+    assert any("binary.json" in e["message"] and "UTF-8" in e["message"] for e in errs), (
+        f"expected UTF-8 decode finding for binary.json; got {errs}"
+    )
+
+
 def test_strip_required_server_fields_walks_nested_required():
     """Unit-test for the Layer 1 pre-processor (load it via importlib to avoid CLI overhead)."""
     import importlib.util
