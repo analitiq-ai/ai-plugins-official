@@ -1,7 +1,7 @@
 {
   "$schema": "https://schemas.analitiq.ai/stream/latest.json",
   "alias": "transfers",
-  "pipeline_id": "b4904c77-0a4a-4a8d-a768-4a8b5f2f2414",
+  "pipeline_id": "7df1856b-3bb9-5c6b-84b3-a200dc02cb3e",
   "source": {
     "endpoint_ref": {
       "scope": "connector",

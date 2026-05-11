@@ -5,7 +5,7 @@
   "source": {
     "endpoint_ref": {
       "scope": "connector",
-      "connection_id": "00000000-0000-4000-8000-000000000003_v1",
+      "connection_id": "00000000-0000-4000-8000-000000000099_v1",
       "alias": "transfers"
     },
     "replication": {"method": "full_refresh"}
@@ -14,7 +14,7 @@
     {
       "endpoint_ref": {
         "scope": "connection",
-        "connection_id": "00000000-0000-4000-8000-000000000099_v1",
+        "connection_id": "00000000-0000-4000-8000-000000000002_v1",
         "alias": "warehouse_transfers"
       },
       "write": {"mode": "insert"}

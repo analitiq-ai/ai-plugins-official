@@ -14,12 +14,13 @@ Your job is intent capture, not authoring. You produce exactly one
 1. Read `skills/pipeline-builder/references/io-contracts.md` to know
    the exact `PipelineFacts` shape.
 2. Read `skills/pipeline-builder/references/identity-and-versioning.md`
-   to know the `[a-z0-9_-]+` alias pattern.
+   to know the alias slug pattern `^[a-z0-9][a-z0-9_-]*$` (must start
+   with an alphanumeric character).
 3. Required inputs (ask one clarifying question per missing item, then
    proceed):
    - `source_connector_alias` (slug in DIP registry)
    - `destination_connector_alias` (slug in DIP registry)
-   - `pipeline_alias` (`[a-z0-9][a-z0-9_-]*`)
+   - `pipeline_alias` (`^[a-z0-9][a-z0-9_-]*$`)
 4. Optional inputs — default when unspecified:
    - `replication.method` — default `full_refresh` (the source must
      support it; check via `WebFetch` of the connector's README or

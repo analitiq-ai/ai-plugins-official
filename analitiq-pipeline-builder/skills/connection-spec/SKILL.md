@@ -22,7 +22,7 @@ document conforming to `https://schemas.analitiq.ai/connection/latest.json`.
 - Top-level shape: `$schema`, `alias`, `connector_alias`, `display_name`,
   `description`, `parameters`, `secret_refs`, `selections`, `discovered`,
   `tags`, `documentation_url`.
-- The seven `secret_refs` URI prefixes (`secrets/`, `connections/`,
+- The six `secret_refs` URI prefixes (`secrets/`, `connections/`,
   `ssm:/`, `arn:aws:secretsmanager:…:secret:…`,
   `arn:aws:ssm:…:parameter/…`, `s3://…`).
 - How to derive `parameters` and `secret_refs` keys from the connector's

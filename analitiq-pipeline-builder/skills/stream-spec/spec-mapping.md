@@ -54,8 +54,8 @@ Must be unique within `assignments`. The `mapping-shape` validator
 catches duplicates.
 
 Cross-document: each `target.path` must exist in the resolved
-destination endpoint schema. The `pipeline-stream-consistency`
-validator enforces this when the destination endpoint resolves.
+destination endpoint schema. Endpoint resolution is server-side at
+save time; the local validator does **not** check this.
 
 ## `arrow_type` vocabulary
 

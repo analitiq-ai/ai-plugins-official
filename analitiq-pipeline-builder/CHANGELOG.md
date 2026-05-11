@@ -4,10 +4,11 @@
 
 Realignment with the published Analitiq schema contract. Breaking change: the
 plugin no longer emits the legacy `conn_1`/`conn_2` positional connection refs
-or the three-section (`assignments` + `source_to_generic` +
-`generic_to_destination`) mapping block. Pre-existing pipelines, connections,
-and endpoint files from 3.x are not migrated and must be regenerated from
-scratch.
+or the legacy server-managed mapping fields (`source_to_generic`,
+`generic_to_destination`, `assignments_hash`, `type_mapping_assignments_hash`).
+The authored mapping block keeps `assignments` only; the registry computes the
+rest. Pre-existing pipelines, connections, and endpoint files from 3.x are not
+migrated and must be regenerated from scratch.
 
 ### Added
 - `scripts/validate_pipeline.py` — Draft 2020-12 JSON Schema validation plus

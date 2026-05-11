@@ -42,6 +42,6 @@ the runtime, not the stream. The runtime-side validator rejects them.
 - Unary operators (`is_null`, `is_not_null`) omit `value`.
 - All other operators include `value` matching the column's data type
   (or for `in` / `not_in`, an array of such values).
-- `field` references a column (database) or parameter key (API). The
-  consistency validator resolves it against the endpoint schema when
-  `--bundle-root` is passed.
+- `field` references a column (database) or parameter key (API).
+  Field-existence is enforced server-side; the local validator does
+  not resolve filter fields against endpoint files.

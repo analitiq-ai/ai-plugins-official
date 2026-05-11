@@ -15,10 +15,12 @@ validator (see `scripts/validate_pipeline.py`) enforces this.
 
 ## Stream
 
-All pipeline-reserved fields plus:
-
 - `stream_id`
+- `version`
 - `stream_schema_version`
+- `org_id`
+- `created_at`
+- `updated_at`
 - `schema_hash`
 - `assignments_hash` (top-level and inside `mapping`)
 - `source_schema_fingerprint`
@@ -29,10 +31,14 @@ All pipeline-reserved fields plus:
 - `generic_to_destination`
 - `type_mapping_assignments_hash`
 
-The legacy three-section mapping (`source_to_generic`,
-`generic_to_destination`, plus hash fields) is server-managed under the
-new schema. Authored mapping is `assignments`-only — one entry per
-destination field. The registry computes the rest.
+Note: `pipeline_id` **is** authored on streams (as a base UUID — no
+`_v<n>` suffix). It points at the parent pipeline's identity and is
+required, not reserved. See `identity-and-versioning.md`.
+
+The legacy mapping fields (`source_to_generic`, `generic_to_destination`,
+plus the hash fields above) are server-managed under the new schema.
+Authored mapping is `assignments`-only — one entry per destination field.
+The registry computes the rest.
 
 ## Connection
 

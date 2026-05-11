@@ -46,9 +46,25 @@ except ImportError as exc:
 
 try:
     from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-except ImportError:  # Python < 3.9 — not supported by the plugin but fail clean
+except ImportError:  # Python < 3.9 — not supported by the plugin
     ZoneInfo = None  # type: ignore[assignment]
     ZoneInfoNotFoundError = Exception  # type: ignore[assignment,misc]
+
+# Detect "tzdata missing" on Python ≥ 3.9 — `ZoneInfo` imports fine but every
+# lookup raises because the system has no tzdata. We probe once at startup so
+# `check_schedule_shape` can degrade to "syntax-only" instead of false-
+# flagging every legitimate timezone.
+_TZDATA_AVAILABLE = False
+if ZoneInfo is not None:
+    try:
+        ZoneInfo("UTC")
+        _TZDATA_AVAILABLE = True
+    except Exception:  # noqa: BLE001 — any failure means tzdata is broken/missing
+        print(
+            "warning: zoneinfo is available but tzdata is missing — schedule.timezone "
+            "validation will be skipped. Install the `tzdata` package to enable it.",
+            file=sys.stderr,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -83,8 +99,17 @@ def fetch_schema(url: str, cache: bool = True) -> dict:
         body = resp.read().decode()
     schema = json.loads(body)
     tmp_path = cache_path.with_suffix(".tmp")
-    tmp_path.write_text(body)
-    os.replace(tmp_path, cache_path)
+    try:
+        tmp_path.write_text(body)
+        os.replace(tmp_path, cache_path)
+    except OSError as exc:
+        # Cache write failed (disk full, antivirus lock, etc.). The schema is
+        # in memory and the caller can proceed; just clean up the temp file.
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        print(f"warning: schema cache write failed: {exc}", file=sys.stderr)
     return schema
 
 
@@ -134,23 +159,40 @@ def finding(
 
 
 def _strip_required_server_fields(schema: dict, entity: str) -> dict:
-    """Return a shallow-cloned schema with server-managed fields removed from `required`.
+    """Return a deep-cloned schema with server-managed fields removed from every `required` array.
 
     The published pipeline/stream/connection schemas describe the canonical
     server-stamped document, so they mark fields like `pipeline_id`, `version`,
     `org_id`, `created_at`, `updated_at` as required at the JSON Schema level.
     Authored documents intentionally omit those fields (the registry stamps
-    them on insert). This helper drops just those entries from the top-level
-    `required` array so authored documents can pass Layer 1; the
-    `reserved-field` Layer 2 validator still catches the inverse case (an
-    authored doc that *does* contain a server-managed field).
+    them on insert). This helper walks the schema (including nested objects,
+    `$defs`, and `allOf`/`oneOf`/`anyOf` branches) and drops every reserved-
+    field entry from each `required` array it encounters so authored documents
+    can pass Layer 1. The `reserved-field` Layer 2 validator still catches the
+    inverse case (an authored doc that *does* contain a server-managed field).
+
+    The clone is deep so callers can't mutate the cached schema held by
+    `fetch_schema`. A shallow clone would alias nested dicts and a future
+    in-place edit would poison the cache.
     """
     server_fields = RESERVED_FIELDS_BY_ENTITY.get(entity, set())
-    if not server_fields or "required" not in schema:
+    if not server_fields:
         return schema
-    cloned = dict(schema)
-    cloned["required"] = [r for r in schema["required"] if r not in server_fields]
-    return cloned
+
+    def _walk(node: Any) -> Any:
+        if isinstance(node, dict):
+            cloned: dict = {}
+            for k, v in node.items():
+                if k == "required" and isinstance(v, list):
+                    cloned[k] = [r for r in v if r not in server_fields]
+                else:
+                    cloned[k] = _walk(v)
+            return cloned
+        if isinstance(node, list):
+            return [_walk(x) for x in node]
+        return node
+
+    return _walk(schema)
 
 
 def layer1_jsonschema(document: dict, schema: dict, entity: str) -> list[dict]:
@@ -257,6 +299,18 @@ SECRET_REF_PATTERNS = [
 ]
 
 
+# Per-entity rule_doc path for reserved-field findings. Auto-generating these
+# from the entity name produces wrong paths for `database_endpoint` (the
+# directory is `endpoints/`, not `database_endpoints/`; the filename uses a
+# hyphen, not an underscore), so they're enumerated here.
+_RESERVED_FIELD_RULE_DOC = {
+    "pipeline": "pipelines/pipeline-schema-parameterization.md#server-managed-and-reserved-fields",
+    "stream": "streams/stream-schema-parameterization.md#server-managed-and-reserved-fields",
+    "connection": "connections/connection-schema-parameterization.md#server-managed-and-reserved-fields",
+    "database_endpoint": "endpoints/database-endpoint-schema-parameterization.md#server-managed-and-reserved-fields",
+}
+
+
 # ---------------------------------------------------------------------------
 # reserved-field
 # ---------------------------------------------------------------------------
@@ -265,6 +319,7 @@ SECRET_REF_PATTERNS = [
 def check_reserved_fields(doc: dict, entity: str) -> list[dict]:
     reserved = RESERVED_FIELDS_BY_ENTITY.get(entity, set())
     findings: list[dict] = []
+    rule_doc = _RESERVED_FIELD_RULE_DOC.get(entity, "")
     for field in sorted(reserved):
         if field in doc:
             findings.append(
@@ -273,7 +328,7 @@ def check_reserved_fields(doc: dict, entity: str) -> list[dict]:
                     "error",
                     f"/{field}",
                     f"Reserved server-managed field '{field}' must not appear in authored {entity} documents.",
-                    rule_doc=f"{entity}s/{entity}-schema-parameterization.md#server-managed-and-reserved-fields",
+                    rule_doc=rule_doc,
                 )
             )
     if entity == "stream":
@@ -285,7 +340,7 @@ def check_reserved_fields(doc: dict, entity: str) -> list[dict]:
                     "error",
                     "/mapping/assignments_hash",
                     "Reserved server-managed field 'assignments_hash' must not appear inside authored mapping.",
-                    rule_doc="streams/stream-schema-parameterization.md#server-managed-and-reserved-fields",
+                    rule_doc=rule_doc,
                 )
             )
     return findings
@@ -463,7 +518,7 @@ def check_schedule_shape(doc: dict) -> list[dict]:
                 )
             )
     tz = schedule.get("timezone")
-    if isinstance(tz, str) and ZoneInfo is not None:
+    if isinstance(tz, str) and _TZDATA_AVAILABLE:
         try:
             ZoneInfo(tz)
         except (ZoneInfoNotFoundError, ValueError):
@@ -869,33 +924,101 @@ def _strip_version(versioned: str) -> str | None:
     return m.group(1) if m else None
 
 
-def _find_stream_files(bundle_root: Path) -> list[Path]:
-    return sorted(bundle_root.rglob("streams/*.json"))
+def _stream_files_for_pipeline(
+    bundle_root: Path,
+    pipeline_alias: str | None,
+) -> list[Path]:
+    """Return the stream files that belong to this pipeline.
+
+    Scopes the lookup to `bundle_root/pipelines/{alias}/streams/*.json` so a
+    bundle containing several pipelines doesn't cause this pipeline to validate
+    against sibling pipelines' streams. Falls back to `bundle_root/streams/`
+    when the conventional layout isn't present (the user passed the pipeline
+    directory directly as the bundle root).
+    """
+    if not isinstance(pipeline_alias, str) or not pipeline_alias:
+        return []
+    scoped = bundle_root / "pipelines" / pipeline_alias / "streams"
+    if scoped.is_dir():
+        return sorted(scoped.glob("*.json"))
+    fallback = bundle_root / "streams"
+    if fallback.is_dir():
+        return sorted(fallback.glob("*.json"))
+    return []
+
+
+def _load_stream_files(
+    stream_files: list[Path],
+    findings: list[dict],
+    validator_id: str,
+) -> list[tuple[Path, dict]]:
+    """Read + parse stream files. Emits a finding per failure rather than skipping."""
+    out: list[tuple[Path, dict]] = []
+    for sf in stream_files:
+        try:
+            sdoc = json.loads(sf.read_text())
+        except OSError as exc:
+            findings.append(
+                finding(
+                    validator_id,
+                    "error",
+                    "/streams",
+                    f"cannot read stream file {sf.name}: {exc}",
+                    rule_doc="pipelines/pipeline-schema-parameterization.md#cross-doc-consistency",
+                )
+            )
+            continue
+        except json.JSONDecodeError as exc:
+            findings.append(
+                finding(
+                    validator_id,
+                    "error",
+                    "/streams",
+                    f"stream file {sf.name} is not valid JSON: {exc.msg} at line {exc.lineno} col {exc.colno}",
+                    rule_doc="pipelines/pipeline-schema-parameterization.md#cross-doc-consistency",
+                )
+            )
+            continue
+        if not isinstance(sdoc, dict):
+            findings.append(
+                finding(
+                    validator_id,
+                    "error",
+                    "/streams",
+                    f"stream file {sf.name} root must be a JSON object; got {type(sdoc).__name__}.",
+                    rule_doc="pipelines/pipeline-schema-parameterization.md#cross-doc-consistency",
+                )
+            )
+            continue
+        out.append((sf, sdoc))
+    return out
 
 
 def check_pipeline_stream_consistency(doc: dict, bundle_root: Path | None) -> list[dict]:
     findings: list[dict] = []
-    if bundle_root is None:
-        return findings
     streams_listed = doc.get("streams") or []
     if not isinstance(streams_listed, list) or not streams_listed:
         return findings
+    if bundle_root is None:
+        return [
+            finding(
+                "pipeline-stream-consistency",
+                "warning",
+                "/streams",
+                "pipeline-stream cross-doc consistency not checked; pass --bundle-root to "
+                "verify stream files match pipeline references.",
+                rule_doc="pipelines/pipeline-schema-parameterization.md#cross-doc-consistency",
+            )
+        ]
     pipeline_alias = doc.get("alias")
     connections = doc.get("connections") or {}
     source_id = connections.get("source") if isinstance(connections, dict) else None
     dest_ids = connections.get("destinations") if isinstance(connections, dict) else None
     dest_set = set(dest_ids) if isinstance(dest_ids, list) else set()
 
-    stream_files = _find_stream_files(bundle_root)
-    streams_by_id: dict[str, dict] = {}
+    stream_files = _stream_files_for_pipeline(bundle_root, pipeline_alias)
     streams_by_alias: dict[str, tuple[Path, dict]] = {}
-    for sf in stream_files:
-        try:
-            sdoc = json.loads(sf.read_text())
-        except (OSError, json.JSONDecodeError):
-            continue
-        if not isinstance(sdoc, dict):
-            continue
+    for sf, sdoc in _load_stream_files(stream_files, findings, "pipeline-stream-consistency"):
         alias = sdoc.get("alias")
         if isinstance(alias, str):
             streams_by_alias[alias] = (sf, sdoc)
@@ -920,7 +1043,11 @@ def check_pipeline_stream_consistency(doc: dict, bundle_root: Path | None) -> li
             base_uuids_seen[base] = f"/streams/{i}"
 
     # Match streams to files by `pipeline_id` (base UUID) — when we can find one.
-    pipeline_base = _strip_version(_synthetic_pipeline_id(pipeline_alias)) if pipeline_alias else None
+    pipeline_base = (
+        _strip_version(_synthetic_pipeline_id(pipeline_alias))
+        if isinstance(pipeline_alias, str)
+        else None
+    )
     for sf, sdoc in streams_by_alias.values():
         spid = sdoc.get("pipeline_id")
         if pipeline_base is not None and isinstance(spid, str) and spid != pipeline_base:
@@ -972,7 +1099,13 @@ def check_pipeline_stream_consistency(doc: dict, bundle_root: Path | None) -> li
 
 
 def _synthetic_pipeline_id(alias: str) -> str:
-    """Mint the deterministic placeholder versioned ID the orchestrator uses for a pipeline."""
+    """Mint the deterministic placeholder versioned ID the orchestrator uses for a pipeline.
+
+    Caller must pass a string. Non-string aliases come from malformed documents
+    and should be filtered upstream rather than reaching this helper.
+    """
+    if not isinstance(alias, str):
+        raise TypeError(f"_synthetic_pipeline_id requires a string alias, got {type(alias).__name__}")
     import uuid
     base = uuid.uuid5(uuid.NAMESPACE_URL, f"analitiq:pipeline:{alias}")
     return f"{base}_v1"
@@ -1012,13 +1145,11 @@ def check_status_lifecycle(doc: dict, bundle_root: Path | None) -> list[dict]:
             )
         )
         return findings
+    pipeline_alias = doc.get("alias")
+    stream_files = _stream_files_for_pipeline(bundle_root, pipeline_alias)
     any_active = False
-    for sf in _find_stream_files(bundle_root):
-        try:
-            sdoc = json.loads(sf.read_text())
-        except (OSError, json.JSONDecodeError):
-            continue
-        if isinstance(sdoc, dict) and sdoc.get("status") == "active":
+    for _, sdoc in _load_stream_files(stream_files, findings, "status-lifecycle"):
+        if sdoc.get("status") == "active":
             any_active = True
             break
     if not any_active:
@@ -1069,6 +1200,13 @@ def run_semantic_validators(
 # ---------------------------------------------------------------------------
 
 
+def _emit(findings: list[dict]) -> int:
+    """Print Diagnostics JSON and return the appropriate exit code."""
+    passed = all(f["severity"] != "error" for f in findings)
+    print(json.dumps({"passed": passed, "findings": findings}, indent=2))
+    return 0 if passed else 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate an Analitiq pipeline / stream / connection / database-endpoint document.")
     parser.add_argument(
@@ -1090,48 +1228,66 @@ def main() -> int:
 
     schema_url = args.schema_url or ENTITY_SCHEMAS[args.entity]
     document_path = Path(args.document)
-    bundle_root = Path(args.bundle_root).resolve() if args.bundle_root else None
+
+    bundle_root: Path | None = None
+    if args.bundle_root:
+        bundle_root = Path(args.bundle_root).resolve()
+        if not bundle_root.is_dir():
+            return _emit([
+                finding("json-schema", "error", "",
+                        f"--bundle-root {bundle_root} is not an existing directory.")
+            ])
+
+    # Read + parse the document. Each failure mode gets its own diagnostic.
+    try:
+        raw = document_path.read_text()
+    except FileNotFoundError:
+        return _emit([finding("json-schema", "error", "",
+                              f"Document not found: {document_path}")])
+    except (PermissionError, IsADirectoryError, OSError) as exc:
+        return _emit([finding("json-schema", "error", "",
+                              f"Cannot read document {document_path}: {exc}")])
+    except UnicodeDecodeError as exc:
+        return _emit([finding("json-schema", "error", "",
+                              f"Document {document_path} is not UTF-8: {exc}")])
 
     try:
-        document = json.loads(document_path.read_text())
-    except (FileNotFoundError, json.JSONDecodeError) as exc:
-        print(
-            json.dumps(
-                {
-                    "passed": False,
-                    "findings": [
-                        finding("json-schema", "error", "", f"Cannot read document: {exc}")
-                    ],
-                }
-            )
-        )
-        return 1
+        document = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        return _emit([finding("json-schema", "error", "",
+                              f"Document {document_path} is not valid JSON: "
+                              f"{exc.msg} at line {exc.lineno} col {exc.colno}")])
+
+    if not isinstance(document, dict):
+        return _emit([finding("json-schema", "error", "",
+                              f"Document root must be a JSON object; got {type(document).__name__}.")])
 
     findings: list[dict] = []
 
+    # Layer 1 fetch + validation. Fetch failure records a finding but does
+    # NOT short-circuit Layer 2 — semantic validators don't depend on the
+    # schema and would otherwise be wastefully gated on a transient network
+    # blip.
     if not args.semantic_only:
+        schema: dict | None = None
         try:
             schema = fetch_schema(schema_url, cache=not args.no_cache)
-        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError, OSError, RuntimeError) as exc:
-            print(
-                json.dumps(
-                    {
-                        "passed": False,
-                        "findings": [
-                            finding("json-schema", "error", "", f"Cannot fetch schema {schema_url}: {exc}")
-                        ],
-                    }
+        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError,
+                json.JSONDecodeError, OSError, RuntimeError) as exc:
+            findings.append(
+                finding(
+                    "json-schema", "error", "",
+                    f"Cannot fetch schema {schema_url}: {exc}. Layer 1 skipped; "
+                    "re-run with connectivity or use --semantic-only to suppress.",
                 )
             )
-            return 1
-        findings.extend(layer1_jsonschema(document, schema, args.entity))
+        if schema is not None:
+            findings.extend(layer1_jsonschema(document, schema, args.entity))
 
     if not args.json_only:
         findings.extend(run_semantic_validators(document, args.entity, bundle_root=bundle_root))
 
-    passed = all(f["severity"] != "error" for f in findings)
-    print(json.dumps({"passed": passed, "findings": findings}, indent=2))
-    return 0 if passed else 1
+    return _emit(findings)
 
 
 if __name__ == "__main__":
