@@ -59,9 +59,8 @@ the registry owns it.
 
 ## Why placeholders, not API calls
 
-The user explicitly chose this approach over plugin-driven registration
-(see the plan file at `~/.claude/plans/make-a-branch-to-resilient-dawn.md`).
-Reasons:
+This plugin authors locally and never calls the registration API.
+Rationale:
 
 - No auth handling burden inside the plugin.
 - No network dependency for the build path.

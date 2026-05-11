@@ -27,9 +27,10 @@
 ## `selected_columns` (database only)
 
 A field projection. Omit for "all columns from the endpoint schema."
-Every entry must exist in the resolved endpoint's `columns[]`. The
-`pipeline-stream-consistency` validator verifies this when the source
-endpoint can be resolved.
+Every entry must reference an existing column in the source endpoint's
+`columns[]`. The local validator does **not** resolve column names
+against endpoint files — this check happens server-side at save time;
+typos surface as a registry rejection rather than a local error.
 
 ## `filters`
 

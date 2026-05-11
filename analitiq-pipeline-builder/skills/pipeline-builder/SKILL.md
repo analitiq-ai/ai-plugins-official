@@ -15,8 +15,9 @@ validation, drift, and writing files.
 
 - `source_connector_alias` (required) — the DIP-registry alias of the source.
 - `destination_connector_alias` (required) — the DIP-registry alias of the destination.
-- `pipeline_alias` (required) — stable slug `[a-z0-9_-]+`; immutable; used to
-  derive the placeholder pipeline UUID and the on-disk directory.
+- `pipeline_alias` (required) — stable slug matching `^[a-z0-9][a-z0-9_-]*$`;
+  immutable; used to derive the placeholder pipeline UUID and the on-disk
+  directory.
 - `replication_method` (optional, default per source capability) — one of
   `full_refresh`, `incremental`. Required `cursor_field` if `incremental`.
 - `write_mode` (optional, default per destination capability) — for API
@@ -27,8 +28,9 @@ validation, drift, and writing files.
 - `previous_release_path` (optional) — path to the prior released directory
   of this pipeline. Required for the drift step.
 
-If any required input is missing, ask exactly one clarifying question and
-proceed once the user answers.
+If a required input is missing, ask for it. Ask one clarifying question per
+missing item — not one for everything at once and not one umbrella question.
+Proceed once the user answers.
 
 ## Required reading
 
@@ -45,7 +47,7 @@ Read on demand:
 - `references/extension-policy.md` — when the user wants to attach `x-*`
   metadata.
 - `references/schema-hosts.md` — when explaining or troubleshooting the
-  dev/prod schema-host situation.
+  published schema host.
 
 Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
 `endpoint-spec` here — the creator sub-agents own those.
@@ -103,7 +105,7 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
    `discover-schemas` → user picks → `discover-tables` → user picks →
    `create-endpoints`. Each created endpoint validates against
    `database-endpoint/latest.json`. Output:
-   `connections/{alias}/endpoints/{database_object.schema}-{database_object.name}.json`.
+   `connections/{alias}/endpoints/{database_object.schema}_{database_object.name}.json`.
 
 7. **Pipeline shell** — invoke `pipeline-creator`. Receives the alias→id
    map, schedule classification, and engine/runtime defaults. Writes

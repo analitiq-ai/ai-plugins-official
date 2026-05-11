@@ -45,9 +45,9 @@ A non-empty array of non-empty key sets. Each inner array is one
 candidate key. Multiple key sets indicate that any of them is sufficient
 to identify a row.
 
-Every key field must exist in the destination endpoint's schema. The
-`pipeline-stream-consistency` validator enforces resolution when the
-destination endpoint can be resolved.
+Every key field must exist in the destination endpoint's schema.
+Field-existence is enforced server-side at save time; the local
+validator does **not** resolve field names against endpoint files.
 
 ## `execution` (per-destination override)
 

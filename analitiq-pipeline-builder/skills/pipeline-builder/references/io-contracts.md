@@ -11,7 +11,7 @@ own required sub-shape.
 
 ```jsonc
 {
-  "pipeline_alias": "wise_to_postgresql",     // [a-z0-9_-]+
+  "pipeline_alias": "wise_to_postgresql",     // matches ^[a-z0-9][a-z0-9_-]*$
   "display_name": "Wise to PostgreSQL",
   "description": "…",
   "source": {

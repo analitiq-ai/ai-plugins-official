@@ -73,7 +73,7 @@ The agent has three modes; one invocation runs exactly one mode.
    ```jsonc
    {
      "$schema": "https://schemas.analitiq.ai/database-endpoint/latest.json",
-     "alias": "<schema>_<name>",                  // [a-z0-9_-]+; lowercase
+     "alias": "<schema>_<name>",                  // matches ^[a-z0-9][a-z0-9_-]*$; lowercase
      "display_name": "<schema>.<name>",
      "database_object": {
        "schema": "<schema>",                       // verbatim

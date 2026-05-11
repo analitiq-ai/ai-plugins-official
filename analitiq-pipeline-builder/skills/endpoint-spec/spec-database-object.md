@@ -64,6 +64,6 @@ it for behavioral hints (e.g., "don't write to a view").
 
 The tuple `(catalog, schema, name)` must be unique within the owner
 (the connection that owns this endpoint). The `column-uniqueness`
-validator catches duplicates at the document level; the
-`pipeline-stream-consistency` validator handles cross-file uniqueness
-when run with `--bundle-root`.
+validator catches column / primary-key issues at the document level.
+Cross-file uniqueness of `database_object` tuples is enforced
+server-side at catalog-merge time.

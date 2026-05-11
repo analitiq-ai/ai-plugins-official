@@ -84,8 +84,8 @@ runs:
    - `secret-ref-format` — `secret_refs` values match the published reference
      patterns (`secrets/…`, `ssm:/…`, `arn:aws:secretsmanager:…:secret:…`,
      `arn:aws:ssm:…:parameter/…`, `s3://…`, `connections/…`).
-   - `column-uniqueness` — column name uniqueness, primary-key resolution,
-     `database_object` tuple uniqueness.
+   - `column-uniqueness` — column name uniqueness, `ordinal_position`
+     uniqueness, primary-key resolution against declared columns.
    - `pipeline-stream-consistency` (with `--bundle-root`) — every referenced
      stream's `pipeline_id` matches; endpoint-ref connection IDs are members
      of `pipeline.connections`.
@@ -130,7 +130,7 @@ connections/
 │   │   ├── credentials.json        # template the user fills in
 │   │   └── client.json             # OAuth2 only
 │   └── endpoints/                  # database connections only
-│       └── {schema}-{table}.json   # validates against database-endpoint/latest.json
+│       └── {schema}_{table}.json   # validates against database-endpoint/latest.json
 
 pipelines/
 └── {pipeline-alias}/
