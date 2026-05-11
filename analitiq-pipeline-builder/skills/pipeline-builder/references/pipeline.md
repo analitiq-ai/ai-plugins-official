@@ -34,10 +34,11 @@ The orchestrator must halt (and surface a clear message) when:
   the file themselves.
 - Phase 2's `registry-browser` returns `status: "refused"` with
   `reason ∈ {registry_missing, fetch_failed}`. The orchestrator
-  surfaces `detail` verbatim to the user. `target_exists` is a
-  defensive net — the orchestrator's own existence check should
-  have prevented the call; if it fires anyway, read the on-disk
-  connector and flag the inconsistency.
+  surfaces `detail` verbatim to the user. (`target_exists` is **not**
+  a halt — the orchestrator's existence check should have prevented
+  the call; if it fires anyway, read the on-disk connector and flag
+  the inconsistency. See SKILL.md phase 2 for the non-halting
+  branch.)
 - Phase 3's enum mappers fail to map an input (the user supplied
   something outside the closed set).
 - Phase 5 finds an existing `connections/{alias}/connection.json` whose
