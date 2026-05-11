@@ -1,6 +1,6 @@
 {
   "name": "analitiq-pipeline-builder",
-  "description": "Analitiq Pipeline Builder — authors pipeline, stream, connection, and database-endpoint JSON documents that conform to the published Analitiq schema contract (schemas.analitiq.work / schemas.analitiq.ai). Downloads connectors from the DIP registry and wires them into complete pipelines without calling any registration APIs.",
+  "description": "Analitiq Pipeline Builder — authors pipeline, stream, connection, and database-endpoint JSON documents that conform to the published Analitiq schema contract (schemas.analitiq.ai). Downloads connectors from the DIP registry and wires them into complete pipelines without calling any registration APIs.",
   "version": "4.0.0",
   "keywords": ["data-integration", "pipelines", "streams", "etl", "dataflow", "analitiq", "schema-contract"],
   "author": {

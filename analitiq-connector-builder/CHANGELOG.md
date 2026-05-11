@@ -4,7 +4,7 @@
 
 ### Changed (BREAKING)
 - Rebuilt the plugin around the published Analitiq schema contract at
-  `schemas.analitiq.work` (dev) / `schemas.analitiq.ai` (production).
+  `schemas.analitiq.ai`.
   The plugin now produces connector and endpoint JSON documents that
   validate directly against the published JSON Schemas — no more
   bespoke `placeholders` / `endpoints` arrays, no separate
