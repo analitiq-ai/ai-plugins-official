@@ -18,9 +18,12 @@ and you do not author anything.
 
 ## Process
 
-1. **Refuse to overwrite.** If `target_dir` already exists, halt and
-   ask the user to remove it. Do not migrate, merge, or update
-   in-place.
+1. **Never overwrite.** If `target_dir` already exists, halt and
+   surface this to the orchestrator. The orchestrator is responsible
+   for routing around existing connector directories — it should not
+   invoke you when a valid connector is already on disk. If you were
+   invoked anyway, do not migrate, merge, or update in-place; just
+   report the existing directory and let the orchestrator decide.
 2. **Resolve the source URL.** The registry hosts each connector as a
    repository named after the alias. The canonical raw URL for
    `connector.json` is:
