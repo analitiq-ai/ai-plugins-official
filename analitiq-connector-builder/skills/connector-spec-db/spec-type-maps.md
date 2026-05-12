@@ -80,18 +80,23 @@ The full vocabulary is in
 
 ### `canonical` value forms by `method`
 
-| Rule `method` | Recommended `canonical` form |
+| Rule `method` | Required `canonical` form |
 |---|---|
-| `exact` | The fully-qualified type literal (e.g. `Utf8`, `Boolean`, `Int64`, `Date32`). |
+| `exact` | The fully-qualified type literal. For non-parameterized canonical types (`Utf8`, `Boolean`, `Int64`, `Date32`, `Binary`, …), the bare name. For parameterized canonical types whose database native carries an implicit default (Snowflake `TIMESTAMP_NTZ` defaults to precision 9 → `Timestamp(NANOSECOND)`; Snowflake `NUMBER` defaults to `(38, 0)` → `Decimal128(38, 0)`; MongoDB `date` is ms epoch UTC → `Timestamp(MILLISECOND, UTC)`), encode the default explicitly. |
 | `regex` matching a non-parameterized native (e.g. `^text$`) | A fully-qualified literal (e.g. `Utf8`). |
 | `regex` matching a parameterized native (e.g. `^NUMERIC\([0-9]+,[0-9]+\)$`, `^timestamp(\([0-9]+\))?( with time zone)?$`) | The **base PascalCase name** (e.g. `Decimal128`, `Timestamp`). The runtime carries the parameter substrings from the captured native into the canonical at discovery time. |
 
-This split is a temporary contract: `type_maps` does not yet support
-capture-group templating, so the engine derives parameters from
+The regex split is a temporary contract: `type_maps` does not yet
+support capture-group templating, so the engine derives parameters from
 `native_type` at discovery. Until that lands, regex rules for
 parameterized natives must emit the base name and let the runtime
 parameterize. Do **not** write `"canonical": "Decimal128(p, s)"` —
 literal `p` / `s` will not be substituted.
+
+Do **not** emit a bare parameterized name from an `exact` rule
+(`{"method": "exact", "native": "TIMESTAMP_NTZ", "canonical": "Timestamp"}`
+is wrong — `Timestamp` requires a unit). Pick the database's documented
+default precision/scale and encode it literally.
 
 ## Rules
 

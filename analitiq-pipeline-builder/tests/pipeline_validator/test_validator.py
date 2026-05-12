@@ -86,9 +86,10 @@ def test_bare_parameterized_arrow_type_rejected(filename, entity):
     et al. must carry parameters. A regression that re-introduces a bare form,
     or a schema-host change that loosens the regex, will be caught here.
 
-    The stream schema's mapping uses anyOf, so the schema error bubbles up to
-    /mapping rather than a per-assignment arrow_type path. We check the
-    finding mentions the offending value rather than locking in the path.
+    The database_endpoint case produces a path-specific error
+    (/columns/<n>/arrow_type); the stream schema's mapping uses anyOf so the
+    error bubbles up to /mapping. Each case asserts the strongest signal
+    available for its entity.
     """
     result = run_validator(FIXTURES / filename, entity)
     schema_errors = [
@@ -96,11 +97,22 @@ def test_bare_parameterized_arrow_type_rejected(filename, entity):
         if f["validator"] == "json-schema" and f["severity"] == "error"
     ]
     assert schema_errors, f"expected Layer-1 error for {filename}; got {result['findings']}"
-    blob = " ".join(f.get("message", "") + " " + f.get("path", "") for f in schema_errors)
-    assert "Decimal128" in blob or "Timestamp" in blob or "arrow_type" in blob, (
-        f"expected error to mention the bare arrow_type or its path; got {schema_errors}"
-    )
     assert result["passed"] is False
+
+    if entity == "database_endpoint":
+        arrow_type_path_errors = [f for f in schema_errors if f["path"].endswith("/arrow_type")]
+        assert arrow_type_path_errors, (
+            f"expected a Layer-1 error path ending in /arrow_type; got paths "
+            f"{[f['path'] for f in schema_errors]}"
+        )
+    else:
+        # Stream mapping errors bubble to /mapping; assert the offending bare
+        # values surface in the error blob so a future "no longer rejects
+        # bare arrow_type" regression breaks this test.
+        blob = " ".join(f.get("message", "") + " " + f.get("path", "") for f in schema_errors)
+        assert "Decimal128" in blob and "arrow_type" in blob, (
+            f"expected stream error to surface the bare arrow_type value; got {schema_errors}"
+        )
 
 
 @pytest.mark.network
@@ -135,24 +147,40 @@ def test_missing_arrow_type_rejected(tmp_path, entity, patch):
 @pytest.mark.parametrize(
     "arrow_type",
     [
+        # Scalars with parameters
         "Timestamp(MICROSECOND, +05:30)",
         "Timestamp(MICROSECOND, Etc/GMT+5)",
         "Timestamp(NANOSECOND)",
-        "List<Int64>",
-        "Map<Utf8, Int64>",
-        "Dictionary<Int32, Utf8>",
-        "Struct<id:Int64, name:Utf8>",
-        "FixedSizeBinary(16)",
-        "FixedSizeList<Int64>[8]",
-        "Decimal256(76, 0)",
         "Time32(SECOND)",
+        "Time32(MILLISECOND)",
         "Time64(NANOSECOND)",
         "Duration(MICROSECOND)",
         "Interval(YEAR_MONTH)",
+        "FixedSizeBinary(16)",
+        "Decimal256(76, 0)",
+        # "Large" variants of bare scalars
+        "LargeUtf8",
+        "LargeBinary",
+        # Nested types
+        "List<Int64>",
+        "LargeList<Int64>",
+        "FixedSizeList<Int64>[8]",
+        "Map<Utf8, Int64>",
+        "Dictionary<Int32, Utf8>",
+        "Struct<id:Int64, name:Utf8>",
+        "SparseUnion<Int64, Utf8>",
+        "DenseUnion<Int64, Utf8>",
+        "RunEndEncoded<Int32, Utf8>",
     ],
 )
 def test_layer1_accepts_fully_qualified_arrow_type_variants(tmp_path, arrow_type):
-    """Each fully-qualified variant from the canonical examples block must pass Layer 1."""
+    """Each fully-qualified variant from the canonical examples block must pass Layer 1.
+
+    Probes every branch of the published regex — scalar parameterized forms,
+    Large* variants, all nested forms, and the union / run-end encoded
+    extensions. If the schema host narrows the regex by mistake, one of these
+    will start failing.
+    """
     doc = json.loads((FIXTURES / "valid_database_endpoint.json").read_text())
     doc["columns"][0]["arrow_type"] = arrow_type
     target = tmp_path / "variant.json"
@@ -160,6 +188,47 @@ def test_layer1_accepts_fully_qualified_arrow_type_variants(tmp_path, arrow_type
     result = run_validator(target, "database_endpoint")
     errors = [f for f in result["findings"] if f["severity"] == "error"]
     assert not errors, f"unexpected errors for arrow_type={arrow_type!r}: {errors}"
+
+
+@pytest.mark.network
+@pytest.mark.parametrize(
+    "arrow_type,why",
+    [
+        ("Decimal128(40, 0)", "precision 40 out of Decimal128 range (max 38)"),
+        ("Decimal256(80, 0)", "precision 80 out of Decimal256 range (max 76)"),
+        ("FixedSizeBinary(0)", "byte width must be >= 1"),
+        ("FixedSizeList<Int64>", "missing trailing [N] length"),
+        ("Map<Utf8>", "Map requires key and value type"),
+        ("Timestamp()", "empty parens — unit is required"),
+        ("Time32(MICROSECOND)", "Time32 only accepts SECOND or MILLISECOND"),
+        ("Time64(SECOND)", "Time64 only accepts MICROSECOND or NANOSECOND"),
+        ("Interval(MICROSECOND)", "Interval accepts IntervalUnit, not TimeUnit"),
+        ("decimal128(12, 2)", "PascalCase required — lowercase rejected"),
+    ],
+)
+def test_layer1_rejects_malformed_arrow_type(tmp_path, arrow_type, why):
+    """Each malformed variant must trip the regex, proving the constraint is real.
+
+    Catches regressions where the schema host accidentally loosens a regex
+    branch (e.g. allowing Time32(MICROSECOND) or decimal128 lowercase). The
+    `why` column is documentation for future readers; the assertion only
+    checks that validation fails.
+    """
+    doc = json.loads((FIXTURES / "valid_database_endpoint.json").read_text())
+    doc["columns"][0]["arrow_type"] = arrow_type
+    target = tmp_path / "malformed.json"
+    target.write_text(json.dumps(doc))
+    result = run_validator(target, "database_endpoint")
+    arrow_type_errors = [
+        f for f in result["findings"]
+        if f["validator"] == "json-schema"
+        and f["severity"] == "error"
+        and f["path"].endswith("/arrow_type")
+    ]
+    assert arrow_type_errors, (
+        f"expected schema error for arrow_type={arrow_type!r} ({why}); got {result['findings']}"
+    )
+    assert result["passed"] is False
 
 
 def test_schema_fetch_failure_is_diagnosed():
