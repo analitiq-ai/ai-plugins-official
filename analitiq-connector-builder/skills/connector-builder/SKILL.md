@@ -109,9 +109,8 @@ Report to the user:
 
 ## Hard rules
 
-- Never set server-managed fields: `connector_id`,
-  `connector_schema_version`, `created_at`, `updated_at`. These are
-  stamped by the registry.
+- Never set server-managed fields: `connector_id`, `created_at`,
+  `updated_at`. These are stamped by the registry.
 - Do not author the connector body yourself. Always dispatch to the
   matching creator sub-agent.
 - Do not load kind-specific spec skills (`connector-spec-api` /

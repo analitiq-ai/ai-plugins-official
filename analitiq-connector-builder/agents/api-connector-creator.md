@@ -57,8 +57,8 @@ Return a `CreatorOutput` JSON block. Do not write to disk.
 
 ## Hard rules
 
-- Never author server-managed fields (`connector_id`,
-  `connector_schema_version`, `created_at`, `updated_at`).
+- Never author server-managed fields (`connector_id`, `created_at`,
+  `updated_at`).
 - Never use `${...}` interpolation outside a `template` value expression.
 - Never pre-compute base64 / SHA / signature values — use `function`
   expressions.

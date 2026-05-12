@@ -43,7 +43,7 @@ the document type:
 
 | Validator id | Rule |
 |---|---|
-| `reserved-field` | No `connector_id` / `connector_schema_version` / `created_at` / `updated_at` in the authored doc. |
+| `reserved-field` | No `connector_id` / `created_at` / `updated_at` in the authored doc. |
 | `expression-resolver` | Every `ref` / `template` / `function` parses; refs target known scopes; functions are in the registered catalog. |
 | `phase-resolvability` | Refs to `connection.discovered.*` are produced by a declared post-auth output. |
 | `transport-ref` | Every `transport_ref` resolves to a key in `transports`; `default_transport` exists in `transports`. |
