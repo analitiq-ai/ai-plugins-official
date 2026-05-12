@@ -8,9 +8,9 @@
     "object_type": "table"
   },
   "columns": [
-    {"name": "id", "native_type": "BIGINT UNSIGNED", "arrow_type": "Int64", "nullable": false, "ordinal_position": 1},
+    {"name": "id", "native_type": "BIGINT UNSIGNED", "arrow_type": "UInt64", "nullable": false, "ordinal_position": 1},
     {"name": "email", "native_type": "VARCHAR(255)", "arrow_type": "Utf8", "nullable": false, "ordinal_position": 2},
-    {"name": "created_at", "native_type": "DATETIME", "arrow_type": "Timestamp", "nullable": false, "ordinal_position": 3}
+    {"name": "created_at", "native_type": "DATETIME", "arrow_type": "Timestamp(MICROSECOND)", "nullable": false, "ordinal_position": 3}
   ],
   "primary_keys": ["id"]
 }

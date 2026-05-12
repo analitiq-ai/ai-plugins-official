@@ -25,7 +25,8 @@ document conforming to `https://schemas.analitiq.ai/stream/latest.json`.
   `pipeline_id` (base UUID), `source`, `destinations`, `mapping`,
   `status`, `tags`, `documentation_url`.
 - The minimal v1 mapping expression vocabulary: `{op: "get", path: "<source field>"}`
-  and `{arrow_type, value}` constants.
+  and `{arrow_type, value}` constants. `arrow_type` is a fully-qualified
+  Apache Arrow canonical type string (see `spec-mapping.md`).
 - The closed source-filter operator vocabularies per endpoint kind.
 
 ## What this skill does NOT cover

@@ -52,26 +52,26 @@
   "type_maps": {
     "native_to_arrow": {
       "rules": [
-        { "method": "exact", "native": "NUMBER",         "canonical": "Decimal128" },
-        { "method": "exact", "native": "DECIMAL",        "canonical": "Decimal128" },
+        { "method": "exact", "native": "NUMBER",         "canonical": "Decimal128(38, 0)" },
+        { "method": "exact", "native": "DECIMAL",        "canonical": "Decimal128(38, 0)" },
         { "method": "exact", "native": "INT",            "canonical": "Int64" },
         { "method": "exact", "native": "INTEGER",        "canonical": "Int64" },
         { "method": "exact", "native": "BIGINT",         "canonical": "Int64" },
         { "method": "exact", "native": "FLOAT",          "canonical": "Float64" },
         { "method": "exact", "native": "DOUBLE",         "canonical": "Float64" },
         { "method": "exact", "native": "BOOLEAN",        "canonical": "Boolean" },
-        { "method": "exact", "native": "VARCHAR",        "canonical": "String" },
-        { "method": "exact", "native": "STRING",         "canonical": "String" },
-        { "method": "exact", "native": "TEXT",           "canonical": "String" },
+        { "method": "exact", "native": "VARCHAR",        "canonical": "Utf8" },
+        { "method": "exact", "native": "STRING",         "canonical": "Utf8" },
+        { "method": "exact", "native": "TEXT",           "canonical": "Utf8" },
         { "method": "exact", "native": "DATE",           "canonical": "Date32" },
-        { "method": "exact", "native": "TIME",           "canonical": "Time64" },
-        { "method": "exact", "native": "TIMESTAMP_NTZ",  "canonical": "Timestamp" },
-        { "method": "exact", "native": "TIMESTAMP_LTZ",  "canonical": "Timestamp" },
-        { "method": "exact", "native": "TIMESTAMP_TZ",   "canonical": "Timestamp" },
+        { "method": "exact", "native": "TIME",           "canonical": "Time64(NANOSECOND)" },
+        { "method": "exact", "native": "TIMESTAMP_NTZ",  "canonical": "Timestamp(NANOSECOND)" },
+        { "method": "exact", "native": "TIMESTAMP_LTZ",  "canonical": "Timestamp(NANOSECOND, UTC)" },
+        { "method": "exact", "native": "TIMESTAMP_TZ",   "canonical": "Timestamp(NANOSECOND, UTC)" },
         { "method": "exact", "native": "BINARY",         "canonical": "Binary" },
-        { "method": "exact", "native": "VARIANT",        "canonical": "String" },
-        { "method": "exact", "native": "OBJECT",         "canonical": "String" },
-        { "method": "exact", "native": "ARRAY",          "canonical": "String" }
+        { "method": "exact", "native": "VARIANT",        "canonical": "Utf8" },
+        { "method": "exact", "native": "OBJECT",         "canonical": "Utf8" },
+        { "method": "exact", "native": "ARRAY",          "canonical": "Utf8" }
       ]
     }
   }

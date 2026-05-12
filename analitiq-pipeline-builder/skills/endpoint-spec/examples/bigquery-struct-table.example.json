@@ -10,7 +10,7 @@
   },
   "columns": [
     {"name": "order_id", "native_type": "STRING", "arrow_type": "Utf8", "nullable": false, "ordinal_position": 1},
-    {"name": "created_at", "native_type": "TIMESTAMP", "arrow_type": "Timestamp", "nullable": false, "ordinal_position": 2},
-    {"name": "customer", "native_type": "STRUCT<name STRING, age INT64>", "arrow_type": "Struct", "nullable": true, "ordinal_position": 3}
+    {"name": "created_at", "native_type": "TIMESTAMP", "arrow_type": "Timestamp(MICROSECOND, UTC)", "nullable": false, "ordinal_position": 2},
+    {"name": "customer", "native_type": "STRUCT<name STRING, age INT64>", "arrow_type": "Struct<name:Utf8, age:Int64>", "nullable": true, "ordinal_position": 3}
   ]
 }

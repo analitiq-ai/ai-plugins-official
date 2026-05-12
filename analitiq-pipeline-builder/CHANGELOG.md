@@ -3,6 +3,25 @@
 ## [unreleased]
 
 ### Changed
+- `arrow_type` is now **required** on every column and every mapping
+  assignment, and must be the **fully-qualified** Apache Arrow canonical
+  type string from the shared vocabulary. Bare parameterized forms
+  (`Timestamp`, `Decimal128`, `Time64`, `Duration`, `Interval`,
+  `FixedSizeBinary`, `List`, `Struct`, `Map`, …) are rejected by the
+  published `database-endpoint/latest.json` and `stream/latest.json`
+  schemas. Authored documents must carry parameters:
+  `Timestamp(MICROSECOND, UTC)`, `Decimal128(12, 2)`,
+  `Time64(MICROSECOND)`, `List<Int64>`, `Struct<id:Int64, name:Utf8>`,
+  etc. `skills/endpoint-spec/spec-columns.md` documents the three
+  shapes (bare / `( )` / `< >`), the `TimeUnit` / `IntervalUnit`
+  identifiers, and the `Timestamp` timezone forms;
+  `skills/stream-spec/spec-mapping.md` cross-references it. The
+  `private-endpoint-creator` agent now derives a fully-qualified
+  `arrow_type` for every column (carrying `(p, s)` from `numeric(p,s)`
+  / `DECIMAL(p,s)`) instead of omitting it when ambiguous; for
+  schemaless or opaque containers it falls back to `Utf8` or `Binary`
+  with a note. All endpoint-spec / stream-spec example fixtures and
+  pipeline-validator fixtures rewritten to the new format.
 - Identifiers in authored documents are now **aliases**, not versioned
   UUIDs. `connections.source`, `connections.destinations[]`, `streams[]`,
   `endpoint_ref.connection_id`, and stream `pipeline_id` all hold alias

@@ -21,11 +21,11 @@ Common API natives:
 
 | Native | Source | Typical canonical |
 |---|---|---|
-| `uuid` | `{"type":"string", "format":"uuid"}` | `String` |
-| `date-time` | `{"type":"string", "format":"date-time"}` | `Timestamp` |
+| `uuid` | `{"type":"string", "format":"uuid"}` | `Utf8` |
+| `date-time` | `{"type":"string", "format":"date-time"}` | `Timestamp(MICROSECOND, UTC)` |
 | `date` | `{"type":"string", "format":"date"}` | `Date32` |
-| `email` / `uri` | `{"type":"string", "format":"…"}` | `String` |
-| `string` | `{"type":"string"}` | `String` |
+| `email` / `uri` | `{"type":"string", "format":"…"}` | `Utf8` |
+| `string` | `{"type":"string"}` | `Utf8` |
 | `integer` | `{"type":"integer"}` | `Int64` |
 | `int32` / `int64` | `{"type":"integer", "format":"…"}` | `Int32` / `Int64` |
 | `number` | `{"type":"number"}` | `Float64` |
@@ -45,7 +45,8 @@ walker recurses into them instead.
       "rules": [
         { "method": "exact",  "native": "INTEGER",                 "canonical": "Int32" },
         { "method": "exact",  "native": "BIGINT",                  "canonical": "Int64" },
-        { "method": "regex",  "native": "^VARCHAR\\([0-9]+\\)$",   "canonical": "String" },
+        { "method": "regex",  "native": "^VARCHAR\\([0-9]+\\)$",   "canonical": "Utf8" },
+        { "method": "regex",  "native": "^NUMERIC\\([0-9]+,[0-9]+\\)$", "canonical": "Decimal128" },
         { "method": "exact",  "native": "BOOLEAN",                 "canonical": "Boolean" }
       ]
     }
@@ -63,10 +64,39 @@ walker recurses into them instead.
 
 ## Canonical types
 
-Arrow canonical types are PascalCase strings (e.g. `Int32`, `Int64`,
-`Float64`, `String`, `Boolean`, `Binary`, `Date32`, `Time64`,
-`Timestamp`, `Decimal128`, `List`, `Struct`, `Map`). The full vocabulary
-is in `docs/schema-contracts/shared/canonical-types.json`.
+Arrow canonical types are fully-qualified PascalCase strings from the
+shared Arrow vocabulary — bare names where the type has no parameters
+(`Int32`, `Int64`, `Float64`, `Utf8`, `Boolean`, `Binary`, `Date32`),
+parens for parameterized scalars (`Decimal128(p, s)`,
+`Timestamp(MICROSECOND, UTC)`, `Time64(MICROSECOND)`,
+`FixedSizeBinary(16)`), and angle brackets for nested types
+(`List<Int64>`, `Struct<id:Int64, name:Utf8>`, `Map<Utf8, Int64>`). See
+`analitiq-pipeline-builder/skills/endpoint-spec/spec-columns.md` for the
+authoritative reference — endpoint columns produced from this map must
+match the same vocabulary.
+
+The full vocabulary is in
+`docs/schema-contracts/shared/canonical-types.json`.
+
+### `canonical` value forms by `method`
+
+| Rule `method` | Required `canonical` form |
+|---|---|
+| `exact` | The fully-qualified type literal. For non-parameterized canonical types (`Utf8`, `Boolean`, `Int64`, `Date32`, `Binary`, …), the bare name. For parameterized canonical types whose database native carries an implicit default (Snowflake `TIMESTAMP_NTZ` defaults to precision 9 → `Timestamp(NANOSECOND)`; Snowflake `NUMBER` defaults to `(38, 0)` → `Decimal128(38, 0)`; MongoDB `date` is ms epoch UTC → `Timestamp(MILLISECOND, UTC)`; MongoDB `decimal` is IEEE 754 decimal128 with 34 significant digits → `Decimal128(34, 0)`), encode the default explicitly. |
+| `regex` matching a non-parameterized native (e.g. `^text$`) | A fully-qualified literal (e.g. `Utf8`). |
+| `regex` matching a parameterized native (e.g. `^NUMERIC\([0-9]+,[0-9]+\)$`, `^timestamp(\([0-9]+\))?( with time zone)?$`) | The **base PascalCase name** (e.g. `Decimal128`, `Timestamp`). The runtime carries the parameter substrings from the captured native into the canonical at discovery time. |
+
+The regex split is a temporary contract: `type_maps` does not yet
+support capture-group templating, so the engine derives parameters from
+`native_type` at discovery. Until that lands, regex rules for
+parameterized natives must emit the base name and let the runtime
+parameterize. Do **not** write `"canonical": "Decimal128(p, s)"` —
+literal `p` / `s` will not be substituted.
+
+Do **not** emit a bare parameterized name from an `exact` rule
+(`{"method": "exact", "native": "TIMESTAMP_NTZ", "canonical": "Timestamp"}`
+is wrong — `Timestamp` requires a unit). Pick the database's documented
+default precision/scale and encode it literally.
 
 ## Rules
 
@@ -82,6 +112,8 @@ is in `docs/schema-contracts/shared/canonical-types.json`.
 - Do not invent canonical types. If you can't pick one from the
   vocabulary, mark the rule as `"canonical": "Binary"` only when the
   native type is genuinely opaque bytes.
+- Use `Utf8` (not `String`) for Arrow's UTF-8 string type — `String` is
+  not a member of the published Arrow vocabulary.
 
 ## Connection-scoped overrides
 

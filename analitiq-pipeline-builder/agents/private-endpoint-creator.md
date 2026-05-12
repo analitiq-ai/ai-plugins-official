@@ -85,10 +85,18 @@ The agent has three modes; one invocation runs exactly one mode.
    }
    ```
 
-5. Also derive `arrow_type` for each column from the native type,
-   using `skills/endpoint-spec/spec-columns.md` as the canonical
-   mapping reference. When the mapping is unclear, omit `arrow_type`
-   and add a note.
+5. Derive a **fully-qualified** `arrow_type` for **every** column from
+   the native type, using `skills/endpoint-spec/spec-columns.md` as the
+   canonical mapping reference. `arrow_type` is **required** by the
+   published `database-endpoint/latest.json` schema, and parameterized
+   types must carry their parameters — `Timestamp(MICROSECOND, UTC)`,
+   `Decimal128(p, s)`, `Time64(MICROSECOND)`, `List<Int64>`, etc. —
+   bare `Timestamp` / `Decimal128` / `Time64` are rejected. Carry
+   precision/scale from `native_type` into `Decimal128(p, s)` (use
+   `Decimal256` when `p > 38`). For schemaless or opaque containers
+   (e.g. MongoDB `BSON.Document`, opaque `jsonb`), prefer `Utf8` or
+   `Binary` over guessing a `Struct<…>` field list; add a `notes[]`
+   entry explaining the choice.
 6. Return a `CreatorOutput[]` (one per table):
 
    ```jsonc
