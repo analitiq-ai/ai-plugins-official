@@ -3,29 +3,28 @@
 ```jsonc
 {
   "connections": {
-    "source": "<versioned-connection-id>",          // required
-    "destinations": ["<versioned-connection-id>", …] // required, non-empty, no duplicates
+    "source": "<connection-alias>",          // required
+    "destinations": ["<connection-alias>", …] // required, non-empty, no duplicates
   }
 }
 ```
 
-## Versioned connection ID format
+## Connection alias format
 
-`<uuid>_v<positive integer>`, e.g.
-`00000000-0000-4000-8000-000000000001_v1`.
-
-See `../pipeline-builder/references/identity-and-versioning.md` for how
-the orchestrator mints placeholder IDs deterministically from the
-connection alias.
+`^[a-z0-9][a-z0-9_-]*$`, e.g. `"wise"`, `"postgresql_prod"`,
+`"snowflake_warehouse"`. The alias matches the directory name under
+`connections/{alias}/` and is the same value the engine resolves at
+runtime. See `../pipeline-builder/references/identity-and-versioning.md`.
 
 ## Rules
 
-- `source` is a single ID, not an array.
-- `destinations` is a non-empty array, with at least one ID.
+- `source` is a single alias, not an array.
+- `destinations` is a non-empty array, with at least one alias.
 - No duplicates in `destinations`.
-- A destination ID may equal the source ID — that's a legitimate self-
-  loop (e.g., copying data within a single database between schemas).
-- Every ID must resolve to a connection owned by the same org. The
+- A destination alias may equal the source alias — that's a legitimate
+  self-loop (e.g., copying data within a single database between
+  schemas).
+- Every alias must resolve to a connection owned by the same org. The
   plugin does not enforce ownership; the registry does at save time.
 
 ## What is NOT in this block

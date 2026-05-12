@@ -11,7 +11,7 @@ document conforming to `https://schemas.analitiq.ai/pipeline/latest.json`.
 
 ## Required reading (load on demand)
 
-- `spec-connections.md` — versioned ID refs for source + destinations.
+- `spec-connections.md` — alias refs for source + destinations.
 - `spec-schedule.md` — manual / interval / cron with IANA timezone.
 - `spec-engine-runtime.md` — vcpu/memory floor, batching, logging, error_handling.
 - `spec-streams-and-status.md` — stream pinning rules and lifecycle gating.
@@ -38,8 +38,8 @@ Every authored document must:
 1. Declare `$schema: "https://schemas.analitiq.ai/pipeline/latest.json"`.
 2. Include `alias` (`[a-z0-9][a-z0-9_-]*`) and a non-empty `connections`
    object.
-3. Use **versioned** connection IDs in `connections.source` and
-   `connections.destinations[]` — `<uuid>_v<positive integer>`.
-4. Use **versioned** stream IDs in `streams[]`.
+3. Use **connection aliases** in `connections.source` and
+   `connections.destinations[]`.
+4. Use **stream aliases** in `streams[]`.
 5. Pass `python scripts/validate_pipeline.py --entity pipeline
    --document <path>` with zero error findings.

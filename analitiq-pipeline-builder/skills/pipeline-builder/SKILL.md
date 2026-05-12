@@ -16,7 +16,7 @@ validation, drift, and writing files.
 - `source_connector_alias` (required) — the DIP-registry alias of the source.
 - `destination_connector_alias` (required) — the DIP-registry alias of the destination.
 - `pipeline_alias` (required) — stable slug matching `^[a-z0-9][a-z0-9_-]*$`;
-  immutable; used to derive the placeholder pipeline UUID and the on-disk
+  immutable; used as the pipeline identifier and the on-disk
   directory.
 - `replication_method` (optional, default per source capability) — one of
   `full_refresh`, `incremental`. Required `cursor_field` if `incremental`.
@@ -125,15 +125,7 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
    - `WriteModeMapper` → `destinations[].write.mode`.
    - `AuthTypeMapper` → drives the `connection-creator` template choice.
 
-4. **Mint placeholder versioned UUIDs** — per
-   `references/identity-and-versioning.md`, compute a deterministic UUID
-   v5 from each connection alias and the pipeline alias. Store the map
-   `{connection_alias → versioned_id, pipeline_alias → base_pipeline_id}`
-   for the downstream agents. The user replaces these placeholders with
-   real registry-stamped IDs at submission time; the plugin makes **no
-   API calls**.
-
-5. **Connections** — for each side, check whether
+4. **Connections** — for each side, check whether
    `connections/{alias}/connection.json` already exists:
    - **If yes** and its `connector_alias` matches the side's
      connector → reuse it. Validate the existing file against
@@ -161,7 +153,7 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
    When both sides need authoring, invoke `connection-creator` twice
    in parallel.
 
-6. **Endpoint discovery (database connections only)** — for each
+5. **Endpoint discovery (database connections only)** — for each
    database connection, run the three-mode discovery flow with
    `private-endpoint-creator`: `discover-schemas` → user picks →
    `discover-tables` → user picks → `create-endpoints`. Sub-modes
@@ -185,23 +177,27 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
    when endpoint files from a prior pipeline are already on disk for
    the same tables.
 
-7. **Pipeline shell** — invoke `pipeline-creator`. Receives the alias→id
-   map, schedule classification, and engine/runtime defaults. Writes
-   `pipelines/{pipeline_alias}/pipeline.json` with `streams: []` (filled
-   in phase 9). Validates against `pipeline/latest.json`.
+6. **Pipeline shell** — invoke `pipeline-creator`. Receives the
+   `connections.source` / `connections.destinations[]` aliases, the
+   pipeline alias, schedule classification, and engine/runtime
+   defaults. Writes `pipelines/{pipeline_alias}/pipeline.json` with
+   `streams: []` (filled in phase 8). Validates against
+   `pipeline/latest.json`.
 
-8. **Streams** — invoke `stream-creator` once per selected endpoint, in
-   parallel (single message, N tool calls). Each receives the source
-   endpoint metadata, destination connection, replication method, write
-   mode, and a deterministic placeholder stream versioned UUID.
-   Writes `pipelines/{pipeline_alias}/streams/{stream_alias}.json` and
+7. **Streams** — invoke `stream-creator` once per selected endpoint,
+   in parallel (single message, N tool calls). Each receives the
+   source endpoint metadata, destination connection alias,
+   replication method, write mode, and the pipeline alias (written
+   into stream `pipeline_id`). Writes
+   `pipelines/{pipeline_alias}/streams/{stream_alias}.json` and
    validates against `stream/latest.json`.
 
-9. **Stitch** — collect the placeholder versioned stream IDs and write
-   them into `pipeline.json#/streams`. Re-validate the pipeline file with
-   `--bundle-root .` so `pipeline-stream-consistency` runs.
+8. **Stitch** — collect each authored stream's `alias` and write
+   them as strings into `pipeline.json#/streams`. Re-validate the
+   pipeline file with `--bundle-root .` so
+   `pipeline-stream-consistency` runs.
 
-10. **Validate** — invoke `pipeline-schema-validator` against every
+9. **Validate** — invoke `pipeline-schema-validator` against every
     artifact:
     - Pipeline → `https://schemas.analitiq.ai/pipeline/latest.json`.
     - Stream → `https://schemas.analitiq.ai/stream/latest.json`.
@@ -215,7 +211,7 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
     files. The validator script is single-shot — iteration discipline
     lives here in the orchestrator's prose.
 
-11. **Drift (optional)** — if `previous_release_path` was supplied,
+10. **Drift (optional)** — if `previous_release_path` was supplied,
     invoke `pipeline-drift-classifier`. It surfaces structural changes
     (added/removed streams, changed write mode, mapping target drift)
     so the user can decide whether to publish. Pipelines/streams use an
@@ -229,8 +225,8 @@ Report to the user:
 
 - Paths of every authored file (pipeline, streams, connections,
   endpoints).
-- The alias→versioned-id placeholder map, with a note that the registry
-  will replace them on submission.
+- The aliases used for the pipeline, each connection, and each stream
+  (these are the identifiers the engine resolves at runtime).
 - Validator clean-run summary (count of artifacts validated, all clean).
 - Drift verdict (if applicable).
 
@@ -241,8 +237,11 @@ Report to the user:
 - Never author connector documents. Those belong to the
   `analitiq-connector-builder` plugin. `registry-browser` only
   *downloads* connector files from the DIP registry.
-- Never invent positional connection refs like `conn_1` / `conn_2`. Use
-  the versioned placeholder UUIDs minted in phase 4.
+- Connection and stream references in authored documents are
+  **aliases** (e.g. `"wise"`, `"postgresql"`,
+  `"wise_users_to_postgresql_users"`). Do not invent positional refs
+  like `conn_1` / `conn_2`, do not mint UUID placeholders. The engine
+  resolves aliases at runtime.
 - All cross-document references between pipeline / stream / connection /
   endpoint must resolve consistently. The `pipeline-stream-consistency`
   validator enforces this; pass `--bundle-root .` when validating the

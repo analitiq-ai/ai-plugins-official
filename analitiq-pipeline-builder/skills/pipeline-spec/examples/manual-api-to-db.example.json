@@ -5,9 +5,9 @@
   "description": "Replicates Wise transfers to a PostgreSQL warehouse on demand.",
   "status": "draft",
   "connections": {
-    "source": "5e6c4f1c-3b1a-5a8d-89fa-1f2e0b8a4c01_v1",
+    "source": "wise",
     "destinations": [
-      "9a3b2c1d-4e5f-5a6b-87cd-2f3e0a1b2c03_v1"
+      "postgresql"
     ]
   },
   "streams": [],

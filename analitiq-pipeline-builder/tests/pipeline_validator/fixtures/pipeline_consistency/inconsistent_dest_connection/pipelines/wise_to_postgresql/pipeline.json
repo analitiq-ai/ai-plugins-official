@@ -3,11 +3,15 @@
   "alias": "wise_to_postgresql",
   "status": "draft",
   "connections": {
-    "source": "00000000-0000-4000-8000-000000000003_v1",
-    "destinations": ["00000000-0000-4000-8000-000000000002_v1"]
+    "source": "wise",
+    "destinations": [
+      "postgresql"
+    ]
   },
   "streams": [
-    "10000000-0000-4000-8000-000000000010_v1"
+    "transfers"
   ],
-  "schedule": {"type": "manual"}
+  "schedule": {
+    "type": "manual"
+  }
 }

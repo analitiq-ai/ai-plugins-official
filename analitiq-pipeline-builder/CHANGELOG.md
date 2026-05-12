@@ -1,5 +1,25 @@
 # Changelog
 
+## [unreleased]
+
+### Changed
+- Identifiers in authored documents are now **aliases**, not versioned
+  UUIDs. `connections.source`, `connections.destinations[]`, `streams[]`,
+  `endpoint_ref.connection_id`, and stream `pipeline_id` all hold alias
+  strings the engine resolves at runtime. The published schemas already
+  accept any non-empty string for these slots; the previous UUID
+  placeholders were a plugin-side convention the engine did not require.
+- Removed the orchestrator's phase-4 "mint placeholder versioned UUIDs"
+  step. The pipeline is now a 10-phase contract (numbering shifted in
+  `references/pipeline.md`).
+- Removed the `versioned-id-format` Layer 2 validator and its
+  supporting helpers. Layer 1's `string`/`minLength: 1`/`uniqueItems`
+  constraints on these fields remain in force via the published schema.
+- `pipeline-stream-consistency` now compares stream `pipeline_id` to
+  the parent pipeline's `alias` directly (no UUID derivation).
+- `references/identity-and-versioning.md` rewritten as a one-page
+  "aliases are the identifier" reference.
+
 ## [4.0.0] - 2026-05-11
 
 Realignment with the published Analitiq schema contract. Breaking change: the

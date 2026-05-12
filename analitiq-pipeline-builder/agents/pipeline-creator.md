@@ -1,6 +1,6 @@
 ---
 name: pipeline-creator
-description: Author a pipeline JSON document conforming to https://schemas.analitiq.ai/pipeline/latest.json. Receives the alias→versioned-connection-id map, schedule classification, and engine/runtime overrides from the orchestrator. Emits a CreatorOutput JSON object with `entity: pipeline`. The `streams` array starts empty; the orchestrator stitches stream IDs in afterwards. Loads pipeline-spec for the authoring vocabulary.
+description: Author a pipeline JSON document conforming to https://schemas.analitiq.ai/pipeline/latest.json. Receives the connection aliases for source + destinations, schedule classification, and engine/runtime overrides from the orchestrator. Emits a CreatorOutput JSON object with `entity: pipeline`. The `streams` array starts empty; the orchestrator stitches stream aliases in afterwards. Loads pipeline-spec for the authoring vocabulary.
 tools: Read
 ---
 
@@ -25,13 +25,13 @@ The orchestrator passes:
 
 - `pipeline_alias` (required) — the stable slug.
 - `display_name`, `description` (optional).
-- `connections.source` and `connections.destinations[]` — already as
-  versioned IDs (the orchestrator minted them in phase 4).
+- `connections.source` (the source connection alias) and
+  `connections.destinations[]` (each destination connection alias).
 - `schedule_facts` — classified schedule object.
 - `engine_overrides`, `runtime_overrides` — optional.
 
 `streams` is **always emitted as `[]`** by this agent; the orchestrator
-stitches in real stream IDs in phase 9.
+stitches in stream aliases in phase 8.
 
 ## Process
 
@@ -57,8 +57,10 @@ stitches in real stream IDs in phase 9.
 
 ## Hard rules
 
-- Never use positional connection refs (`conn_1`, `conn_2`, …). The
-  orchestrator's placeholder versioned UUIDs are the only legal values.
+- Connection references in `connections.source` and
+  `connections.destinations[]` are **aliases** — the values match the
+  directory names under `connections/{alias}/`. Do not invent
+  positional refs (`conn_1`, `conn_2`), do not mint UUIDs.
 - Always emit `streams: []` — stitching happens later.
 - For `schedule.type=manual`: omit `interval_minutes` and
   `cron_expression` entirely.
