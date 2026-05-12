@@ -123,7 +123,6 @@ def fetch_schema(url: str, cache: bool = True) -> dict:
 VALIDATOR_IDS = {
     "json-schema",
     "reserved-field",
-    "versioned-id-format",
     "schedule-shape",
     "runtime-ranges",
     "endpoint-ref-shape",
@@ -269,12 +268,6 @@ RESERVED_FIELDS_BY_ENTITY: dict[str, set[str]] = {
 }
 
 
-VERSIONED_ID_RE = re.compile(
-    r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}_v[1-9][0-9]*$"
-)
-BASE_UUID_RE = re.compile(
-    r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-)
 CRON_RE = re.compile(r"^cron\(.+\)$")
 
 
@@ -346,89 +339,6 @@ def check_reserved_fields(doc: dict, entity: str) -> list[dict]:
                     rule_doc=rule_doc,
                 )
             )
-    return findings
-
-
-# ---------------------------------------------------------------------------
-# versioned-id-format
-# ---------------------------------------------------------------------------
-
-
-def _check_versioned_id(value: Any, path: str) -> list[dict]:
-    findings: list[dict] = []
-    if not isinstance(value, str):
-        findings.append(
-            finding(
-                "versioned-id-format",
-                "error",
-                path,
-                f"expected a versioned ID string of the form <uuid>_v<n>; got {type(value).__name__}.",
-                rule_doc="shared/identity-and-versioning.md",
-            )
-        )
-        return findings
-    if not VERSIONED_ID_RE.match(value):
-        findings.append(
-            finding(
-                "versioned-id-format",
-                "error",
-                path,
-                f"value {value!r} does not match versioned-id pattern <uuid>_v<positive integer>.",
-                rule_doc="shared/identity-and-versioning.md",
-            )
-        )
-    return findings
-
-
-def check_versioned_ids_pipeline(doc: dict) -> list[dict]:
-    findings: list[dict] = []
-    connections = doc.get("connections")
-    if isinstance(connections, dict):
-        source = connections.get("source")
-        if source is not None:
-            findings.extend(_check_versioned_id(source, "/connections/source"))
-        destinations = connections.get("destinations")
-        if isinstance(destinations, list):
-            for i, dest in enumerate(destinations):
-                findings.extend(_check_versioned_id(dest, f"/connections/destinations/{i}"))
-    streams = doc.get("streams")
-    if isinstance(streams, list):
-        for i, sid in enumerate(streams):
-            findings.extend(_check_versioned_id(sid, f"/streams/{i}"))
-    return findings
-
-
-def check_versioned_ids_stream(doc: dict) -> list[dict]:
-    findings: list[dict] = []
-    pipeline_id = doc.get("pipeline_id")
-    if pipeline_id is not None:
-        if not isinstance(pipeline_id, str) or not BASE_UUID_RE.match(pipeline_id):
-            findings.append(
-                finding(
-                    "versioned-id-format",
-                    "error",
-                    "/pipeline_id",
-                    f"stream.pipeline_id must be a base UUID (no _v suffix); got {pipeline_id!r}.",
-                    rule_doc="shared/identity-and-versioning.md",
-                )
-            )
-    source_ref = (doc.get("source") or {}).get("endpoint_ref") if isinstance(doc.get("source"), dict) else None
-    if isinstance(source_ref, dict) and "connection_id" in source_ref:
-        findings.extend(
-            _check_versioned_id(source_ref["connection_id"], "/source/endpoint_ref/connection_id")
-        )
-    destinations = doc.get("destinations")
-    if isinstance(destinations, list):
-        for i, dest in enumerate(destinations):
-            if not isinstance(dest, dict):
-                continue
-            ref = dest.get("endpoint_ref")
-            if isinstance(ref, dict) and "connection_id" in ref:
-                findings.extend(
-                    _check_versioned_id(
-                        ref["connection_id"], f"/destinations/{i}/endpoint_ref/connection_id"
-                    )
-                )
     return findings
 
 
@@ -920,13 +830,6 @@ def check_column_uniqueness(doc: dict) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def _strip_version(versioned: str) -> str | None:
-    if not isinstance(versioned, str):
-        return None
-    m = re.match(r"^(.+)_v[1-9][0-9]*$", versioned)
-    return m.group(1) if m else None
-
-
 def _stream_files_for_pipeline(
     bundle_root: Path,
     pipeline_alias: str | None,
@@ -1039,42 +942,17 @@ def check_pipeline_stream_consistency(doc: dict, bundle_root: Path | None) -> li
         if isinstance(alias, str):
             streams_by_alias[alias] = (sf, sdoc)
 
-    base_uuids_seen: dict[str, str] = {}
-    for i, sid in enumerate(streams_listed):
-        if not isinstance(sid, str):
-            continue
-        base = _strip_version(sid)
-        if base in base_uuids_seen:
+    # Match streams to files by `pipeline_id` — which is the pipeline's alias.
+    for sf, sdoc in streams_by_alias.values():
+        spid = sdoc.get("pipeline_id")
+        if isinstance(pipeline_alias, str) and isinstance(spid, str) and spid != pipeline_alias:
             findings.append(
                 finding(
                     "pipeline-stream-consistency",
                     "error",
-                    f"/streams/{i}",
-                    f"stream base UUID {base!r} appears more than once in pipeline.streams "
-                    f"(also at {base_uuids_seen[base]}).",
-                    rule_doc="pipelines/pipeline-schema-parameterization.md#stream-pinning",
-                )
-            )
-        elif base is not None:
-            base_uuids_seen[base] = f"/streams/{i}"
-
-    # Match streams to files by `pipeline_id` (base UUID) — when we can find one.
-    pipeline_base = (
-        _strip_version(_synthetic_pipeline_id(pipeline_alias))
-        if isinstance(pipeline_alias, str)
-        else None
-    )
-    for sf, sdoc in streams_by_alias.values():
-        spid = sdoc.get("pipeline_id")
-        if pipeline_base is not None and isinstance(spid, str) and spid != pipeline_base:
-            findings.append(
-                finding(
-                    "pipeline-stream-consistency",
-                    "warning",
                     "/streams",
-                    f"stream file {sf.name} has pipeline_id {spid!r} which does not match the placeholder "
-                    f"derived from pipeline.alias ({pipeline_base!r}). If you supply your own pipeline_id, "
-                    "ensure stream files match.",
+                    f"stream file {sf.name} has pipeline_id {spid!r} which does not match "
+                    f"pipeline.alias ({pipeline_alias!r}).",
                     rule_doc="pipelines/pipeline-schema-parameterization.md#stream-pinning",
                 )
             )
@@ -1112,19 +990,6 @@ def check_pipeline_stream_consistency(doc: dict, bundle_root: Path | None) -> li
                             )
                         )
     return findings
-
-
-def _synthetic_pipeline_id(alias: str) -> str:
-    """Mint the deterministic placeholder versioned ID the orchestrator uses for a pipeline.
-
-    Caller must pass a string. Non-string aliases come from malformed documents
-    and should be filtered upstream rather than reaching this helper.
-    """
-    if not isinstance(alias, str):
-        raise TypeError(f"_synthetic_pipeline_id requires a string alias, got {type(alias).__name__}")
-    import uuid
-    base = uuid.uuid5(uuid.NAMESPACE_URL, f"analitiq:pipeline:{alias}")
-    return f"{base}_v1"
 
 
 # ---------------------------------------------------------------------------
@@ -1194,13 +1059,11 @@ def run_semantic_validators(
     findings: list[dict] = []
     findings.extend(check_reserved_fields(doc, entity))
     if entity == "pipeline":
-        findings.extend(check_versioned_ids_pipeline(doc))
         findings.extend(check_schedule_shape(doc))
         findings.extend(check_runtime_ranges(doc))
         findings.extend(check_pipeline_stream_consistency(doc, bundle_root))
         findings.extend(check_status_lifecycle(doc, bundle_root))
     elif entity == "stream":
-        findings.extend(check_versioned_ids_stream(doc))
         findings.extend(check_endpoint_ref_shape(doc))
         findings.extend(check_mapping_shape(doc))
         findings.extend(check_filter_operators(doc))

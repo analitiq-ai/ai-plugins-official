@@ -1,11 +1,11 @@
 {
   "$schema": "https://schemas.analitiq.ai/stream/latest.json",
   "alias": "orders_to_warehouse",
-  "pipeline_id": "b4904c77-0a4a-4a8d-a768-4a8b5f2f2414",
+  "pipeline_id": "wise_to_postgresql",
   "source": {
     "endpoint_ref": {
       "scope": "connection",
-      "connection_id": "00000000-0000-4000-8000-000000000001_v1",
+      "connection_id": "mysql_source",
       "alias": "public_orders"
     },
     "replication": {"method": "full_refresh"}
@@ -14,7 +14,7 @@
     {
       "endpoint_ref": {
         "scope": "connection",
-        "connection_id": "00000000-0000-4000-8000-000000000002_v1",
+        "connection_id": "postgresql",
         "alias": "warehouse_orders"
       },
       "write": {"mode": "insert"}

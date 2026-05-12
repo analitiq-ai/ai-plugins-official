@@ -43,6 +43,7 @@ Every authored document must:
 1. Declare `$schema: "https://schemas.analitiq.ai/stream/latest.json"`.
 2. Include `alias`, `pipeline_id` (a **base** UUID, no `_v<n>` suffix),
    `source`, and at least one `destinations[]` entry.
-3. Use **versioned** connection IDs in every `endpoint_ref.connection_id`.
+3. Use **connection aliases** in every `endpoint_ref.connection_id`
+   (the field name keeps `_id` but the value is an alias string).
 4. Pass `python scripts/validate_pipeline.py --entity stream
    --document <path>` with zero error findings.

@@ -195,42 +195,6 @@ def test_reserved_assignments_hash_inside_mapping_caught(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Layer 2 — versioned-id-format
-# ---------------------------------------------------------------------------
-
-
-def test_pipeline_versioned_ids_caught():
-    result = run_validator(
-        FIXTURES / "invalid_pipeline_versioned_id.json", "pipeline", "--semantic-only"
-    )
-    errs = errors_of(result, "versioned-id-format")
-    paths = sorted(e["path"] for e in errs)
-    assert "/connections/source" in paths, f"expected source id error; got {paths}"
-    assert "/connections/destinations/0" in paths, f"expected destinations[0] id error; got {paths}"
-
-
-def test_pipeline_duplicate_stream_base_uuid_caught():
-    result = run_validator(
-        FIXTURES / "invalid_pipeline_duplicate_stream_base.json",
-        "pipeline", "--semantic-only", "--bundle-root", str(FIXTURES),
-    )
-    errs = errors_of(result, "pipeline-stream-consistency")
-    assert any("appears more than once" in e["message"] for e in errs), (
-        f"expected duplicate base UUID finding; got {errs}"
-    )
-
-
-def test_stream_pipeline_id_must_not_be_versioned():
-    result = run_validator(
-        FIXTURES / "invalid_stream_pipeline_id_versioned.json", "stream", "--semantic-only"
-    )
-    errs = errors_of(result, "versioned-id-format")
-    assert any(e["path"] == "/pipeline_id" for e in errs), (
-        f"expected /pipeline_id versioned-id error; got {errs}"
-    )
-
-
-# ---------------------------------------------------------------------------
 # Layer 2 — schedule-shape
 # ---------------------------------------------------------------------------
 
@@ -493,8 +457,8 @@ def test_pipeline_stream_consistency_ignores_sibling_pipelines(tmp_path):
         "$schema": "https://schemas.analitiq.ai/pipeline/latest.json",
         "alias": "other_pipeline",
         "connections": {
-            "source": "99999999-9999-4999-8999-999999999999_v1",
-            "destinations": ["88888888-8888-4888-8888-888888888888_v1"],
+            "source": "other_source",
+            "destinations": ["other_dest"],
         },
         "streams": [],
         "schedule": {"type": "manual"},
@@ -502,16 +466,16 @@ def test_pipeline_stream_consistency_ignores_sibling_pipelines(tmp_path):
     (other_dir / "streams" / "stray.json").write_text(json.dumps({
         "$schema": "https://schemas.analitiq.ai/stream/latest.json",
         "alias": "stray",
-        "pipeline_id": "00000000-0000-4000-8000-000000000abc",
+        "pipeline_id": "other_pipeline",
         "source": {
             "endpoint_ref": {"scope": "connector",
-                             "connection_id": "99999999-9999-4999-8999-999999999999_v1",
+                             "connection_id": "other_source",
                              "alias": "x"},
             "replication": {"method": "full_refresh"},
         },
         "destinations": [{
             "endpoint_ref": {"scope": "connection",
-                             "connection_id": "88888888-8888-4888-8888-888888888888_v1",
+                             "connection_id": "other_dest",
                              "alias": "y"},
             "write": {"mode": "insert"},
         }],

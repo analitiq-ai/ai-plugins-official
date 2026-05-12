@@ -17,13 +17,13 @@ Given a source connector alias and a destination connector alias, the plugin:
    `.secrets/` templates the user fills in.
 4. For database connections, introspects the live database to discover schemas
    and tables, then authors `database-endpoint` documents per selected table.
-5. Authors a `pipeline.json` shell that references the connections by
-   placeholder versioned UUIDs (e.g. `…000001_v1`).
+5. Authors a `pipeline.json` shell that references the connections by alias
+   (e.g. `"wise"`, `"postgresql"`).
 6. Authors one `stream.json` per selected endpoint, dispatched in parallel.
 7. Validates everything against the published JSON schemas plus a layer of
-   semantic validators (versioned-id format, schedule shape, runtime ranges,
-   endpoint-ref shape, mapping shape, filter operators, secret-ref format,
-   column uniqueness, pipeline↔stream consistency, status lifecycle).
+   semantic validators (schedule shape, runtime ranges, endpoint-ref shape,
+   mapping shape, filter operators, secret-ref format, column uniqueness,
+   pipeline↔stream consistency, status lifecycle).
 8. Writes files to disk at predictable paths only when every artifact passes.
 
 **Usage:** Launch Claude Code and say *"build a pipeline from &lt;source&gt; to
@@ -67,8 +67,6 @@ runs:
    selected by `--entity {pipeline|stream|connection|database_endpoint}`.
 2. **Semantic validators** for rules JSON Schema can't express:
    - `reserved-field` — no server-managed fields in authored docs.
-   - `versioned-id-format` — connection / stream IDs match
-     `<uuid>_v<positive integer>`; stream `pipeline_id` is a base UUID.
    - `schedule-shape` — manual / interval / cron field exclusivity; IANA
      timezone parses.
    - `runtime-ranges` — engine vcpu/memory, runtime buffer/batching, error
@@ -139,14 +137,16 @@ pipelines/
         └── {stream-alias}.json     # validates against stream/latest.json
 ```
 
-### Connection IDs are placeholders
+### Identifiers are aliases, not UUIDs
 
-The pipeline schema requires versioned connection IDs of the form
-`<uuid>_v<positive integer>`. The plugin mints **stable placeholder** IDs
-deterministically from the connection alias (UUID v5, suffix `_v1`) and
-embeds them into `pipeline.json` and stream `endpoint_ref.connection_id`.
-The user (or the registry) replaces them with real IDs at submission time.
-The plugin makes no API calls.
+The plugin authors **aliases** into every reference slot. Pipelines
+reference their connections by alias in `connections.source` and
+`connections.destinations[]`; streams reference their parent pipeline
+by alias in `pipeline_id`; stream `endpoint_ref.connection_id` holds
+the connection alias (the field name keeps `_id` for schema
+compatibility, but the value is a string alias). The engine resolves
+aliases to internal identifiers at runtime. The plugin makes no API
+calls and mints no UUIDs.
 
 ### Reusing existing connectors and connections
 

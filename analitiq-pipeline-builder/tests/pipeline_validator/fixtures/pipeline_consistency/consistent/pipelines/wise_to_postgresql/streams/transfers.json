@@ -1,23 +1,27 @@
 {
   "$schema": "https://schemas.analitiq.ai/stream/latest.json",
   "alias": "transfers",
-  "pipeline_id": "7df1856b-3bb9-5c6b-84b3-a200dc02cb3e",
+  "pipeline_id": "wise_to_postgresql",
   "source": {
     "endpoint_ref": {
       "scope": "connector",
-      "connection_id": "00000000-0000-4000-8000-000000000003_v1",
+      "connection_id": "wise",
       "alias": "transfers"
     },
-    "replication": {"method": "full_refresh"}
+    "replication": {
+      "method": "full_refresh"
+    }
   },
   "destinations": [
     {
       "endpoint_ref": {
         "scope": "connection",
-        "connection_id": "00000000-0000-4000-8000-000000000002_v1",
+        "connection_id": "postgresql",
         "alias": "warehouse_transfers"
       },
-      "write": {"mode": "insert"}
+      "write": {
+        "mode": "insert"
+      }
     }
   ],
   "status": "draft"

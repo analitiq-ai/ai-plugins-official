@@ -5,7 +5,7 @@ Source and every destination carry an `endpoint_ref`:
 ```jsonc
 {
   "scope": "connector" | "connection",   // closed enum
-  "connection_id": "<versioned-connection-id>",
+  "connection_id": "<connection-alias>",
   "alias": "<endpoint alias>"
 }
 ```
@@ -25,13 +25,12 @@ on API endpoints.
 
 ## `connection_id`
 
-The **versioned** connection UUID the parent pipeline selected for that
-side (source for `stream.source.endpoint_ref`, destinations for
-`stream.destinations[].endpoint_ref`). Pattern:
-
-```
-^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}_v[1-9][0-9]*$
-```
+The **connection alias** the parent pipeline selected for that side —
+source for `stream.source.endpoint_ref`, destinations for
+`stream.destinations[].endpoint_ref`. The field name historically
+implies a UUID, but the published schema accepts any non-empty string
+and the engine resolves the alias at runtime. The value matches one of
+`pipeline.connections.source` or `pipeline.connections.destinations[]`.
 
 ## `alias`
 

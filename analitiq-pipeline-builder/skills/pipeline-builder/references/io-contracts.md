@@ -79,11 +79,11 @@ the creator returns:
   "passed": false,
   "findings": [
     {
-      "validator": "versioned-id-format",
+      "validator": "schedule-shape",
       "severity": "error",
-      "path": "/connections/source",
-      "message": "value 'conn_1' does not match versioned-id pattern <uuid>_v<positive integer>.",
-      "rule_doc": "shared/identity-and-versioning.md"
+      "path": "/schedule",
+      "message": "schedule.type='interval' requires interval_minutes; cron_expression must be absent.",
+      "rule_doc": "shared/schedule.md"
     }
   ]
 }
