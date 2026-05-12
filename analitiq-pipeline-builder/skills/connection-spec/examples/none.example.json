@@ -1,0 +1,9 @@
+{
+  "$schema": "https://schemas.analitiq.ai/connection/latest.json",
+  "alias": "public_status_api",
+  "connector_alias": "public-status-api",
+  "display_name": "Public status API",
+  "parameters": {
+    "base_url": "https://status.example.com/api/v1"
+  }
+}

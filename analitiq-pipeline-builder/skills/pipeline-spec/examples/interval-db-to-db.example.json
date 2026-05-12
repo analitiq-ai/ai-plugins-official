@@ -1,0 +1,27 @@
+{
+  "$schema": "https://schemas.analitiq.ai/pipeline/latest.json",
+  "alias": "mysql_to_postgresql",
+  "display_name": "MySQL to PostgreSQL",
+  "status": "draft",
+  "connections": {
+    "source": "mysql_source",
+    "destinations": [
+      "postgresql_warehouse"
+    ]
+  },
+  "streams": [
+    "mysql_users_to_postgresql_users",
+    "mysql_orders_to_postgresql_orders"
+  ],
+  "schedule": {
+    "type": "interval",
+    "timezone": "UTC",
+    "interval_minutes": 60
+  },
+  "runtime": {
+    "batching": {
+      "batch_size": 3000,
+      "max_concurrent_batches": 3
+    }
+  }
+}

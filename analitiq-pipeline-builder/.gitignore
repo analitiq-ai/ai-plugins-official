@@ -3,3 +3,6 @@
 node_modules/
 .secrets/
 credential-form.html
+__pycache__/
+*.pyc
+.pytest_cache/

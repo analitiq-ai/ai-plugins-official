@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schemas.analitiq.ai/pipeline/latest.json",
+  "alias": "wise_to_postgresql",
+  "status": "draft",
+  "connections": {
+    "source": "wise",
+    "destinations": [
+      "postgresql"
+    ]
+  },
+  "streams": [
+    "transfers"
+  ],
+  "schedule": {
+    "type": "manual"
+  }
+}

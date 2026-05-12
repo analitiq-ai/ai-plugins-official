@@ -2,10 +2,9 @@
 
 Claude Code plugin that authors connector JSON documents conforming to the
 published Analitiq schema contract at
-[`schemas.analitiq.work`](https://schemas.analitiq.work) (dev) /
-`schemas.analitiq.ai` (production). Supports API and database connectors;
-storage kinds (`file`, `s3`, `stdout`) are accepted by the schema but the
-engine doesn't yet execute them — those are stubbed.
+[`schemas.analitiq.ai`](https://schemas.analitiq.ai). Supports API and database
+connectors; storage kinds (`file`, `s3`, `stdout`) are accepted by the schema
+but the engine doesn't yet execute them — those are stubbed.
 
 ## What it does
 
@@ -56,9 +55,9 @@ The plugin includes a Python validator script
 (`scripts/validate_connector.py`) that runs:
 
 1. **JSON Schema validation** (Draft 2020-12) against the published schema:
-   - Connector → `https://schemas.analitiq.work/connector/latest.json`
-   - API endpoint → `https://schemas.analitiq.work/api-endpoint/latest.json`
-   - Database endpoint → `https://schemas.analitiq.work/database-endpoint/latest.json`
+   - Connector → `https://schemas.analitiq.ai/connector/latest.json`
+   - API endpoint → `https://schemas.analitiq.ai/api-endpoint/latest.json`
+   - Database endpoint → `https://schemas.analitiq.ai/database-endpoint/latest.json`
 2. **Semantic validators** for rules JSON Schema can't express:
    - `reserved-field`, `expression-resolver`, `phase-resolvability`,
      `transport-ref`, `dsn-binding`, `auth-shape`, `tls-consistency`,
@@ -68,7 +67,7 @@ Run directly:
 
 ```bash
 python scripts/validate_connector.py \
-  --schema-url https://schemas.analitiq.work/connector/latest.json \
+  --schema-url https://schemas.analitiq.ai/connector/latest.json \
   --document path/to/connector.json
 ```
 
@@ -76,14 +75,11 @@ Output is a single `Diagnostics` JSON object. Exit 0 iff `passed: true`.
 
 Tests live under `tests/connector_validator/`. Run with `pytest`.
 
-## Schema host (dev → prod)
+## Schema host
 
-- The validator currently *fetches* schemas from
-  `https://schemas.analitiq.work` (dev).
-- Authored documents declare `$schema` with the production host
-  `https://schemas.analitiq.ai/...` — that URL is locked by a `const` inside
-  the published schema.
-- When production cuts over, the validator's fetch host flips to `.ai`.
+- The validator fetches schemas from `https://schemas.analitiq.ai`.
+- Authored documents declare `$schema` with the same host — the URL is
+  locked by a `const` inside the published schema.
 
 ## File output
 
@@ -123,7 +119,7 @@ claude plugin add ./analitiq-connector-builder
 
 - [Analitiq DIP Registry](https://github.com/analitiq-ai/analitiq-dip-registry) — community connector submissions.
 - [Schema contracts](https://github.com/analitiq-ai/analitiq-infra/tree/main/docs/schema-contracts) — authoritative shape specs.
-- [Published schemas](https://schemas.analitiq.work) — the JSON Schemas the validator runs against.
+- [Published schemas](https://schemas.analitiq.ai) — the JSON Schemas the validator runs against.
 
 ## License
 

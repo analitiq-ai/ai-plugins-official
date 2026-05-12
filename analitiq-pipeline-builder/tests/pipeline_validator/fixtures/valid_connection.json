@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schemas.analitiq.ai/connection/latest.json",
+  "alias": "production_postgresql",
+  "connector_alias": "postgresql",
+  "display_name": "Production PostgreSQL",
+  "description": "Read-only analytics replica.",
+  "parameters": {
+    "host": "db.example.com",
+    "port": 5432,
+    "database": "analytics",
+    "username": "readonly_user",
+    "ssl_mode": "verify-full"
+  },
+  "secret_refs": {
+    "password": "secrets/production_postgresql/password",
+    "ssl_ca_certificate": "secrets/production_postgresql/ssl_ca_certificate"
+  },
+  "tags": ["production", "warehouse"]
+}

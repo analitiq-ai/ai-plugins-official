@@ -1,0 +1,14 @@
+{
+  "$schema": "https://schemas.analitiq.ai/pipeline/latest.json",
+  "alias": "wise_to_postgresql",
+  "connections": {
+    "source": "wise",
+    "destinations": ["postgresql"]
+  },
+  "streams": [],
+  "schedule": {
+    "type": "manual",
+    "cron_expression": "cron(0 12 * * ? *)",
+    "interval_minutes": 15
+  }
+}

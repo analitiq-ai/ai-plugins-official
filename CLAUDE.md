@@ -9,7 +9,7 @@ This is the official directory of Analitiq Claude Code plugins for building data
 ## Plugins
 
 ### `analitiq-connector-builder` (v2.0.0)
-Authors connector and endpoint JSON documents conforming to the published Analitiq schema contract at `schemas.analitiq.work` (dev) / `schemas.analitiq.ai` (production). Connectors may be published to the `analitiq-dip-registry` GitHub org as individual repos named `{alias}`.
+Authors connector and endpoint JSON documents conforming to the published Analitiq schema contract at `schemas.analitiq.ai`. Connectors may be published to the `analitiq-dip-registry` GitHub org as individual repos named `{alias}`.
 
 **Agent chain:** `connector-builder` (skill, orchestrator) → `connector-provider-researcher` → `{api|db|storage}-connector-creator` → `endpoint-creator` (API only, parallel) → `connector-schema-validator` (loop) → `connector-drift-classifier` (optional) → write files
 
@@ -36,8 +36,8 @@ Builds data integration pipelines using pre-defined connectors from the DIP regi
 
 ## Key Concepts
 
-- **Connector:** Reusable provider transport + auth contract. Lives in `{alias}/definition/connector.json` and validates against `https://schemas.analitiq.work/connector/latest.json`. Top-level fields: `$schema`, `kind` (one of `api`, `database`, `file`, `s3`, `stdout`), `alias`, `version`, `default_transport`, `transports`, `auth`, `connection_contract`, optional `resource_discovery` and `type_maps`. Server-managed fields (`connector_id`, `connector_schema_version`, `created_at`, `updated_at`) are stamped by the registry on insert and must NOT appear in authored documents.
-- **Endpoint:** Operation template for a single resource. API endpoints live in `{alias}/definition/endpoints/{endpoint-alias}.json` and validate against `https://schemas.analitiq.work/api-endpoint/latest.json`. Database endpoints validate against `database-endpoint/latest.json` but are connection-scoped — the plugin does not author them; they are produced from the connector's `resource_discovery` workflow at runtime. Endpoint documents do not carry a `kind` field; the parent connector's `kind` selects the endpoint schema.
+- **Connector:** Reusable provider transport + auth contract. Lives in `{alias}/definition/connector.json` and validates against `https://schemas.analitiq.ai/connector/latest.json`. Top-level fields: `$schema`, `kind` (one of `api`, `database`, `file`, `s3`, `stdout`), `alias`, `version`, `default_transport`, `transports`, `auth`, `connection_contract`, optional `resource_discovery` and `type_maps`. Server-managed fields (`connector_id`, `connector_schema_version`, `created_at`, `updated_at`) are stamped by the registry on insert and must NOT appear in authored documents.
+- **Endpoint:** Operation template for a single resource. API endpoints live in `{alias}/definition/endpoints/{endpoint-alias}.json` and validate against `https://schemas.analitiq.ai/api-endpoint/latest.json`. Database endpoints validate against `database-endpoint/latest.json` but are connection-scoped — the plugin does not author them; they are produced from the connector's `resource_discovery` workflow at runtime. Endpoint documents do not carry a `kind` field; the parent connector's `kind` selects the endpoint schema.
 - **Type map:** Map from native types to Arrow canonical types. Authored as `connector.type_maps.native_to_arrow.rules` (an array of `{method, native, canonical}` entries with `method` ∈ `exact` | `regex`). For OLTP databases, the connector ships a comprehensive type map; for warehouses and document stores, restrict to documented native types. Connection-level supplements may extend coverage at runtime (e.g. PostGIS `GEOMETRY`).
 - **TLS declaration:** Database transports declare TLS via `transports.<name>.tls` with `mode` (refs `connection.parameters.ssl_mode`) and `ca_certificate` (refs `secrets.ssl_ca_certificate`). The runtime materializer translates this generic declaration into driver-specific arguments. The canonical SSL mode enum is `none | require | verify-ca | verify-full | prefer`.
 - **Value expression:** One of `ref` / `template` / `literal` / `function`. Refs and template variables target the closed scope list: `secrets.*`, `connection.parameters.*`, `connection.selections.*`, `connection.discovered.*`, `auth.*`, `runtime.*`, `stream.*`. Inline functions: `basic_auth`, `jwt_sign`, `url_encode`. Unknown scopes/functions are validation errors.
@@ -76,13 +76,13 @@ Server-managed fields (`connector_id`, `connector_schema_version`, `created_at`,
 
 ## Schemas + Validation
 
-Published schemas (dev host: `schemas.analitiq.work`; production host: `schemas.analitiq.ai`):
+Published schemas (host: `schemas.analitiq.ai`):
 
-- Connector: `https://schemas.analitiq.work/connector/latest.json`
-- API endpoint: `https://schemas.analitiq.work/api-endpoint/latest.json`
-- Database endpoint: `https://schemas.analitiq.work/database-endpoint/latest.json`
+- Connector: `https://schemas.analitiq.ai/connector/latest.json`
+- API endpoint: `https://schemas.analitiq.ai/api-endpoint/latest.json`
+- Database endpoint: `https://schemas.analitiq.ai/database-endpoint/latest.json`
 
-Authored documents declare `$schema` with the production host (`.ai`) — that URL is locked by a `const` inside each schema. The validator currently *fetches* from the dev host (`.work`); production cutover flips fetch to `.ai`.
+Authored documents declare `$schema` with this host — the URL is locked by a `const` inside each schema, and the validator fetches from the same host.
 
 The `connector-schema-validator` sub-agent runs `scripts/validate_connector.py`, which performs Draft 2020-12 JSON Schema validation plus semantic validators (reserved-field, expression-resolver, phase-resolvability, transport-ref, dsn-binding, auth-shape, tls-consistency, type-map-coverage). Tests under `analitiq-connector-builder/tests/connector_validator/`.
 

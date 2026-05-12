@@ -71,9 +71,9 @@ sub-agents own those skills.
    list, invoke `endpoint-creator`. Endpoint creators may run in
    parallel — dispatch them in a single message.
 5. **Validate** — invoke `connector-schema-validator`:
-   - Connector → `https://schemas.analitiq.work/connector/latest.json`.
-   - API endpoint → `https://schemas.analitiq.work/api-endpoint/latest.json`.
-   - Database endpoint → `https://schemas.analitiq.work/database-endpoint/latest.json`.
+   - Connector → `https://schemas.analitiq.ai/connector/latest.json`.
+   - API endpoint → `https://schemas.analitiq.ai/api-endpoint/latest.json`.
+   - Database endpoint → `https://schemas.analitiq.ai/database-endpoint/latest.json`.
 
    The orchestrator should attempt at most 5 fix passes per artifact —
    re-dispatch the matching creator with the validator's findings,
@@ -120,10 +120,9 @@ Report to the user:
   `auth.*`, `runtime.*`, `stream.*`) must come from the documented
   scopes in `references/value-expressions.md`. Unknown scope = stop and
   ask.
-- Authored documents declare `$schema` with the production host
-  (`https://schemas.analitiq.ai/...`). The validator currently *fetches*
-  from the dev host (`https://schemas.analitiq.work/...`); both are
-  intentional during the dev → prod migration.
+- Authored documents declare `$schema` with the published host
+  (`https://schemas.analitiq.ai/...`). The validator fetches from the
+  same host.
 - Storage kinds (`file`, `s3`, `stdout`) currently produce a structured
   refusal. If the user asks for one, surface the refusal note and stop.
 - Never overwrite an existing `{alias}/` directory. The pre-flight

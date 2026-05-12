@@ -1,0 +1,15 @@
+{
+  "$schema": "https://schemas.analitiq.ai/database-endpoint/latest.json",
+  "alias": "public_orders",
+  "database_object": {
+    "schema": "public",
+    "name": "orders",
+    "object_type": "table"
+  },
+  "columns": [
+    {"name": "id", "native_type": "uuid", "ordinal_position": 1},
+    {"name": "id", "native_type": "uuid", "ordinal_position": 2},
+    {"name": "amount", "native_type": "numeric(12,2)", "ordinal_position": 2}
+  ],
+  "primary_keys": ["does_not_exist"]
+}
