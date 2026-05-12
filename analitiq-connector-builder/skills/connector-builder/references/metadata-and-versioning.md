@@ -7,7 +7,7 @@ and `connectors/connector-schema-parameterization.md`.
 
 | Field | Required | Notes |
 |---|---|---|
-| `$schema` | Yes (for standalone files) | Fixed const: `https://schemas.analitiq.ai/connector/latest.json`. The schema host inside the doc is `.ai` (production); the *fetch* host the validator uses is `.work` (current dev). |
+| `$schema` | Yes (for standalone files) | Fixed const: `https://schemas.analitiq.ai/connector/latest.json`. The validator fetches from the same host. |
 | `kind` | Yes | One of `api`, `database`, `file`, `s3`, `stdout`. |
 | `alias` | Yes | Stable connector slug. Lowercase, `[a-z0-9_-]`. Immutable in the registry. |
 | `display_name` | No | User-facing label. |
@@ -65,6 +65,5 @@ Authored connector files declare:
 ```
 
 This is locked by a `const` inside the published schema. Do not write a
-different URL — the JSON Schema validator will reject it. Note this is
-the production host; the validator currently fetches from `.work`
-(dev), but the in-document declaration uses `.ai`.
+different URL — the JSON Schema validator will reject it. The validator
+fetches from the same host.

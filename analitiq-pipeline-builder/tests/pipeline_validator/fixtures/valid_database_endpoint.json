@@ -1,0 +1,42 @@
+{
+  "$schema": "https://schemas.analitiq.ai/database-endpoint/latest.json",
+  "alias": "public_orders",
+  "display_name": "Orders",
+  "description": "Orders table from production PostgreSQL.",
+  "database_object": {
+    "schema": "public",
+    "name": "orders",
+    "object_type": "table"
+  },
+  "columns": [
+    {
+      "name": "id",
+      "native_type": "uuid",
+      "arrow_type": "Utf8",
+      "nullable": false,
+      "default": null,
+      "comment": null,
+      "ordinal_position": 1
+    },
+    {
+      "name": "amount",
+      "native_type": "numeric(12,2)",
+      "arrow_type": "Decimal128",
+      "nullable": false,
+      "default": null,
+      "comment": null,
+      "ordinal_position": 2
+    },
+    {
+      "name": "updated_at",
+      "native_type": "timestamp with time zone",
+      "arrow_type": "Timestamp",
+      "nullable": true,
+      "default": null,
+      "comment": null,
+      "ordinal_position": 3
+    }
+  ],
+  "primary_keys": ["id"],
+  "tags": ["orders"]
+}

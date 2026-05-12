@@ -1,0 +1,29 @@
+{
+  "$schema": "https://schemas.analitiq.ai/stream/latest.json",
+  "alias": "transfers_to_warehouse",
+  "display_name": "Transfers to warehouse",
+  "pipeline_id": "wise_to_postgresql",
+  "source": {
+    "endpoint_ref": {
+      "scope": "connector",
+      "connection_id": "wise",
+      "alias": "transfers"
+    },
+    "filters": [
+      {"field": "status", "operator": "eq", "value": "completed"}
+    ],
+    "replication": {"method": "full_refresh"},
+    "primary_keys": ["id"]
+  },
+  "destinations": [
+    {
+      "endpoint_ref": {
+        "scope": "connection",
+        "connection_id": "postgresql",
+        "alias": "public_transfers"
+      },
+      "write": {"mode": "insert"}
+    }
+  ],
+  "status": "draft"
+}

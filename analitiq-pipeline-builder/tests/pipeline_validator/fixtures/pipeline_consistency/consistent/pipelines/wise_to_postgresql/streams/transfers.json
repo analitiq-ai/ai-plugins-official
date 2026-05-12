@@ -1,0 +1,28 @@
+{
+  "$schema": "https://schemas.analitiq.ai/stream/latest.json",
+  "alias": "transfers",
+  "pipeline_id": "wise_to_postgresql",
+  "source": {
+    "endpoint_ref": {
+      "scope": "connector",
+      "connection_id": "wise",
+      "alias": "transfers"
+    },
+    "replication": {
+      "method": "full_refresh"
+    }
+  },
+  "destinations": [
+    {
+      "endpoint_ref": {
+        "scope": "connection",
+        "connection_id": "postgresql",
+        "alias": "warehouse_transfers"
+      },
+      "write": {
+        "mode": "insert"
+      }
+    }
+  ],
+  "status": "draft"
+}

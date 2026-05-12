@@ -1,0 +1,16 @@
+{
+  "$schema": "https://schemas.analitiq.ai/database-endpoint/latest.json",
+  "alias": "analytics_orders",
+  "display_name": "BigQuery analytics.orders",
+  "database_object": {
+    "catalog": "analytics-prod",
+    "schema": "warehouse",
+    "name": "orders",
+    "object_type": "table"
+  },
+  "columns": [
+    {"name": "order_id", "native_type": "STRING", "arrow_type": "Utf8", "nullable": false, "ordinal_position": 1},
+    {"name": "created_at", "native_type": "TIMESTAMP", "arrow_type": "Timestamp", "nullable": false, "ordinal_position": 2},
+    {"name": "customer", "native_type": "STRUCT<name STRING, age INT64>", "arrow_type": "Struct", "nullable": true, "ordinal_position": 3}
+  ]
+}

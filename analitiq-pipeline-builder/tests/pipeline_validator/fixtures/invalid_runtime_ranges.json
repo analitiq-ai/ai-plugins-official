@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schemas.analitiq.ai/pipeline/latest.json",
+  "alias": "wise_to_postgresql",
+  "connections": {
+    "source": "wise",
+    "destinations": ["postgresql"]
+  },
+  "streams": [],
+  "schedule": {"type": "manual"},
+  "runtime": {
+    "error_handling": {
+      "strategy": "dlq",
+      "max_retries": 7,
+      "retry_delay_seconds": null
+    }
+  }
+}

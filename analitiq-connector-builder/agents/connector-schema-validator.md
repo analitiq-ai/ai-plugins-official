@@ -13,17 +13,15 @@ files.
 ## Inputs
 
 - `schema_url` — a published schema URL. One of:
-  - `https://schemas.analitiq.work/connector/latest.json`
-  - `https://schemas.analitiq.work/api-endpoint/latest.json`
-  - `https://schemas.analitiq.work/database-endpoint/latest.json`
-  - `https://schemas.analitiq.work/connection/latest.json` (other plugin uses this)
+  - `https://schemas.analitiq.ai/connector/latest.json`
+  - `https://schemas.analitiq.ai/api-endpoint/latest.json`
+  - `https://schemas.analitiq.ai/database-endpoint/latest.json`
+  - `https://schemas.analitiq.ai/connection/latest.json` (other plugin uses this)
 - `document_path` — absolute path to the draft JSON document.
 
-The dev host (`schemas.analitiq.work`) is what's currently live. Production
-will move to `schemas.analitiq.ai` later. The `$schema` const inside each
-schema points at `analitiq.ai`, so authored documents must declare the
-`.ai` URL in their own `$schema` field; only the *fetch* URL stays on
-`.work` for now.
+The `$schema` const inside each published schema points at
+`schemas.analitiq.ai`, so authored documents declare the same URL in
+their own `$schema` field and the validator fetches from the same host.
 
 ## Layer 1 — JSON Schema validation
 
