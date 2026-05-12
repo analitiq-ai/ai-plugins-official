@@ -9,8 +9,8 @@
   },
   "columns": [
     {"name": "_id", "native_type": "BSON.ObjectId", "arrow_type": "Utf8", "nullable": false},
-    {"name": "created_at", "native_type": "BSON.Date", "arrow_type": "Timestamp", "nullable": true},
-    {"name": "payload", "native_type": "BSON.Document", "arrow_type": "Struct", "nullable": true}
+    {"name": "created_at", "native_type": "BSON.Date", "arrow_type": "Timestamp(MILLISECOND, UTC)", "nullable": true},
+    {"name": "payload", "native_type": "BSON.Document", "arrow_type": "Utf8", "nullable": true}
   ],
   "primary_keys": ["_id"]
 }

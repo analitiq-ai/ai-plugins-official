@@ -48,11 +48,11 @@
         "value": {"expression": {"op": "get", "path": "id"}}
       },
       {
-        "target": {"path": "amount", "arrow_type": "Decimal128", "native_type": "NUMERIC(12,2)", "nullable": false},
+        "target": {"path": "amount", "arrow_type": "Decimal128(12, 2)", "native_type": "NUMERIC(12,2)", "nullable": false},
         "value": {"expression": {"op": "get", "path": "amount"}}
       },
       {
-        "target": {"path": "updated_at", "arrow_type": "Timestamp", "nullable": true},
+        "target": {"path": "updated_at", "arrow_type": "Timestamp(MICROSECOND, UTC)", "nullable": true},
         "value": {"expression": {"op": "get", "path": "updated_at"}}
       }
     ]

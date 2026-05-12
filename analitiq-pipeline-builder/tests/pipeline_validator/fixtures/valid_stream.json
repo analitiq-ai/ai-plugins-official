@@ -63,7 +63,7 @@
       {
         "target": {
           "path": "amount",
-          "arrow_type": "Decimal128",
+          "arrow_type": "Decimal128(12, 2)",
           "native_type": "NUMERIC(12,2)",
           "nullable": false
         },

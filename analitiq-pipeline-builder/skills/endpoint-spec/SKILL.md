@@ -15,8 +15,8 @@ database endpoint document conforming to
 - `spec-database-object.md` — catalog/schema/name/object_type rules; no
   identifier normalization.
 - `spec-columns.md` — `name`, `native_type` (required), `arrow_type`
-  (optional PascalCase), `nullable`, `default`, `comment`,
-  `ordinal_position`.
+  (required, fully-qualified Apache Arrow canonical type), `nullable`,
+  `default`, `comment`, `ordinal_position`.
 - At least one of `examples/*.example.json` for the database dialect
   you're authoring.
 

@@ -10,9 +10,9 @@
   },
   "columns": [
     {"name": "id", "native_type": "uuid", "arrow_type": "Utf8", "nullable": false, "default": null, "comment": null, "ordinal_position": 1},
-    {"name": "amount", "native_type": "numeric(12,2)", "arrow_type": "Decimal128", "nullable": false, "default": null, "comment": null, "ordinal_position": 2},
+    {"name": "amount", "native_type": "numeric(12,2)", "arrow_type": "Decimal128(12, 2)", "nullable": false, "default": null, "comment": null, "ordinal_position": 2},
     {"name": "status", "native_type": "text", "arrow_type": "Utf8", "nullable": false, "default": null, "comment": null, "ordinal_position": 3},
-    {"name": "updated_at", "native_type": "timestamp with time zone", "arrow_type": "Timestamp", "nullable": true, "default": null, "comment": null, "ordinal_position": 4}
+    {"name": "updated_at", "native_type": "timestamp with time zone", "arrow_type": "Timestamp(MICROSECOND, UTC)", "nullable": true, "default": null, "comment": null, "ordinal_position": 4}
   ],
   "primary_keys": ["id"]
 }
