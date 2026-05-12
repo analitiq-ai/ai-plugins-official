@@ -1,6 +1,6 @@
 # Changelog
 
-## [unreleased]
+## [3.0.1] - 2026-05-12
 
 ### Removed
 - `connector_schema_version` dropped from the `reserved-field`

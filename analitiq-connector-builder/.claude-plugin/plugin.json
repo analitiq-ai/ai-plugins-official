@@ -1,7 +1,7 @@
 {
   "name": "analitiq-connector-builder",
   "description": "Analitiq Connector Builder — authors connector and endpoint JSON documents that conform to the published Analitiq schema contract (schemas.analitiq.ai). Supports kind=api and kind=database; storage kinds (file/s3/stdout) are recognized by the schema and stubbed pending engine support.",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "keywords": ["data-integration", "connectors", "api", "database", "analitiq", "schema-contract"],
   "author": {
     "name": "Analitiq"
