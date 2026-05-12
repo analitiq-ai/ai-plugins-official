@@ -95,10 +95,10 @@ def test_examples_glob_is_non_empty():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("field", ["connector_id", "connector_schema_version", "created_at", "updated_at"])
+@pytest.mark.parametrize("field", ["connector_id", "created_at", "updated_at"])
 def test_reserved_field_caught(tmp_path, field):
     base = json.loads((FIXTURES / "valid_api_connector.json").read_text())
-    base[field] = "should-not-be-here" if field != "connector_schema_version" else 7
+    base[field] = "should-not-be-here"
     doc_path = tmp_path / f"reserved_{field}.json"
     doc_path.write_text(json.dumps(base))
     result = run_validator(doc_path, "--semantic-only")

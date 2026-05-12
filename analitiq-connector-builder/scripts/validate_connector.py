@@ -141,7 +141,6 @@ def layer1_jsonschema(document: dict, schema: dict) -> list[dict]:
 
 RESERVED_FIELDS = {
     "connector_id",
-    "connector_schema_version",
     "created_at",
     "updated_at",
 }

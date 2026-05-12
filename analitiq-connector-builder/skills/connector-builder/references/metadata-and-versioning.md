@@ -26,11 +26,10 @@ and `connectors/connector-schema-parameterization.md`.
 
 ## Server-managed fields (NEVER author)
 
-These four fields are stamped by the registry on insert/update and must
+These fields are stamped by the registry on insert/update and must
 not appear in authored documents:
 
 - `connector_id`
-- `connector_schema_version`
 - `created_at`
 - `updated_at`
 

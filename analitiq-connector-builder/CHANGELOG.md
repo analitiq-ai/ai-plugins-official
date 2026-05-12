@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.0.1] - 2026-05-12
+
+### Removed
+- `connector_schema_version` dropped from the `reserved-field`
+  validator's `RESERVED_FIELDS` set, its matching parametrized test
+  case, and every doc reference (agent prompts, skill, README,
+  top-level `CLAUDE.md`, `metadata-and-versioning.md`). The published
+  `connector/latest.json` schema no longer carries the field, so
+  guarding against it was dead weight. Mirrors the sibling
+  `analitiq-pipeline-builder` cleanup that landed in PR #27.
+
 ## [3.0.0] - 2026-05-09
 
 ### Changed (BREAKING)

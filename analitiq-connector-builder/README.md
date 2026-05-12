@@ -94,9 +94,8 @@ For each successfully built connector:
 └── README.md
 ```
 
-Server-managed fields (`connector_id`, `connector_schema_version`,
-`created_at`, `updated_at`) are NEVER written to disk — the registry
-stamps them on insert/update.
+Server-managed fields (`connector_id`, `created_at`, `updated_at`)
+are NEVER written to disk — the registry stamps them on insert/update.
 
 ### Existing directories are not overwritten
 
