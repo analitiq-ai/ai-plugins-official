@@ -1,6 +1,6 @@
 ---
 name: pipeline-drift-classifier
-description: Compare an authored pipeline (and its streams) against a previous_release_path and emit a DriftVerdict listing structural changes (added/removed streams, changed write mode, mapping target drift, schedule/runtime changes). Informational only; pipelines/streams use an integer `version` that the registry stamps, so the plugin does not bump versions. Use after Phase 10 validation when a previous release is supplied.
+description: Compare an authored pipeline (and its streams) against a previous_release_path and emit a DriftVerdict listing structural changes (added/removed streams, changed write mode, mapping target drift, schedule/runtime changes). Informational only; pipelines/streams use an integer `version` that the registry stamps, so the plugin does not bump versions. Use after Phase 9 validation when a previous release is supplied.
 tools: Read
 ---
 

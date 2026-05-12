@@ -67,8 +67,8 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
    Existing `connectors/{alias}/` and `connections/{alias}/`
    directories are **not** collisions. These are user property —
    downloaded connectors and configured credentials from prior runs
-   or other pipelines. The orchestrator reuses them in phases 2, 5,
-   and 6 rather than asking the user to delete them. Adding a new
+   or other pipelines. The orchestrator reuses them in phases 2, 4,
+   and 5 rather than asking the user to delete them. Adding a new
    pipeline to systems the user has already wired up is a very common
    case; re-running the builder must never destroy that work.
 
@@ -90,7 +90,7 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
      re-fetch from the registry. Record "Reused existing connector
      at `connectors/{alias}/`" in the final summary. Connector files
      are trusted as registry-owned artifacts — neither this plugin
-     nor phase 10 schema-validates them; downstream creator failures
+     nor phase 9 schema-validates them; downstream creator failures
      will surface any stale-shape issues.
    - **If present but does not parse** → halt and ask the user to
      fix or remove the file themselves. Do not invoke
