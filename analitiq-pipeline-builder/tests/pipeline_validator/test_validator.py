@@ -71,6 +71,97 @@ def test_layer1_valid_fixtures_pass_against_live_schema(filename, entity):
     assert result["passed"] is True
 
 
+@pytest.mark.network
+@pytest.mark.parametrize(
+    "filename,entity",
+    [
+        ("invalid_database_endpoint_bare_arrow_type.json", "database_endpoint"),
+        ("invalid_stream_bare_arrow_type.json", "stream"),
+    ],
+)
+def test_bare_parameterized_arrow_type_rejected(filename, entity):
+    """The published schema regex rejects bare parameterized Arrow types.
+
+    Pins the contract change in PR #34 — Timestamp, Decimal128, Time64, List, Struct
+    et al. must carry parameters. A regression that re-introduces a bare form,
+    or a schema-host change that loosens the regex, will be caught here.
+
+    The stream schema's mapping uses anyOf, so the schema error bubbles up to
+    /mapping rather than a per-assignment arrow_type path. We check the
+    finding mentions the offending value rather than locking in the path.
+    """
+    result = run_validator(FIXTURES / filename, entity)
+    schema_errors = [
+        f for f in result["findings"]
+        if f["validator"] == "json-schema" and f["severity"] == "error"
+    ]
+    assert schema_errors, f"expected Layer-1 error for {filename}; got {result['findings']}"
+    blob = " ".join(f.get("message", "") + " " + f.get("path", "") for f in schema_errors)
+    assert "Decimal128" in blob or "Timestamp" in blob or "arrow_type" in blob, (
+        f"expected error to mention the bare arrow_type or its path; got {schema_errors}"
+    )
+    assert result["passed"] is False
+
+
+@pytest.mark.network
+@pytest.mark.parametrize(
+    "entity,patch",
+    [
+        ("database_endpoint", lambda doc: doc["columns"][0].pop("arrow_type")),
+        ("stream", lambda doc: doc["mapping"]["assignments"][0]["target"].pop("arrow_type")),
+    ],
+    ids=["database_endpoint", "stream"],
+)
+def test_missing_arrow_type_rejected(tmp_path, entity, patch):
+    """`arrow_type` is now required on every column and every mapping target."""
+    source = "valid_database_endpoint.json" if entity == "database_endpoint" else "valid_stream.json"
+    doc = json.loads((FIXTURES / source).read_text())
+    patch(doc)
+    target = tmp_path / f"missing_arrow_type_{entity}.json"
+    target.write_text(json.dumps(doc))
+    result = run_validator(target, entity)
+    schema_errors = [
+        f for f in result["findings"]
+        if f["validator"] == "json-schema" and f["severity"] == "error"
+    ]
+    assert any("arrow_type" in f.get("message", "") or "arrow_type" in f.get("path", "")
+               for f in schema_errors), (
+        f"expected required-field error mentioning arrow_type; got {result['findings']}"
+    )
+    assert result["passed"] is False
+
+
+@pytest.mark.network
+@pytest.mark.parametrize(
+    "arrow_type",
+    [
+        "Timestamp(MICROSECOND, +05:30)",
+        "Timestamp(MICROSECOND, Etc/GMT+5)",
+        "Timestamp(NANOSECOND)",
+        "List<Int64>",
+        "Map<Utf8, Int64>",
+        "Dictionary<Int32, Utf8>",
+        "Struct<id:Int64, name:Utf8>",
+        "FixedSizeBinary(16)",
+        "FixedSizeList<Int64>[8]",
+        "Decimal256(76, 0)",
+        "Time32(SECOND)",
+        "Time64(NANOSECOND)",
+        "Duration(MICROSECOND)",
+        "Interval(YEAR_MONTH)",
+    ],
+)
+def test_layer1_accepts_fully_qualified_arrow_type_variants(tmp_path, arrow_type):
+    """Each fully-qualified variant from the canonical examples block must pass Layer 1."""
+    doc = json.loads((FIXTURES / "valid_database_endpoint.json").read_text())
+    doc["columns"][0]["arrow_type"] = arrow_type
+    target = tmp_path / "variant.json"
+    target.write_text(json.dumps(doc))
+    result = run_validator(target, "database_endpoint")
+    errors = [f for f in result["findings"] if f["severity"] == "error"]
+    assert not errors, f"unexpected errors for arrow_type={arrow_type!r}: {errors}"
+
+
 def test_schema_fetch_failure_is_diagnosed():
     bad_url = "http://127.0.0.1:1/nonexistent.json"
     result = run_validator(
@@ -134,6 +225,23 @@ def test_reference_example_passes_semantic_validation(example):
     entity = _example_entity(example)
     assert entity is not None, f"could not map {example} to a validator entity"
     result = run_validator(example, entity, "--semantic-only")
+    errors = [f for f in result["findings"] if f["severity"] == "error"]
+    assert not errors, f"{example.relative_to(REPO_ROOT)}: {errors}"
+
+
+@pytest.mark.network
+@pytest.mark.parametrize("example", EXAMPLES_GLOB, ids=lambda p: f"{p.parent.parent.name}/{p.name}")
+def test_reference_example_passes_layer1(example):
+    """Every reference example must also pass Layer 1 against the live schema.
+
+    Without this the semantic sweep silently bypasses the regex constraint on
+    `arrow_type` and friends, leaving the canonical examples (e.g. nested
+    `Struct<…>`, fully-qualified `Timestamp(MICROSECOND, UTC)`) unverified
+    against the contract they're meant to demonstrate.
+    """
+    entity = _example_entity(example)
+    assert entity is not None, f"could not map {example} to a validator entity"
+    result = run_validator(example, entity)
     errors = [f for f in result["findings"] if f["severity"] == "error"]
     assert not errors, f"{example.relative_to(REPO_ROOT)}: {errors}"
 

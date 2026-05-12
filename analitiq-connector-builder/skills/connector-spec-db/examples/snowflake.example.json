@@ -60,18 +60,18 @@
         { "method": "exact", "native": "FLOAT",          "canonical": "Float64" },
         { "method": "exact", "native": "DOUBLE",         "canonical": "Float64" },
         { "method": "exact", "native": "BOOLEAN",        "canonical": "Boolean" },
-        { "method": "exact", "native": "VARCHAR",        "canonical": "String" },
-        { "method": "exact", "native": "STRING",         "canonical": "String" },
-        { "method": "exact", "native": "TEXT",           "canonical": "String" },
+        { "method": "exact", "native": "VARCHAR",        "canonical": "Utf8" },
+        { "method": "exact", "native": "STRING",         "canonical": "Utf8" },
+        { "method": "exact", "native": "TEXT",           "canonical": "Utf8" },
         { "method": "exact", "native": "DATE",           "canonical": "Date32" },
         { "method": "exact", "native": "TIME",           "canonical": "Time64" },
         { "method": "exact", "native": "TIMESTAMP_NTZ",  "canonical": "Timestamp" },
         { "method": "exact", "native": "TIMESTAMP_LTZ",  "canonical": "Timestamp" },
         { "method": "exact", "native": "TIMESTAMP_TZ",   "canonical": "Timestamp" },
         { "method": "exact", "native": "BINARY",         "canonical": "Binary" },
-        { "method": "exact", "native": "VARIANT",        "canonical": "String" },
-        { "method": "exact", "native": "OBJECT",         "canonical": "String" },
-        { "method": "exact", "native": "ARRAY",          "canonical": "String" }
+        { "method": "exact", "native": "VARIANT",        "canonical": "Utf8" },
+        { "method": "exact", "native": "OBJECT",         "canonical": "Utf8" },
+        { "method": "exact", "native": "ARRAY",          "canonical": "Utf8" }
       ]
     }
   }

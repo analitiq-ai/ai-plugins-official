@@ -71,18 +71,18 @@
         { "method": "exact", "native": "real",      "canonical": "Float32" },
         { "method": "exact", "native": "double precision", "canonical": "Float64" },
         { "method": "exact", "native": "boolean",   "canonical": "Boolean" },
-        { "method": "exact", "native": "text",      "canonical": "String" },
-        { "method": "regex", "native": "^character varying(\\([0-9]+\\))?$", "canonical": "String" },
-        { "method": "regex", "native": "^character(\\([0-9]+\\))?$", "canonical": "String" },
-        { "method": "exact", "native": "uuid",      "canonical": "String" },
+        { "method": "exact", "native": "text",      "canonical": "Utf8" },
+        { "method": "regex", "native": "^character varying(\\([0-9]+\\))?$", "canonical": "Utf8" },
+        { "method": "regex", "native": "^character(\\([0-9]+\\))?$", "canonical": "Utf8" },
+        { "method": "exact", "native": "uuid",      "canonical": "Utf8" },
         { "method": "exact", "native": "date",      "canonical": "Date32" },
         { "method": "regex", "native": "^time(\\([0-9]+\\))?( without time zone)?$", "canonical": "Time64" },
         { "method": "regex", "native": "^timestamp(\\([0-9]+\\))?( without time zone)?$", "canonical": "Timestamp" },
         { "method": "regex", "native": "^timestamp(\\([0-9]+\\))? with time zone$", "canonical": "Timestamp" },
         { "method": "regex", "native": "^numeric(\\([0-9]+,[0-9]+\\))?$", "canonical": "Decimal128" },
         { "method": "exact", "native": "bytea",     "canonical": "Binary" },
-        { "method": "exact", "native": "json",      "canonical": "String" },
-        { "method": "exact", "native": "jsonb",     "canonical": "String" }
+        { "method": "exact", "native": "json",      "canonical": "Utf8" },
+        { "method": "exact", "native": "jsonb",     "canonical": "Utf8" }
       ]
     }
   }

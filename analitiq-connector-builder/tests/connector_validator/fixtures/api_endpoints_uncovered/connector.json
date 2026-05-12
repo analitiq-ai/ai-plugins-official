@@ -25,7 +25,7 @@
   "type_maps": {
     "native_to_arrow": {
       "rules": [
-        { "method": "exact", "native": "string",  "canonical": "String" },
+        { "method": "exact", "native": "string",  "canonical": "Utf8" },
         { "method": "exact", "native": "integer", "canonical": "Int64" }
       ]
     }

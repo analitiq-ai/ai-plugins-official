@@ -55,10 +55,27 @@ The literal Flatbuffers enum identifiers, uppercase:
 - `TimeUnit`: `SECOND`, `MILLISECOND`, `MICROSECOND`, `NANOSECOND`
 - `IntervalUnit`: `YEAR_MONTH`, `DAY_TIME`, `MONTH_DAY_NANO`
 
+Not every type accepts every unit. The published regex restricts:
+
+| Type | Allowed units |
+|---|---|
+| `Time32` | `SECOND`, `MILLISECOND` only |
+| `Time64` | `MICROSECOND`, `NANOSECOND` only |
+| `Timestamp`, `Duration` | all four `TimeUnit` values |
+| `Interval` | `IntervalUnit` values only |
+
+`Time32(MICROSECOND)` and `Time64(SECOND)` are rejected.
+
 ### `Timestamp` timezone
 
-Optional second argument: `null`, an IANA name (`UTC`, `Europe/Berlin`),
-`Etc/GMT±N`, or a fixed `±HH:MM` offset.
+Optional second argument. Three valid forms:
+
+- **Omit the slot** — naive timestamp, no implied zone: `Timestamp(MICROSECOND)`.
+- **Literal `null`** — explicit naive marker: `Timestamp(MICROSECOND, null)`
+  (distinct from omitting; some readers treat it as "zone is unknown
+  rather than absent").
+- **An actual zone** — IANA name (`UTC`, `Europe/Berlin`), `Etc/GMT±N`,
+  or a fixed `±HH:MM` offset: `Timestamp(MICROSECOND, +05:30)`.
 
 ### Canonical examples
 
@@ -94,10 +111,11 @@ Dictionary<Int32, Utf8>
 | `BIGINT UNSIGNED` (MySQL) | `UInt64` |
 | `real` / `double precision` | `Float32` / `Float64` |
 | `boolean` / `BOOL` | `Boolean` |
-| `numeric(p,s)` / `DECIMAL(p,s)` | `Decimal128(p, s)` (use `Decimal256` when `p > 38`) |
+| `numeric(p,s)` / `DECIMAL(p,s)` | `Decimal128(p, s)` (use `Decimal256` when `p > 38`; max precision is 76) |
 | `date` | `Date32` |
 | `timestamp` / `DATETIME` (no zone) | `Timestamp(MICROSECOND)` |
 | `timestamp with time zone` / `TIMESTAMP_TZ` / BigQuery `TIMESTAMP` | `Timestamp(MICROSECOND, UTC)` |
+| BSON `Date` / JavaScript `Date` (ms epoch) | `Timestamp(MILLISECOND, UTC)` |
 | `time` | `Time64(MICROSECOND)` |
 | `bytea` / `BLOB` | `Binary` |
 | arrays | `List<…>` |
@@ -106,6 +124,15 @@ Dictionary<Int32, Utf8>
 For schemaless or opaque container types (e.g. MongoDB `BSON.Document`,
 PostgreSQL `jsonb` you do not introspect), prefer `Utf8` (JSON-as-text)
 or `Binary` over guessing a `Struct<…>` field list.
+
+### Inner grammar for `Struct<…>` / `Map<…>`
+
+The published regex enforces only that the angle brackets are present and
+non-empty (`Struct<.+>`, `Map<.+, .+>`); the inner grammar shown above
+(`field:Type, …` for structs; `key, value` for maps) is the recommended
+convention but is **not** regex-enforced. Stay consistent with the
+canonical examples block so downstream consumers can parse the inner
+shape unambiguously.
 
 ## `nullable`
 

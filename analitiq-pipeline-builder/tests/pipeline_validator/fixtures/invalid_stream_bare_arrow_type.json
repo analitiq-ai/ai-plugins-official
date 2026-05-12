@@ -1,0 +1,35 @@
+{
+  "$schema": "https://schemas.analitiq.ai/stream/latest.json",
+  "alias": "orders_to_warehouse",
+  "pipeline_id": "mysql_to_warehouse",
+  "source": {
+    "endpoint_ref": {
+      "scope": "connection",
+      "connection_id": "mysql_source",
+      "alias": "public_orders"
+    },
+    "replication": {"method": "full_refresh"}
+  },
+  "destinations": [
+    {
+      "endpoint_ref": {
+        "scope": "connection",
+        "connection_id": "postgresql_warehouse",
+        "alias": "warehouse_orders"
+      },
+      "write": {"mode": "insert"}
+    }
+  ],
+  "mapping": {
+    "assignments": [
+      {
+        "target": {"path": "id", "arrow_type": "Utf8", "nullable": false},
+        "value": {"expression": {"op": "get", "path": "id"}}
+      },
+      {
+        "target": {"path": "amount", "arrow_type": "Decimal128", "native_type": "NUMERIC(12,2)", "nullable": false},
+        "value": {"expression": {"op": "get", "path": "amount"}}
+      }
+    ]
+  }
+}

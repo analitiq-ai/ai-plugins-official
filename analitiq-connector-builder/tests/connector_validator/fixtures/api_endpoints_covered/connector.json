@@ -25,9 +25,9 @@
   "type_maps": {
     "native_to_arrow": {
       "rules": [
-        { "method": "exact", "native": "uuid",      "canonical": "String" },
+        { "method": "exact", "native": "uuid",      "canonical": "Utf8" },
         { "method": "exact", "native": "date-time", "canonical": "Timestamp" },
-        { "method": "exact", "native": "string",    "canonical": "String" },
+        { "method": "exact", "native": "string",    "canonical": "Utf8" },
         { "method": "exact", "native": "integer",   "canonical": "Int64" },
         { "method": "exact", "native": "number",    "canonical": "Float64" },
         { "method": "exact", "native": "boolean",   "canonical": "Boolean" }

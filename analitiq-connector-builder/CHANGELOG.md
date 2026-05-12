@@ -1,5 +1,26 @@
 # Changelog
 
+## [unreleased]
+
+### Changed
+- `type_maps.native_to_arrow.rules[].canonical` values aligned with the
+  fully-qualified Apache Arrow vocabulary used by the pipeline-builder's
+  endpoint `arrow_type` contract. Renamed every `"canonical": "String"`
+  to `"canonical": "Utf8"` (24 occurrences across postgresql / mysql /
+  snowflake / mongodb examples and the api-endpoints test fixtures) —
+  `String` is not a member of the published Arrow type set; the canonical
+  UTF-8 string type is `Utf8`. `skills/connector-spec-db/spec-type-maps.md`
+  rewritten with a new "`canonical` value forms by `method`" section that
+  documents the temporary split: `exact` rules emit the fully-qualified
+  literal (e.g. `Utf8`, `Date32`, `Int64`); `regex` rules matching
+  parameterized natives (`^NUMERIC\(…\)$`, `^timestamp(…)?$`) emit the
+  base PascalCase name (`Decimal128`, `Timestamp`) and the runtime
+  carries parameters from the captured native at discovery time. This
+  is a temporary contract until `type_maps` supports capture-group
+  templating in `canonical`. API-native mapping table updated likewise
+  (`uuid` → `Utf8`, `date-time` → `Timestamp(MICROSECOND, UTC)`,
+  `string` / `email` / `uri` → `Utf8`).
+
 ## [3.0.1] - 2026-05-12
 
 ### Removed
