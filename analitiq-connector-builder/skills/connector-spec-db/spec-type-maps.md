@@ -82,7 +82,7 @@ The full vocabulary is in
 
 | Rule `method` | Required `canonical` form |
 |---|---|
-| `exact` | The fully-qualified type literal. For non-parameterized canonical types (`Utf8`, `Boolean`, `Int64`, `Date32`, `Binary`, …), the bare name. For parameterized canonical types whose database native carries an implicit default (Snowflake `TIMESTAMP_NTZ` defaults to precision 9 → `Timestamp(NANOSECOND)`; Snowflake `NUMBER` defaults to `(38, 0)` → `Decimal128(38, 0)`; MongoDB `date` is ms epoch UTC → `Timestamp(MILLISECOND, UTC)`), encode the default explicitly. |
+| `exact` | The fully-qualified type literal. For non-parameterized canonical types (`Utf8`, `Boolean`, `Int64`, `Date32`, `Binary`, …), the bare name. For parameterized canonical types whose database native carries an implicit default (Snowflake `TIMESTAMP_NTZ` defaults to precision 9 → `Timestamp(NANOSECOND)`; Snowflake `NUMBER` defaults to `(38, 0)` → `Decimal128(38, 0)`; MongoDB `date` is ms epoch UTC → `Timestamp(MILLISECOND, UTC)`; MongoDB `decimal` is IEEE 754 decimal128 with 34 significant digits → `Decimal128(34, 0)`), encode the default explicitly. |
 | `regex` matching a non-parameterized native (e.g. `^text$`) | A fully-qualified literal (e.g. `Utf8`). |
 | `regex` matching a parameterized native (e.g. `^NUMERIC\([0-9]+,[0-9]+\)$`, `^timestamp(\([0-9]+\))?( with time zone)?$`) | The **base PascalCase name** (e.g. `Decimal128`, `Timestamp`). The runtime carries the parameter substrings from the captured native into the canonical at discovery time. |
 

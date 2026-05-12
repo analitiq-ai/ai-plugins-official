@@ -10,16 +10,28 @@
   snowflake / mongodb examples and the api-endpoints test fixtures) —
   `String` is not a member of the published Arrow type set; the canonical
   UTF-8 string type is `Utf8`. `skills/connector-spec-db/spec-type-maps.md`
-  rewritten with a new "`canonical` value forms by `method`" section that
-  documents the temporary split: `exact` rules emit the fully-qualified
-  literal (e.g. `Utf8`, `Date32`, `Int64`); `regex` rules matching
-  parameterized natives (`^NUMERIC\(…\)$`, `^timestamp(…)?$`) emit the
-  base PascalCase name (`Decimal128`, `Timestamp`) and the runtime
-  carries parameters from the captured native at discovery time. This
-  is a temporary contract until `type_maps` supports capture-group
-  templating in `canonical`. API-native mapping table updated likewise
-  (`uuid` → `Utf8`, `date-time` → `Timestamp(MICROSECOND, UTC)`,
-  `string` / `email` / `uri` → `Utf8`).
+  rewritten with a new "`canonical` value forms by `method`" section.
+  Policy:
+  - `exact` rules with a non-parameterized canonical (`Utf8`, `Boolean`,
+    `Int64`, `Date32`, `Binary`, …) emit the bare name.
+  - `exact` rules with a parameterized canonical must encode the
+    database's documented default precision / scale / unit literally —
+    bare `Decimal128` / `Timestamp` / `Time64` from `exact` rules are
+    now wrong. Snowflake `NUMBER`/`DECIMAL` → `Decimal128(38, 0)`,
+    `TIME` → `Time64(NANOSECOND)`, `TIMESTAMP_NTZ` →
+    `Timestamp(NANOSECOND)`, `TIMESTAMP_LTZ`/`TIMESTAMP_TZ` →
+    `Timestamp(NANOSECOND, UTC)`; MongoDB `decimal` (BSON Decimal128,
+    34-digit IEEE 754) → `Decimal128(34, 0)`, `date` (ms epoch UTC) →
+    `Timestamp(MILLISECOND, UTC)`; api `date-time` →
+    `Timestamp(MICROSECOND, UTC)`.
+  - `regex` rules matching parameterized natives (`^NUMERIC\(…\)$`,
+    `^timestamp(…)?$`) emit the base PascalCase name (`Decimal128`,
+    `Timestamp`) and the runtime carries parameters from the captured
+    native at discovery time. Temporary contract until `type_maps`
+    supports capture-group templating in `canonical`.
+  Snowflake / MongoDB examples and the `api_endpoints_covered` test
+  fixture rewritten accordingly. PostgreSQL / MySQL regex rules
+  unchanged.
 
 ## [3.0.1] - 2026-05-12
 
