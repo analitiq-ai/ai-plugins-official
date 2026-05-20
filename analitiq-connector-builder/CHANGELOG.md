@@ -24,7 +24,17 @@
   - `scripts/validate_connector.py` type-map coverage walker now
     descends into `operations.write.<mode>.input.schema` and
     `operations.write.<mode>.params[*]` instead of treating `write`
-    as a single op.
+    as a single op. Added three fixture trees + tests covering
+    fully-covered, uncovered, and multi-mode (insert + upsert)
+    write endpoints — including JSON-pointer assertions to guard
+    against the per-mode loop or `input.schema` path regressing.
+  - `endpoint-creator` write `response` bullet now describes
+    `affected_records` / `generated_keys` / `error.{code,message,details}`
+    / `metadata` / `success_when` instead of just saying "optional".
+  - Repo-root `CLAUDE.md` `Key Concepts` and `Connector Directory
+    Structure` sections updated from `{endpoint-alias}.json` to
+    `{endpoint_id}.json` so the project-level concept doc no longer
+    contradicts the plugin docs.
 - `type_maps.native_to_arrow.rules[].canonical` values aligned with the
   fully-qualified Apache Arrow vocabulary used by the pipeline-builder's
   endpoint `arrow_type` contract. Renamed every `"canonical": "String"`

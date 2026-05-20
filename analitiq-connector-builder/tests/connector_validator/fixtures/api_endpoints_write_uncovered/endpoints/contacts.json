@@ -1,0 +1,23 @@
+{
+  "$schema": "https://schemas.analitiq.ai/api-endpoint/latest.json",
+  "endpoint_id": "contacts",
+  "operations": {
+    "write": {
+      "insert": {
+        "request": { "method": "POST", "path": "/contacts" },
+        "input": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id":         { "type": "string", "format": "uuid" },
+              "created_at": { "type": "string", "format": "date-time" }
+            }
+          }
+        },
+        "params": {
+          "dry_run": { "in": "query", "type": "boolean", "required": false }
+        }
+      }
+    }
+  }
+}

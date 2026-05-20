@@ -1027,6 +1027,10 @@ def _collect_endpoint_natives(endpoint_doc: dict) -> list[tuple[str, str]]:
 
     write = operations.get("write")
     if isinstance(write, dict):
+        # Per api-endpoint/latest.json, write mode keys are restricted to
+        # {"insert", "upsert"}; Layer 1 rejects others. We iterate whatever
+        # is present so a future schema-side mode addition is picked up
+        # without code change.
         for mode, mode_op in write.items():
             if not isinstance(mode_op, dict):
                 continue

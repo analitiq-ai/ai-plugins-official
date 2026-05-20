@@ -30,7 +30,8 @@ containing one endpoint document body.
    `^[a-z0-9][a-z0-9_-]*$`. This is the endpoint document's stable
    identifier; the schema does not accept `alias` on endpoints.
 3. Author `operations.read` when the resource is readable. Required keys
-   are `request` and `response`; `params`, `pagination`, `replication`
+   are `request` and `response` (and inside `response`, both `records`
+   and `schema` are required); `params`, `pagination`, `replication`
    are optional.
    - `request.method` (`GET` or `POST`) and `request.path`.
    - `request.transport_ref` — only if not the default transport.
@@ -58,7 +59,17 @@ containing one endpoint document body.
    - `batching` (optional) — `{"max_records": <int ≥ 2>}` when the
      provider documents a per-request cap.
    - `params` (optional) — same shape as read params.
-   - `response` (optional).
+   - `response` (optional) — write-result extraction. All keys
+     optional; populate whichever the provider documents:
+     - `affected_records` — value expression resolving to the count of
+       impacted records.
+     - `generated_keys` — value expression resolving to
+       provider-assigned identifiers.
+     - `error` — `{code, message, details}`, each a value expression,
+       for failure parsing.
+     - `metadata` — named value expressions for response metadata.
+     - `success_when` — predicate (`eq` / `neq` / `exists` / `and` /
+       `or` / …) determining operation success.
 5. At least one of `operations.read` or `operations.write` must be
    present. Omit the other when the resource is read-only or
    write-only.
