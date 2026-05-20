@@ -68,8 +68,9 @@ containing one endpoint document body.
      - `error` — `{code, message, details}`, each a value expression,
        for failure parsing.
      - `metadata` — named value expressions for response metadata.
-     - `success_when` — predicate (`eq` / `neq` / `exists` / `and` /
-       `or` / …) determining operation success.
+     - `success_when` — predicate determining operation success.
+       Schema-closed set: `eq`, `neq`, `lt`, `lte`, `gt`, `gte`,
+       `exists`, `missing`, `empty`, `not_empty`, `and`, `or`, `not`.
 5. At least one of `operations.read` or `operations.write` must be
    present. Omit the other when the resource is read-only or
    write-only.
