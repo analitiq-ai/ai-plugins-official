@@ -16,17 +16,20 @@ load. The orchestrator's `AuthTypeMapper`
 | `aws_iam` | `examples/aws-iam.example.json` | `credentials.json` (with `aws_access_key_id`, `aws_secret_access_key`) |
 | `none` | `examples/none.example.json` | (none) |
 
-`none` produces a connection with no `secret_refs` and no `.secrets/`
-files — typical for fully public APIs that need only an alias and
-optional parameters.
+`none` produces a connection whose `values` envelope contains only
+non-secret entries (no secret placeholders, no `.secrets/` files) —
+typical for fully public APIs.
 
 ## How the agent uses this
 
 1. Read the downloaded connector document. Look at `auth.type`.
 2. Load the matching `examples/*.example.json`.
-3. Adapt: replace example aliases with the user's alias, replace example
-   parameter values with the user's input, replace example `secret_refs`
-   paths with the plugin convention `secrets/<alias>/<key>`.
+3. Adapt: generate a fresh `connection_id` UUID, set `connector_id` to
+   the connector's slug, replace example `values` entries with the
+   user's input. For each input whose connector contract bucket is
+   `secrets`, write a `"<see .secrets/credentials.json>"` placeholder
+   into `values` and add the key to the `.secrets/credentials.json`
+   template.
 4. Write the `.secrets/<file>.json` template the user fills in.
 5. Validate against `connection/latest.json` and pass.
 

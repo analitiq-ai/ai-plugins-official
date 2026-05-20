@@ -6,21 +6,22 @@ validator (see `scripts/validate_pipeline.py`) enforces this.
 
 ## Pipeline
 
-- `pipeline_id`
 - `version`
 - `org_id`
 - `created_at`
 - `updated_at`
 
+`pipeline_id` is **not** reserved — it is an optional authored UUID
+(see `identity-and-versioning.md`).
+
 ## Stream
 
-- `stream_id`
 - `version`
 - `org_id`
 - `created_at`
 - `updated_at`
 - `schema_hash`
-- `assignments_hash` (top-level and inside `mapping`)
+- `mapping.assignments_hash` (server-computed, `readOnly`; the schema does not define a top-level `assignments_hash` — `additionalProperties: false` rejects it at Layer 1)
 - `source_schema_fingerprint`
 - `target_schema_fingerprint`
 - `source_schema_id`
@@ -29,9 +30,9 @@ validator (see `scripts/validate_pipeline.py`) enforces this.
 - `generic_to_destination`
 - `type_mapping_assignments_hash`
 
-Note: `pipeline_id` **is** authored on streams (as a base UUID — no
-`_v<n>` suffix). It points at the parent pipeline's identity and is
-required, not reserved. See `identity-and-versioning.md`.
+`stream_id` is **not** reserved — it is an optional authored UUID.
+`pipeline_id` is **authored** on streams as the parent pipeline's UUID
+cross-reference; it is required.
 
 The legacy mapping fields (`source_to_generic`, `generic_to_destination`,
 plus the hash fields above) are server-managed under the new schema.
@@ -40,28 +41,27 @@ The registry computes the rest.
 
 ## Connection
 
-- `connection_id`
 - `version`
 - `org_id`
-- `connector_id`
 - `connector_version`
 - `auth_state` (the auth lifecycle status block)
 - `created_at`
 - `updated_at`
 
-`connector_alias` is **not** reserved — it is authored and immutable.
-The registry resolves `connector_alias` → `connector_id` at save time.
+`connection_id` is **not** reserved — it is an optional authored UUID.
+`connector_id` is **authored** as the connector slug (or UUID) and is
+required.
 
 ## Database endpoint
 
-- `endpoint_id` (the catalog stamps it equal to `alias`)
 - `connector_id`
 - `connector_version`
 - `connection_id`
 - `schema_hash`
 
-The endpoint's `alias` is authored and stable — it serves as the
-catalog key after the endpoint is materialized.
+`endpoint_id` is **authored** as a slug (`^[a-z0-9][a-z0-9_-]*$`) and is
+required — it serves as the catalog key after the endpoint is
+materialized.
 
 ## Why JSON Schema still has these as `required`
 

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schemas.analitiq.ai/database-endpoint/latest.json",
-  "alias": "analytics_orders",
+  "endpoint_id": "analytics_orders",
   "display_name": "BigQuery analytics.orders",
   "database_object": {
     "catalog": "analytics-prod",

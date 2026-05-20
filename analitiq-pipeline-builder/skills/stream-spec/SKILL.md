@@ -21,9 +21,8 @@ document conforming to `https://schemas.analitiq.ai/stream/latest.json`.
 
 ## What this skill covers
 
-- Top-level shape: `$schema`, `alias`, `display_name`, `description`,
-  `pipeline_id` (base UUID), `source`, `destinations`, `mapping`,
-  `status`, `tags`, `documentation_url`.
+- Top-level shape: `$schema`, `stream_id`, `display_name`, `description`,
+  `pipeline_id`, `source`, `destinations`, `mapping`, `status`, `tags`.
 - The minimal v1 mapping expression vocabulary: `{op: "get", path: "<source field>"}`
   and `{arrow_type, value}` constants. `arrow_type` is a fully-qualified
   Apache Arrow canonical type string (see `spec-mapping.md`).
@@ -42,9 +41,15 @@ document conforming to `https://schemas.analitiq.ai/stream/latest.json`.
 Every authored document must:
 
 1. Declare `$schema: "https://schemas.analitiq.ai/stream/latest.json"`.
-2. Include `alias`, `pipeline_id` (a **base** UUID, no `_v<n>` suffix),
-   `source`, and at least one `destinations[]` entry.
-3. Use **connection aliases** in every `endpoint_ref.connection_id`
-   (the field name keeps `_id` but the value is an alias string).
-4. Pass `python scripts/validate_pipeline.py --entity stream
+2. Include `pipeline_id`, `source`, and a non-empty `destinations[]`
+   (the schema-required fields). Author `stream_id` as an RFC-4122 UUID
+   the plugin generates (plugin convention; schema permits omission and
+   the service will assign one on ingest). `pipeline_id` carries the
+   parent pipeline's UUID.
+3. Use **connection UUIDs** in every `endpoint_ref.connection_id` — they
+   must match the `connection_id` of the corresponding connection
+   document.
+4. Use **endpoint slugs** in every `endpoint_ref.endpoint_id` — these
+   match `endpoint_id` on the referenced endpoint document.
+5. Pass `python scripts/validate_pipeline.py --entity stream
    --document <path>` with zero error findings.

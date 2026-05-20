@@ -1,13 +1,13 @@
 {
   "$schema": "https://schemas.analitiq.ai/stream/latest.json",
-  "alias": "orders_to_warehouse",
+  "stream_id": "22222222-2222-4222-8222-222222222222",
   "display_name": "Orders to warehouse",
-  "pipeline_id": "mysql_to_postgresql",
+  "pipeline_id": "20202020-2020-4020-8020-202020202020",
   "source": {
     "endpoint_ref": {
       "scope": "connection",
-      "connection_id": "mysql_source",
-      "alias": "public_orders"
+      "connection_id": "21212121-2121-4121-8121-212121212121",
+      "endpoint_id": "public_orders"
     },
     "selected_columns": ["id", "amount", "updated_at", "status"],
     "filters": [
@@ -28,8 +28,8 @@
     {
       "endpoint_ref": {
         "scope": "connection",
-        "connection_id": "postgresql_warehouse",
-        "alias": "warehouse_orders"
+        "connection_id": "05050505-0505-4505-8505-050505050505",
+        "endpoint_id": "warehouse_orders"
       },
       "write": {
         "mode": "upsert",

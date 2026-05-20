@@ -1,14 +1,12 @@
 {
   "$schema": "https://schemas.analitiq.ai/connection/latest.json",
-  "alias": "warehouse_lake",
-  "connector_alias": "s3",
+  "connection_id": "02020202-0202-4202-8202-020202020202",
+  "connector_id": "s3",
   "display_name": "Warehouse lake (S3)",
-  "parameters": {
+  "values": {
     "region": "eu-central-1",
-    "bucket": "analitiq-warehouse-lake"
-  },
-  "secret_refs": {
-    "aws_access_key_id": "secrets/warehouse_lake/aws_access_key_id",
-    "aws_secret_access_key": "secrets/warehouse_lake/aws_secret_access_key"
+    "bucket": "analitiq-warehouse-lake",
+    "aws_access_key_id": "<see .secrets/credentials.json>",
+    "aws_secret_access_key": "<see .secrets/credentials.json>"
   }
 }

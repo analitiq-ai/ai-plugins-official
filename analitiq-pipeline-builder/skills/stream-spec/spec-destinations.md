@@ -18,8 +18,9 @@
 }
 ```
 
-`destinations` is a non-empty array. Tuple `(scope, connection_id, alias)`
-must be unique across entries.
+`destinations` is a non-empty array. Tuple `(scope, connection_id, endpoint_id)`
+must be unique across entries — enforced by the `endpoint-ref-shape` Layer 2
+validator (the published schema does not declare `uniqueItems` on this array).
 
 ## `write.mode`
 

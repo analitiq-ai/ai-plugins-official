@@ -7,17 +7,16 @@ description: Build a pipeline JSON document plus its supporting stream, connecti
 
 You are the orchestrator for authoring a complete data integration pipeline.
 You do not author any document body yourself — you classify inputs, mint
-placeholder identifiers, then dispatch creator sub-agents in a specific
-order. You own the cross-cutting steps: research, classification,
+UUID identities, then dispatch creator sub-agents in a specific order. You
+own the cross-cutting steps: research, classification, identity minting,
 validation, drift, and writing files.
 
 ## Inputs to collect
 
-- `source_connector_alias` (required) — the DIP-registry alias of the source.
-- `destination_connector_alias` (required) — the DIP-registry alias of the destination.
-- `pipeline_alias` (required) — stable slug matching `^[a-z0-9][a-z0-9_-]*$`;
-  immutable; used as the pipeline identifier and the on-disk
-  directory.
+- `source_connector_id` (required) — the DIP-registry slug of the source connector.
+- `destination_connector_id` (required) — the DIP-registry slug of the destination connector.
+- `pipeline_slug` (required) — directory name matching `^[a-z0-9][a-z0-9_-]*$`;
+  immutable; the on-disk pipeline directory (not the document's UUID identity).
 - `replication_method` (optional, default per source capability) — one of
   `full_refresh`, `incremental`. Required `cursor_field` if `incremental`.
 - `write_mode` (optional, default per destination capability) — for API
@@ -43,8 +42,8 @@ Always load:
 
 Read on demand:
 
-- `references/extension-policy.md` — when the user wants to attach `x-*`
-  metadata.
+- `references/extension-policy.md` — when the user wants to attach extra
+  metadata (note: schemas are closed; this is largely "no").
 - `references/schema-hosts.md` — when explaining or troubleshooting the
   published schema host.
 - `references/reserved-fields.md` — only when debugging a
@@ -58,24 +57,25 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
 ## Pipeline (full contract: `references/pipeline.md`)
 
 0. **Pre-flight: pipeline directory check** — before any research or
-   authoring, check whether `pipelines/{pipeline_alias}/` already
+   authoring, check whether `pipelines/<pipeline-slug>/` already
    exists in the current working directory. If it does, **halt** and
-   ask the user whether to pick a different `pipeline_alias` or to
+   ask the user whether to pick a different `pipeline_slug` or to
    remove the existing directory themselves first. Do not migrate
    legacy-shape pipeline files.
 
-   Existing `connectors/{alias}/` and `connections/{alias}/`
-   directories are **not** collisions. These are user property —
-   downloaded connectors and configured credentials from prior runs
-   or other pipelines. The orchestrator reuses them in phases 2, 4,
-   and 5 rather than asking the user to delete them. Adding a new
-   pipeline to systems the user has already wired up is a very common
-   case; re-running the builder must never destroy that work.
+   Existing `connectors/<connector-slug>/` and
+   `connections/<connection-slug>/` directories are **not** collisions.
+   These are user property — downloaded connectors and configured
+   credentials from prior runs or other pipelines. The orchestrator
+   reuses them in phases 2, 4, and 5 rather than asking the user to
+   delete them. Adding a new pipeline to systems the user has already
+   wired up is a very common case; re-running the builder must never
+   destroy that work.
 
    The user-facing message (only when the pipeline directory exists)
    must include:
    - The full path of the existing pipeline directory.
-   - The suggestion of choosing a different `pipeline_alias`.
+   - The suggestion of choosing a different `pipeline_slug`.
    - The exact `rm -rf <path>` command **only** if the user wants to
      start the pipeline over from scratch.
 
@@ -84,14 +84,14 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
    If the user did not supply required inputs, halt and ask.
 
 2. **Connectors** — for each side, check whether
-   `connectors/{alias}/definition/connector.json` already exists and
-   parses as valid JSON:
+   `connectors/<connector-slug>/definition/connector.json` already exists
+   and parses as valid JSON:
    - **If present and parses** → reuse it. Read it directly; do not
      re-fetch from the registry. Record "Reused existing connector
-     at `connectors/{alias}/`" in the final summary. Connector files
-     are trusted as registry-owned artifacts — neither this plugin
-     nor phase 9 schema-validates them; downstream creator failures
-     will surface any stale-shape issues.
+     at `connectors/<connector-slug>/`" in the final summary. Connector
+     files are trusted as registry-owned artifacts — neither this
+     plugin nor phase 9 schema-validates them; downstream creator
+     failures will surface any stale-shape issues.
    - **If present but does not parse** → halt and ask the user to
      fix or remove the file themselves. Do not invoke
      `registry-browser` against an existing-but-broken directory; it
@@ -110,7 +110,7 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
        connector and continue, but flag the inconsistency for the
        user.
      - `registry_missing` → halt and surface `detail` verbatim.
-       Suggest the user check the alias or author it via the
+       Suggest the user check the slug or author it via the
        `analitiq-connector-builder` plugin.
      - `fetch_failed` → halt and surface `detail` verbatim. The
        registry is reachable but the fetch did not succeed.
@@ -118,38 +118,50 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
    The connector files are read-only inputs regardless of whether
    they were just downloaded or already on disk — never modify them.
 
-3. **Classify** — run the closed-enum mappers inline (see
-   `references/enum-mappers.md`):
+3. **Classify and mint identities** — run the closed-enum mappers
+   inline (see `references/enum-mappers.md`):
    - `ScheduleTypeMapper` → `schedule.type`.
    - `ReplicationMethodMapper` → `source.replication.method`.
    - `WriteModeMapper` → `destinations[].write.mode`.
    - `AuthTypeMapper` → drives the `connection-creator` template choice.
 
+   Then mint UUIDs (`uuid.uuid4()`) for `pipeline_id` and for each new
+   `connection_id` and `stream_id` the orchestrator will author. Reused
+   on-disk connections contribute their existing `connection_id` UUIDs
+   instead. Bundle the result as `MintedIdentities` (see
+   `references/io-contracts.md`) and pass to downstream creators so
+   cross-document references are consistent.
+
 4. **Connections** — for each side, check whether
-   `connections/{alias}/connection.json` already exists:
-   - **If yes** and its `connector_alias` matches the side's
-     connector → reuse it. Validate the existing file against
+   `connections/<connection-slug>/connection.json` already exists:
+   - **If yes** and its `connector_id` matches the side's
+     connector slug → reuse it. Validate the existing file against
      `connection/latest.json` so a stale shape is caught early. If
-     validation passes, read its `secret_refs` for downstream use,
-     leave the user's `.secrets/credentials.json` untouched, and
-     record "Reused existing connection at `connections/{alias}/`"
+     validation passes, record its `connection_id` UUID for downstream
+     use, leave the user's `.secrets/credentials.json` untouched, and
+     record "Reused existing connection at `connections/<connection-slug>/`"
      in the final summary. If validation **fails**, halt and
      surface the validator's findings (`path`, `message`,
      `rule_doc`) verbatim — the user needs to see what's broken to
      fix it. The orchestrator does not re-author the file (that
      would overwrite the user's `.secrets/`); the user must fix
      `connection.json` or remove it themselves before re-running.
-   - **If yes** but its `connector_alias` does **not** match the
+   - **If yes** but its `connector_id` does **not** match the
      side's connector → halt and ask the user to either pick a
-     different `connection_alias` for this pipeline or confirm they
+     different `connection_slug` for this pipeline or confirm they
      want to remove the existing connection themselves first. Do not
      overwrite.
    - **If no** → invoke `connection-creator`. It writes:
-     - `connections/{alias}/connection.json` — validates against
-       `connection/latest.json`.
-     - `connections/{alias}/.secrets/credentials.json` — template the
-       user fills in. Reference each secret as `secrets/{alias}/{key}`
-       in `connection.secret_refs`.
+     - `connections/<connection-slug>/connection.json` — validates
+       against `connection/latest.json`. Authors `connection_id` as
+       the orchestrator-minted UUID, `connector_id` as the connector
+       slug, and routes all input values into the single `values`
+       envelope (secrets as `"<see .secrets/credentials.json>"`
+       placeholders).
+     - `connections/<connection-slug>/.secrets/credentials.json` —
+       template the user fills in. The user (or CI) merges secret
+       values from this file into `values` before submitting the
+       connection.
    When both sides need authoring, invoke `connection-creator` twice
    in parallel.
 
@@ -160,7 +172,7 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
    are sequential per connection but parallel across connections.
 
    For each table the user selects, check whether
-   `connections/{alias}/endpoints/{database_object.schema}_{database_object.name}.json`
+   `connections/<connection-slug>/endpoints/<schema>_<name>.json`
    already exists:
    - **If yes** → reuse it. Validate it against
      `database-endpoint/latest.json` so a stale shape is caught
@@ -171,29 +183,30 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
      broken to fix it. The orchestrator does not re-introspect over
      a half-broken file; the user must fix the endpoint JSON or
      remove it themselves before re-running.
-   - **If no** → invoke `create-endpoints` for that table.
+   - **If no** → invoke `create-endpoints` for that table. Each
+     endpoint document's `endpoint_id` slug typically matches its
+     filename stem.
 
    This avoids re-running introspection against the user's database
    when endpoint files from a prior pipeline are already on disk for
    the same tables.
 
-6. **Pipeline shell** — invoke `pipeline-creator`. Receives the
-   `connections.source` / `connections.destinations[]` aliases, the
-   pipeline alias, schedule classification, and engine/runtime
-   defaults. Writes `pipelines/{pipeline_alias}/pipeline.json` with
-   `streams: []` (filled in phase 8). Validates against
-   `pipeline/latest.json`.
+6. **Pipeline shell** — invoke `pipeline-creator`. Receives the minted
+   `pipeline_id` UUID, the `connections.source` / `connections.destinations[]`
+   UUIDs, schedule classification, and engine/runtime defaults. Writes
+   `pipelines/<pipeline-slug>/pipeline.json` with `streams: []` (filled
+   in phase 8). Validates against `pipeline/latest.json`.
 
 7. **Streams** — invoke `stream-creator` once per selected endpoint,
    in parallel (single message, N tool calls). Each receives the
-   source endpoint metadata, destination connection alias,
-   replication method, write mode, and the pipeline alias (written
-   into stream `pipeline_id`). Writes
-   `pipelines/{pipeline_alias}/streams/{stream_alias}.json` and
+   source endpoint metadata, source + destination `connection_id`
+   UUIDs, the minted `stream_id` UUID, replication method, write mode,
+   and the parent `pipeline_id` UUID (written into stream `pipeline_id`).
+   Writes `pipelines/<pipeline-slug>/streams/<stream-slug>.json` and
    validates against `stream/latest.json`.
 
-8. **Stitch** — collect each authored stream's `alias` and write
-   them as strings into `pipeline.json#/streams`. Re-validate the
+8. **Stitch** — collect each authored stream's `stream_id` UUID and
+   write them as strings into `pipeline.json#/streams`. Re-validate the
    pipeline file with `--bundle-root .` so
    `pipeline-stream-consistency` runs.
 
@@ -225,8 +238,9 @@ Report to the user:
 
 - Paths of every authored file (pipeline, streams, connections,
   endpoints).
-- The aliases used for the pipeline, each connection, and each stream
-  (these are the identifiers the engine resolves at runtime).
+- The UUID identities used for the pipeline, each connection, and each
+  stream (these are the cross-document references the engine resolves
+  at runtime), plus the directory slugs on disk.
 - Validator clean-run summary (count of artifacts validated, all clean).
 - Drift verdict (if applicable).
 
@@ -237,11 +251,11 @@ Report to the user:
 - Never author connector documents. Those belong to the
   `analitiq-connector-builder` plugin. `registry-browser` only
   *downloads* connector files from the DIP registry.
-- Connection and stream references in authored documents are
-  **aliases** (e.g. `"wise"`, `"postgresql"`,
-  `"wise_users_to_postgresql_users"`). Do not invent positional refs
-  like `conn_1` / `conn_2`, do not mint UUID placeholders. The engine
-  resolves aliases at runtime.
+- Identity inside authored documents is **UUIDs** for
+  `pipeline_id` / `stream_id` / `connection_id`, and **slugs** for
+  `connector_id` / `endpoint_id`. Directory names use slugs. Do not
+  invent positional refs like `conn_1` / `conn_2`; do not put slugs
+  where UUIDs belong; do not put UUIDs where slugs belong.
 - All cross-document references between pipeline / stream / connection /
   endpoint must resolve consistently. The `pipeline-stream-consistency`
   validator enforces this; pass `--bundle-root .` when validating the
@@ -249,11 +263,14 @@ Report to the user:
 - Authored documents declare `$schema` with the published host
   (`https://schemas.analitiq.ai/...`). The validator fetches from the
   same host. See `references/schema-hosts.md`.
-- Never overwrite an existing `pipelines/{alias}/` directory. The
-  pre-flight check (phase 0) halts and asks the user to pick a
-  different alias or remove the directory themselves.
-- Reuse existing `connectors/{alias}/` and `connections/{alias}/`
-  directories when they are valid for the requested connector — these
-  are user property (downloaded connectors, configured credentials,
-  prior endpoint selections). Never ask the user to delete them, and
-  never delete files on the user's behalf.
+- The published schemas are **closed** (`additionalProperties: false`).
+  Do not author unknown fields, including `x-*` extension keys.
+- Never overwrite an existing `pipelines/<pipeline-slug>/` directory.
+  The pre-flight check (phase 0) halts and asks the user to pick a
+  different slug or remove the directory themselves.
+- Reuse existing `connectors/<connector-slug>/` and
+  `connections/<connection-slug>/` directories when they are valid for
+  the requested connector — these are user property (downloaded
+  connectors, configured credentials, prior endpoint selections). Never
+  ask the user to delete them, and never delete files on the user's
+  behalf.

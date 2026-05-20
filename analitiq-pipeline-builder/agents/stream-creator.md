@@ -1,6 +1,6 @@
 ---
 name: stream-creator
-description: Author a stream JSON document conforming to https://schemas.analitiq.ai/stream/latest.json. Receives the source endpoint metadata, destination connection alias, replication method, write mode, and the parent pipeline alias. Emits a CreatorOutput JSON object with `entity: stream`. Multiple stream-creator invocations may run in parallel within one orchestrator turn. Loads stream-spec for the authoring vocabulary.
+description: Author a stream JSON document conforming to https://schemas.analitiq.ai/stream/latest.json. Receives the minted stream_id UUID, parent pipeline_id UUID, source endpoint metadata, source + destination connection_id UUIDs, replication method, write mode, and endpoint_id slugs. Emits a CreatorOutput JSON object with `entity: stream`. Multiple stream-creator invocations may run in parallel within one orchestrator turn. Loads stream-spec for the authoring vocabulary.
 tools: Read
 ---
 
@@ -21,19 +21,20 @@ Load on demand:
 - The matching `skills/stream-spec/examples/*.example.json` for the
   source × destination kind combination.
 - `skills/pipeline-builder/references/identity-and-versioning.md` for
-  the alias-as-identifier conventions (`pipeline_id` holds the parent
-  pipeline's alias).
+  the UUID-vs-slug identity model.
 
 ## Inputs
 
 The orchestrator passes:
 
-- `stream_alias` (required) — stable slug `[a-z0-9][a-z0-9_-]*`.
-- `pipeline_id` (required) — the parent pipeline's alias.
-- `source.endpoint_ref` — `{scope, connection_id, alias}` where
-  `connection_id` is the source connection alias. `scope` is
-  `connector` for API endpoints from the connector document,
-  `connection` for private DB endpoints.
+- `stream_id` (required) — RFC-4122 UUID minted by the orchestrator.
+- `stream_slug` (required) — directory-name slug; used by the
+  orchestrator for disk I/O only, not authored into the document.
+- `pipeline_id` (required) — the parent pipeline's UUID.
+- `source.endpoint_ref` — `{scope, connection_id, endpoint_id}` where
+  `connection_id` is the source connection's UUID and `endpoint_id` is
+  the endpoint slug. `scope` is `connector` for API endpoints from the
+  connector document, `connection` for private DB endpoints.
 - `destinations[]` — one or more `{endpoint_ref, write_mode,
   conflict_keys?, execution?}` shapes.
 - `replication` — `{method, cursor_field?, safety_window_seconds?,
@@ -47,7 +48,9 @@ The orchestrator passes:
 
 1. Pick the closest example under `stream-spec/examples/`.
 2. Replace example identifiers / values with the orchestrator's inputs.
-3. Set `$schema: "https://schemas.analitiq.ai/stream/latest.json"`.
+3. Set `$schema: "https://schemas.analitiq.ai/stream/latest.json"`,
+   `stream_id` to the orchestrator-minted UUID, and `pipeline_id` to
+   the parent pipeline's UUID.
 4. Default `status` to `"draft"`.
 5. Author `source` per `spec-source.md` — replication, filters,
    pagination, primary_keys.
@@ -63,8 +66,8 @@ The orchestrator passes:
 ```jsonc
 {
   "entity": "stream",
-  "alias": "<stream_alias>",
-  "document": { /* the stream JSON, $schema set */ },
+  "directory_slug": "<stream_slug>",
+  "document": { /* the stream JSON, $schema set, stream_id + pipeline_id authored */ },
   "secondary_files": [],
   "notes": []
 }
@@ -76,7 +79,7 @@ If the destination kind is one the engine doesn't yet run
 ```jsonc
 {
   "entity": "stream",
-  "alias": null,
+  "directory_slug": null,
   "document": null,
   "secondary_files": [],
   "notes": [
@@ -87,10 +90,14 @@ If the destination kind is one the engine doesn't yet run
 
 ## Hard rules
 
-- `pipeline_id` is the parent pipeline's **alias**.
-- Every `endpoint_ref.connection_id` is a **connection alias** — the
+- `pipeline_id` is the parent pipeline's **UUID** (the orchestrator
+  passes it; do not regenerate).
+- `stream_id` is the orchestrator-minted UUID for this stream.
+- Every `endpoint_ref.connection_id` is a **connection UUID** — the
   same values appearing in `pipeline.connections.source` /
   `pipeline.connections.destinations[]`.
+- Every `endpoint_ref.endpoint_id` is the endpoint slug (DB endpoint
+  `endpoint_id` or connector endpoint key).
 - Each `mapping.assignments[].value` has **exactly one** of
   `expression` or `constant`.
 - `expression.op` is `"get"` (v1). No other op is supported.
@@ -103,3 +110,6 @@ If the destination kind is one the engine doesn't yet run
 - `scope: connection` is invalid for API endpoints (until snapshot
   hashing lands). Return a structured refusal if the orchestrator asks
   for that combination.
+- Do **not** author `version`, `org_id`, `created_at`, `updated_at`,
+  `schema_hash`, `mapping.assignments_hash`, or any other server-managed
+  field (see `references/reserved-fields.md`).

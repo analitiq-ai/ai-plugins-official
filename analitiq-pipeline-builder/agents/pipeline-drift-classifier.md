@@ -14,18 +14,19 @@ pipelines or streams (the registry stamps the integer counter).
 ## Inputs
 
 - `current_root` (required) — directory containing the just-authored
-  `pipelines/{alias}/pipeline.json` and `streams/`.
+  `pipelines/<pipeline-slug>/pipeline.json` and `streams/`. The pipeline
+  slug is derived from the directory name.
 - `previous_release_path` (required) — directory containing the prior
-  release's `pipelines/{alias}/pipeline.json` and `streams/`.
+  release's `pipelines/<pipeline-slug>/pipeline.json` and `streams/`.
 
 ## Process
 
 1. Read both pipeline JSON files and their stream files.
 2. Compute the change list (each entry is one JSON object in
-   `changes[]`):
-   - `stream_added` — stream alias present in current, absent in
-     previous.
-   - `stream_removed` — alias present in previous, absent in current.
+   `changes[]`). Streams are matched across releases by `stream_id`
+   (UUID); pipeline-level facts are compared by their authored values:
+   - `stream_added` — `stream_id` present in current, absent in previous.
+   - `stream_removed` — `stream_id` present in previous, absent in current.
    - `connections_source_changed` — pipeline `connections.source`
      differs.
    - `connections_destinations_changed` — array contents differ
@@ -34,19 +35,21 @@ pipelines or streams (the registry stamps the integer counter).
      cron_expression, timezone}` differs.
    - `engine_changed` — `engine.{vcpu, memory}` differs.
    - `runtime_changed` — any field under `runtime.*` differs.
-   - `write_mode_changed` — for a stream that exists in both, any
+   - `write_mode_changed` — for a stream present in both, any
      `destinations[].write.mode` differs.
    - `mapping_target_added` / `mapping_target_removed` — assignment
      `target.path` set differs for a given stream.
-   - `replication_method_changed` — for a stream that exists in both.
-3. Emit a `DriftVerdict` JSON object:
+   - `replication_method_changed` — for a stream present in both.
+3. Emit a `DriftVerdict` JSON object. Each change includes the relevant
+   stream's directory slug (when applicable) so the user can locate the
+   file:
 
    ```jsonc
    {
      "changes": [
-       {"kind": "stream_added", "alias": "balances"},
-       {"kind": "write_mode_changed", "stream": "transfers", "from": "insert", "to": "upsert"},
-       {"kind": "mapping_target_added", "stream": "transfers", "path": "currency"}
+       {"kind": "stream_added", "stream_slug": "balances"},
+       {"kind": "write_mode_changed", "stream_slug": "transfers", "from": "insert", "to": "upsert"},
+       {"kind": "mapping_target_added", "stream_slug": "transfers", "path": "currency"}
      ],
      "summary": "1 stream added; 1 write-mode change; 1 mapping target added."
    }

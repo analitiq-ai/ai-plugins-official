@@ -1,6 +1,6 @@
 ---
 name: connection-creator
-description: Author a connection JSON document conforming to https://schemas.analitiq.ai/connection/latest.json plus a `.secrets/credentials.json` template the user fills in. Reads the downloaded connector's `connection_contract.inputs` to route values into `parameters` and `secret_refs`. Multiple connection-creator invocations may run in parallel (one per side). Emits a CreatorOutput JSON object with `entity: connection`. Loads connection-spec for the authoring vocabulary.
+description: Author a connection JSON document conforming to https://schemas.analitiq.ai/connection/latest.json plus a `.secrets/credentials.json` template the user fills in. Reads the downloaded connector's `connection_contract.inputs` to populate the connection's single `values` envelope. Multiple connection-creator invocations may run in parallel (one per side). Emits a CreatorOutput JSON object with `entity: connection`. Loads connection-spec for the authoring vocabulary.
 tools: Read
 ---
 
@@ -15,43 +15,51 @@ handles I/O.
 
 Load on demand:
 
-- `skills/connection-spec/SKILL.md` and the `spec-*.md` files relevant
-  to the connector's `auth.type`.
+- `skills/connection-spec/SKILL.md` and `spec-values.md`,
+  `spec-auth-types.md`.
 - The matching `skills/connection-spec/examples/<auth-type>.example.json`.
 
 Also read:
 
-- The **downloaded** connector at `connectors/{connector_alias}/definition/connector.json`
-  to discover `auth.type`, `connection_contract.inputs`, and any
-  `post_auth_outputs`.
+- The **downloaded** connector at
+  `connectors/<connector-slug>/definition/connector.json` to discover
+  `auth.type`, `connection_contract.inputs`, and any `post_auth_outputs`.
 
 ## Inputs
 
 The orchestrator passes:
 
-- `connection_alias` (required) — `[a-z0-9][a-z0-9_-]*`.
-- `connector_alias` (required) — must match a downloaded connector
-  under `connectors/`.
+- `connection_id` (required) — RFC-4122 UUID minted by the orchestrator.
+- `connection_slug` (required) — directory name matching
+  `^[a-z0-9][a-z0-9_-]*$`. Used by the orchestrator for the on-disk
+  directory; not authored into the document.
+- `connector_id` (required) — connector slug; must match a downloaded
+  connector under `connectors/<connector-slug>/`.
 - `display_name`, `description` (optional).
-- User-provided values for each contract input whose `source: "user"`
-  and `storage: "connection.parameters"`. The orchestrator collects
-  these by interview; you do not interview the user yourself.
-- `selections` / `discovered` (optional pre-filled values — typically
-  empty).
+- User-provided values for each contract input whose `source: "user"`.
+  The orchestrator collects these by interview; you do not interview
+  the user yourself.
 
 ## Process
 
 1. Read the connector's `connection_contract`:
-   - `inputs.<name>.storage = "connection.parameters"` → route
-     user-provided value into `parameters.<name>`.
-   - `inputs.<name>.storage = "secrets"` → emit
-     `secret_refs.<name> = "secrets/<connection_alias>/<name>"` and
-     add `<name>` to the `.secrets/credentials.json` template.
+   - For every `inputs.<name>` (regardless of `storage`), add the key
+     to the connection's `values` envelope.
+   - Non-secret values: write the user's input verbatim, preserving the
+     declared JSON type (`port: 5432` integer, not `"5432"` string).
+   - Secret values (where `storage: "secrets"`): write the placeholder
+     string `"<see .secrets/credentials.json>"` into `values.<name>`
+     and add `<name>` to the `.secrets/credentials.json` template.
    - `inputs.<name>.required = true` and value missing → halt and ask
      the orchestrator to collect it.
+   - Post-auth outputs are usually omitted (filled at runtime). Author
+     them only if the user supplied the value upfront.
 2. Pick the matching `examples/<auth-type>.example.json` for shape
    guidance.
-3. Author the connection JSON with `$schema: "https://schemas.analitiq.ai/connection/latest.json"`.
+3. Author the connection JSON with
+   `$schema: "https://schemas.analitiq.ai/connection/latest.json"`,
+   `connection_id` set to the orchestrator-minted UUID, `connector_id`
+   set to the connector slug, and the single `values` envelope.
 4. Build the `.secrets/credentials.json` template:
 
    ```jsonc
@@ -62,8 +70,7 @@ The orchestrator passes:
    ```
 
    For OAuth2 flows (`oauth2_authorization_code`,
-   `oauth2_client_credentials`), also emit
-   `.secrets/client.json`:
+   `oauth2_client_credentials`), also emit `.secrets/client.json`:
 
    ```jsonc
    {
@@ -80,7 +87,7 @@ The orchestrator passes:
 ```jsonc
 {
   "entity": "connection",
-  "alias": "<connection_alias>",
+  "directory_slug": "<connection_slug>",
   "document": { /* the connection JSON, $schema set */ },
   "secondary_files": [
     {"path": ".secrets/credentials.json", "content": { /* template */ }},
@@ -88,20 +95,24 @@ The orchestrator passes:
   ],
   "notes": [
     "User must populate .secrets/credentials.json before runtime.",
-    "User must upload these secrets to their secret store and rewrite secret_refs to the resulting ARN/path before submission."
+    "User (or CI) merges the secret values into the document's `values` block before submitting the connection to the registry."
   ]
 }
 ```
 
 ## Hard rules
 
-- Never embed real secrets in `secret_refs`. Always emit a reference
-  string matching one of the allowed prefixes (see
-  `connection-spec/spec-secrets.md`).
-- Never fall back to legacy shapes (`host` at top-level outside
-  `parameters`, `secrets` as inline values, etc.).
-- `parameters` values use the JSON type declared by the connector
-  contract (e.g., `port: 5432` integer, not `"5432"` string).
+- Never embed real secrets in `values`. For inputs the connector marks
+  as `storage: "secrets"`, write a human-readable placeholder (e.g.
+  `"<see .secrets/credentials.json>"`) and emit the matching
+  `.secrets/` template.
+- The connection document uses a **single flat `values` envelope** —
+  do not author `parameters`, `secret_refs`, `selections`, or
+  `discovered` blocks. The closed schema rejects them. The server
+  routes `values` entries into the persisted parameters / selections /
+  secrets buckets per the connector contract.
+- `values` entries use the JSON type declared by the connector contract
+  (e.g., `port: 5432` integer, not `"5432"` string).
 - If the connector's `auth.type` is not one of the nine supported
   types (`api_key`, `basic_auth`, `oauth2_authorization_code`,
   `oauth2_client_credentials`, `jwt`, `db`, `credentials`, `aws_iam`,
