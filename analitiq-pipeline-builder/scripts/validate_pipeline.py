@@ -128,7 +128,6 @@ VALIDATOR_IDS = {
     "endpoint-ref-shape",
     "mapping-shape",
     "filter-operators",
-    "secret-ref-format",
     "column-uniqueness",
     "pipeline-stream-consistency",
     "status-lifecycle",
@@ -164,10 +163,10 @@ def _strip_required_server_fields(schema: dict, entity: str) -> dict:
     """Return a deep-cloned schema with server-managed fields removed from every `required` array.
 
     The published pipeline/stream/connection schemas describe the canonical
-    server-stamped document, so they mark fields like `pipeline_id`, `version`,
-    `org_id`, `created_at`, `updated_at` as required at the JSON Schema level.
-    Authored documents intentionally omit those fields (the registry stamps
-    them on insert). This helper walks the schema (including nested objects,
+    server-stamped document, so they mark fields like `version`, `org_id`,
+    `created_at`, `updated_at` as required at the JSON Schema level. Authored
+    documents intentionally omit those fields (the registry stamps them on
+    insert). This helper walks the schema (including nested objects,
     `$defs`, and `allOf`/`oneOf`/`anyOf` branches) and drops every reserved-
     field entry from each `required` array it encounters so authored documents
     can pass Layer 1. The `reserved-field` Layer 2 validator still catches the
@@ -226,14 +225,12 @@ def layer1_jsonschema(document: dict, schema: dict, entity: str) -> list[dict]:
 
 RESERVED_FIELDS_BY_ENTITY: dict[str, set[str]] = {
     "pipeline": {
-        "pipeline_id",
         "version",
         "org_id",
         "created_at",
         "updated_at",
     },
     "stream": {
-        "stream_id",
         "version",
         "org_id",
         "created_at",
@@ -249,17 +246,14 @@ RESERVED_FIELDS_BY_ENTITY: dict[str, set[str]] = {
         "type_mapping_assignments_hash",
     },
     "connection": {
-        "connection_id",
         "version",
         "org_id",
-        "connector_id",
         "connector_version",
         "auth_state",
         "created_at",
         "updated_at",
     },
     "database_endpoint": {
-        "endpoint_id",
         "connector_id",
         "connector_version",
         "connection_id",
@@ -283,16 +277,6 @@ API_FILTER_OPERATORS = {
     "contains", "starts_with", "ends_with",
 }
 UNARY_OPERATORS = {"is_null", "is_not_null"}
-
-
-SECRET_REF_PATTERNS = [
-    re.compile(r"^secrets/.+"),
-    re.compile(r"^connections/.+"),
-    re.compile(r"^ssm:/.+"),
-    re.compile(r"^arn:aws:secretsmanager:[^:]+:[^:]+:secret:.+"),
-    re.compile(r"^arn:aws:ssm:[^:]+:[^:]+:parameter/.+"),
-    re.compile(r"^s3://[^/]+/.+"),
-]
 
 
 # Per-entity rule_doc path for reserved-field findings. Auto-generating these
@@ -563,7 +547,7 @@ def check_endpoint_ref_shape(doc: dict) -> list[dict]:
                 key = (
                     str(ref.get("scope")),
                     str(ref.get("connection_id")),
-                    str(ref.get("alias")),
+                    str(ref.get("endpoint_id")),
                 )
                 if key in seen:
                     findings.append(
@@ -571,7 +555,7 @@ def check_endpoint_ref_shape(doc: dict) -> list[dict]:
                             "endpoint-ref-shape",
                             "error",
                             f"/destinations/{i}/endpoint_ref",
-                            f"duplicate destination endpoint_ref {key!r}; refs must be unique by (scope, connection_id, alias).",
+                            f"duplicate destination endpoint_ref {key!r}; refs must be unique by (scope, connection_id, endpoint_id).",
                             rule_doc="streams/stream-schema-parameterization.md#endpoint-refs",
                         )
                     )
@@ -727,46 +711,6 @@ def check_filter_operators(doc: dict) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# secret-ref-format
-# ---------------------------------------------------------------------------
-
-
-def check_secret_ref_format(doc: dict) -> list[dict]:
-    findings: list[dict] = []
-    refs = doc.get("secret_refs")
-    if not isinstance(refs, dict):
-        return findings
-    for key, value in refs.items():
-        path = f"/secret_refs/{key}"
-        if not isinstance(value, str):
-            findings.append(
-                finding(
-                    "secret-ref-format",
-                    "error",
-                    path,
-                    f"secret_refs.{key} must be a string; got {type(value).__name__}.",
-                    rule_doc="connections/connection-schema-parameterization.md#secret-references",
-                )
-            )
-            continue
-        if not any(p.match(value) for p in SECRET_REF_PATTERNS):
-            findings.append(
-                finding(
-                    "secret-ref-format",
-                    "error",
-                    path,
-                    (
-                        f"secret_refs.{key}={value!r} does not match any allowed prefix "
-                        "(secrets/…, connections/…, ssm:/…, arn:aws:secretsmanager:…:secret:…, "
-                        "arn:aws:ssm:…:parameter/…, s3://bucket/…)."
-                    ),
-                    rule_doc="connections/connection-schema-parameterization.md#secret-references",
-                )
-            )
-    return findings
-
-
-# ---------------------------------------------------------------------------
 # column-uniqueness
 # ---------------------------------------------------------------------------
 
@@ -832,19 +776,21 @@ def check_column_uniqueness(doc: dict) -> list[dict]:
 
 def _stream_files_for_pipeline(
     bundle_root: Path,
-    pipeline_alias: str | None,
+    pipeline_slug: str | None,
 ) -> list[Path]:
     """Return the stream files that belong to this pipeline.
 
-    Scopes the lookup to `bundle_root/pipelines/{alias}/streams/*.json` so a
-    bundle containing several pipelines doesn't cause this pipeline to validate
-    against sibling pipelines' streams. Falls back to `bundle_root/streams/`
-    when the conventional layout isn't present (the user passed the pipeline
-    directory directly as the bundle root).
+    Scopes the lookup to `bundle_root/pipelines/<pipeline_slug>/streams/*.json`
+    so a bundle containing several pipelines doesn't cause this pipeline to
+    validate against sibling pipelines' streams. The slug is the directory
+    name, **not** the document's `pipeline_id` UUID — the on-disk layout uses
+    human-readable slugs while document identity uses UUIDs. Falls back to
+    `bundle_root/streams/` when the conventional layout isn't present (the
+    user passed the pipeline directory directly as the bundle root).
     """
-    if not isinstance(pipeline_alias, str) or not pipeline_alias:
+    if not isinstance(pipeline_slug, str) or not pipeline_slug:
         return []
-    scoped = bundle_root / "pipelines" / pipeline_alias / "streams"
+    scoped = bundle_root / "pipelines" / pipeline_slug / "streams"
     if scoped.is_dir():
         return sorted(scoped.glob("*.json"))
     fallback = bundle_root / "streams"
@@ -913,46 +859,91 @@ def _load_stream_files(
     return out
 
 
-def check_pipeline_stream_consistency(doc: dict, bundle_root: Path | None) -> list[dict]:
+def check_pipeline_stream_consistency(
+    doc: dict, bundle_root: Path | None, document_path: Path | None = None
+) -> list[dict]:
     findings: list[dict] = []
     streams_listed = doc.get("streams") or []
     if not isinstance(streams_listed, list) or not streams_listed:
         return findings
+
+    cross_doc_rule = "pipelines/pipeline-schema-parameterization.md#cross-doc-consistency"
+
+    def warn(message: str) -> dict:
+        return finding(
+            "pipeline-stream-consistency",
+            "warning",
+            "/streams",
+            message,
+            rule_doc=cross_doc_rule,
+        )
+
     if bundle_root is None:
         return [
-            finding(
-                "pipeline-stream-consistency",
-                "warning",
-                "/streams",
+            warn(
                 "pipeline-stream cross-doc consistency not checked; pass --bundle-root to "
-                "verify stream files match pipeline references.",
-                rule_doc="pipelines/pipeline-schema-parameterization.md#cross-doc-consistency",
+                "verify stream files match pipeline references."
             )
         ]
-    pipeline_alias = doc.get("alias")
+    # Pipeline identity is the authored `pipeline_id` (RFC-4122 UUID). The
+    # directory layout (`<bundle>/pipelines/<slug>/`) is a human-readable
+    # convention used only for stream-file discovery, not for cross-doc
+    # matching.
+    pipeline_slug = document_path.parent.name if document_path is not None else None
+    # `not pipeline_slug` catches both None (no path supplied by an in-process
+    # caller) and "" (`Path("pipeline.json").parent.name == ""` — the user ran
+    # the validator on a bare filename). Either way, stream-file discovery is
+    # unreliable; emit a warning instead of silently passing the empty slug
+    # through `_stream_files_for_pipeline`.
+    if not pipeline_slug:
+        findings.append(
+            warn(
+                "stream-file discovery skipped: cannot derive pipeline directory slug "
+                "from the document path. Cross-document consistency was NOT checked."
+            )
+        )
+        return findings
+
+    stream_files = _stream_files_for_pipeline(bundle_root, pipeline_slug)
+    if not stream_files:
+        findings.append(
+            warn(
+                f"pipeline.streams is non-empty but no stream files were found under "
+                f"pipelines/{pipeline_slug}/streams/ (or {bundle_root}/streams/). "
+                "Cross-document consistency was NOT checked."
+            )
+        )
+        return findings
+
+    pipeline_id = doc.get("pipeline_id")
     connections = doc.get("connections") or {}
     source_id = connections.get("source") if isinstance(connections, dict) else None
     dest_ids = connections.get("destinations") if isinstance(connections, dict) else None
     dest_set = set(dest_ids) if isinstance(dest_ids, list) else set()
 
-    stream_files = _stream_files_for_pipeline(bundle_root, pipeline_alias)
-    streams_by_alias: dict[str, tuple[Path, dict]] = {}
     for sf, sdoc in _load_stream_files(stream_files, findings, "pipeline-stream-consistency"):
-        alias = sdoc.get("alias")
-        if isinstance(alias, str):
-            streams_by_alias[alias] = (sf, sdoc)
-
-    # Match streams to files by `pipeline_id` — which is the pipeline's alias.
-    for sf, sdoc in streams_by_alias.values():
         spid = sdoc.get("pipeline_id")
-        if isinstance(pipeline_alias, str) and isinstance(spid, str) and spid != pipeline_alias:
+        if isinstance(pipeline_id, str) and isinstance(spid, str) and spid != pipeline_id:
             findings.append(
                 finding(
                     "pipeline-stream-consistency",
                     "error",
                     "/streams",
                     f"stream file {sf.name} has pipeline_id {spid!r} which does not match "
-                    f"pipeline.alias ({pipeline_alias!r}).",
+                    f"pipeline.pipeline_id ({pipeline_id!r}).",
+                    rule_doc="pipelines/pipeline-schema-parameterization.md#stream-pinning",
+                )
+            )
+        elif pipeline_id is None and isinstance(spid, str):
+            findings.append(
+                finding(
+                    "pipeline-stream-consistency",
+                    "warning",
+                    "/streams",
+                    f"stream file {sf.name} has pipeline_id={spid!r} but the parent "
+                    "pipeline omits pipeline_id; cross-document identity pinning is "
+                    "not enforceable. Either author pipeline_id on the pipeline or "
+                    "omit it on every stream.",
                     rule_doc="pipelines/pipeline-schema-parameterization.md#stream-pinning",
                 )
             )
@@ -997,7 +988,9 @@ def check_pipeline_stream_consistency(doc: dict, bundle_root: Path | None) -> li
 # ---------------------------------------------------------------------------
 
 
-def check_status_lifecycle(doc: dict, bundle_root: Path | None) -> list[dict]:
+def check_status_lifecycle(
+    doc: dict, bundle_root: Path | None, document_path: Path | None = None
+) -> list[dict]:
     findings: list[dict] = []
     status = doc.get("status", "draft")
     if status != "active":
@@ -1026,8 +1019,24 @@ def check_status_lifecycle(doc: dict, bundle_root: Path | None) -> list[dict]:
             )
         )
         return findings
-    pipeline_alias = doc.get("alias")
-    stream_files = _stream_files_for_pipeline(bundle_root, pipeline_alias)
+    pipeline_slug = document_path.parent.name if document_path is not None else None
+    if not pipeline_slug:
+        # Same empty/None guard as `check_pipeline_stream_consistency`. Without
+        # a slug we cannot locate stream files; emit a warning instead of
+        # falsely reporting "no referenced stream file has status='active'"
+        # when the real issue is that the validator couldn't find them.
+        findings.append(
+            finding(
+                "status-lifecycle",
+                "warning",
+                "/status",
+                "stream-file discovery skipped: cannot derive pipeline directory slug "
+                "from the document path. status='active' lifecycle gate was NOT checked.",
+                rule_doc="shared/lifecycle-status.md",
+            )
+        )
+        return findings
+    stream_files = _stream_files_for_pipeline(bundle_root, pipeline_slug)
     any_active = False
     for _, sdoc in _load_stream_files(stream_files, findings, "status-lifecycle"):
         if sdoc.get("status") == "active":
@@ -1055,20 +1064,19 @@ def run_semantic_validators(
     doc: dict,
     entity: str,
     bundle_root: Path | None = None,
+    document_path: Path | None = None,
 ) -> list[dict]:
     findings: list[dict] = []
     findings.extend(check_reserved_fields(doc, entity))
     if entity == "pipeline":
         findings.extend(check_schedule_shape(doc))
         findings.extend(check_runtime_ranges(doc))
-        findings.extend(check_pipeline_stream_consistency(doc, bundle_root))
-        findings.extend(check_status_lifecycle(doc, bundle_root))
+        findings.extend(check_pipeline_stream_consistency(doc, bundle_root, document_path))
+        findings.extend(check_status_lifecycle(doc, bundle_root, document_path))
     elif entity == "stream":
         findings.extend(check_endpoint_ref_shape(doc))
         findings.extend(check_mapping_shape(doc))
         findings.extend(check_filter_operators(doc))
-    elif entity == "connection":
-        findings.extend(check_secret_ref_format(doc))
     elif entity == "database_endpoint":
         findings.extend(check_column_uniqueness(doc))
     return findings
@@ -1164,7 +1172,9 @@ def main() -> int:
             findings.extend(layer1_jsonschema(document, schema, args.entity))
 
     if not args.json_only:
-        findings.extend(run_semantic_validators(document, args.entity, bundle_root=bundle_root))
+        findings.extend(run_semantic_validators(
+            document, args.entity, bundle_root=bundle_root, document_path=document_path,
+        ))
 
     return _emit(findings)
 

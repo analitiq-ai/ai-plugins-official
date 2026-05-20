@@ -9,21 +9,23 @@ and wires them into complete pipelines. Does **not** create connectors and does
 
 ## What it does
 
-Given a source connector alias and a destination connector alias, the plugin:
+Given a source connector slug and a destination connector slug, the plugin:
 
 1. Researches user intent (replication method, write mode, schedule, naming).
 2. Downloads the source + destination connectors from the DIP registry.
-3. Authors a `connection.json` per side with `secret_refs` pointing at
-   `.secrets/` templates the user fills in.
+3. Authors a `connection.json` per side with a single `values` envelope —
+   secret entries carry a `"<see .secrets/credentials.json>"` placeholder and
+   the plugin emits a sibling `.secrets/credentials.json` template the user
+   fills in.
 4. For database connections, introspects the live database to discover schemas
    and tables, then authors `database-endpoint` documents per selected table.
-5. Authors a `pipeline.json` shell that references the connections by alias
-   (e.g. `"wise"`, `"postgresql"`).
+5. Authors a `pipeline.json` shell that references the connections by their
+   `connection_id` UUIDs.
 6. Authors one `stream.json` per selected endpoint, dispatched in parallel.
 7. Validates everything against the published JSON schemas plus a layer of
    semantic validators (schedule shape, runtime ranges, endpoint-ref shape,
-   mapping shape, filter operators, secret-ref format, column uniqueness,
-   pipeline↔stream consistency, status lifecycle).
+   mapping shape, filter operators, column uniqueness, pipeline↔stream
+   consistency, status lifecycle).
 8. Writes files to disk at predictable paths only when every artifact passes.
 
 **Usage:** Launch Claude Code and say *"build a pipeline from &lt;source&gt; to
@@ -79,14 +81,11 @@ runs:
      reference mapped fields.
    - `filter-operators` — database vs API operator vocabularies; unary
      operators omit `value`.
-   - `secret-ref-format` — `secret_refs` values match the published reference
-     patterns (`secrets/…`, `ssm:/…`, `arn:aws:secretsmanager:…:secret:…`,
-     `arn:aws:ssm:…:parameter/…`, `s3://…`, `connections/…`).
    - `column-uniqueness` — column name uniqueness, `ordinal_position`
      uniqueness, primary-key resolution against declared columns.
    - `pipeline-stream-consistency` (with `--bundle-root`) — every referenced
-     stream's `pipeline_id` matches; endpoint-ref connection IDs are members
-     of `pipeline.connections`.
+     stream's `pipeline_id` matches the parent pipeline's `pipeline_id`;
+     endpoint-ref connection IDs are members of `pipeline.connections`.
    - `status-lifecycle` — `status=active` requires runnable streams.
 
 Run directly:
@@ -114,63 +113,74 @@ For each successfully built pipeline:
 
 ```
 connectors/                         # downloaded by registry-browser, read-only
-├── {source-alias}/
+├── <source-slug>/
 │   ├── definition/
 │   │   ├── connector.json
 │   │   └── endpoints/              # API connectors only
 │   └── README.md
-└── {destination-alias}/...
+└── <destination-slug>/...
 
 connections/
-├── {alias}/
+├── <connection-slug>/
 │   ├── connection.json             # validates against connection/latest.json
 │   ├── .secrets/
 │   │   ├── credentials.json        # template the user fills in
 │   │   └── client.json             # OAuth2 only
 │   └── endpoints/                  # database connections only
-│       └── {schema}_{table}.json   # validates against database-endpoint/latest.json
+│       └── <endpoint-slug>.json    # validates against database-endpoint/latest.json
 
 pipelines/
-└── {pipeline-alias}/
+└── <pipeline-slug>/
     ├── pipeline.json               # validates against pipeline/latest.json
     └── streams/
-        └── {stream-alias}.json     # validates against stream/latest.json
+        └── <stream-slug>.json      # validates against stream/latest.json
 ```
 
-### Identifiers are aliases, not UUIDs
+### Identity model: UUIDs inside, slugs on disk
 
-The plugin authors **aliases** into every reference slot. Pipelines
-reference their connections by alias in `connections.source` and
-`connections.destinations[]`; streams reference their parent pipeline
-by alias in `pipeline_id`; stream `endpoint_ref.connection_id` holds
-the connection alias (the field name keeps `_id` for schema
-compatibility, but the value is a string alias). The engine resolves
-aliases to internal identifiers at runtime. The plugin makes no API
-calls and mints no UUIDs.
+The plugin authors **RFC-4122 UUIDs** for `pipeline_id`, `stream_id`,
+and `connection_id` and threads them through every cross-document
+reference. `connector_id` and `endpoint_id` are **slugs** (the
+connector's registry slug; the endpoint's stable `^[a-z0-9][a-z0-9_-]*$`
+identifier). Directory names on disk stay human-readable slugs and are
+independent of the UUID identity stored inside each document — the
+slug is purely for file organization. The plugin makes no API calls;
+the registry can also assign UUIDs on ingest if the plugin omits them.
+
+### Connection secrets workflow
+
+Connection documents use a single flat `values` envelope. For inputs
+whose connector contract bucket is `secrets`, the plugin writes a
+human-readable placeholder string into `values` and emits a
+`.secrets/credentials.json` template the user fills in. The user (or
+CI) merges secret values from `.secrets/` into the document's `values`
+block before submitting the connection to the registry. The registry
+never reads `.secrets/` directly.
 
 ### Reusing existing connectors and connections
 
 Adding a new pipeline to systems the user has already wired up is a
 very common case. The orchestrator reuses what's already on disk:
 
-- **`connectors/{alias}/`** — if `definition/connector.json` is
-  already present and parses, it is reused (no registry re-fetch).
-- **`connections/{alias}/`** — if `connection.json` is already
-  present and its `connector_alias` matches the side's connector,
+- **`connectors/<connector-slug>/`** — if `definition/connector.json`
+  is already present and parses, it is reused (no registry re-fetch).
+- **`connections/<connection-slug>/`** — if `connection.json` is
+  already present and its `connector_id` matches the side's connector,
   the connection (and its existing `.secrets/credentials.json`) is
-  reused as-is. If the `connector_alias` doesn't match, the
-  orchestrator halts and asks the user to pick a different
-  `connection_alias` or remove the existing file themselves.
-- **`connections/{alias}/endpoints/*.json`** — endpoint files for
-  tables already discovered in a prior run are reused; only newly
-  selected tables run database introspection.
+  reused as-is. The orchestrator reads its `connection_id` UUID and
+  uses it in downstream cross-references. If the `connector_id`
+  doesn't match, the orchestrator halts and asks the user to pick a
+  different `connection_slug` or remove the existing file themselves.
+- **`connections/<connection-slug>/endpoints/*.json`** — endpoint
+  files for tables already discovered in a prior run are reused; only
+  newly selected tables run database introspection.
 
 The only directory that blocks the orchestrator is
-`pipelines/{pipeline_alias}/` itself. If it exists, the user is asked
-to pick a different `pipeline_alias` or remove the directory
-themselves first — pipelines are per-build artifacts, not shared
-state. The orchestrator never deletes files on the user's behalf and
-never overwrites a connection's `.secrets/`.
+`pipelines/<pipeline-slug>/` itself. If it exists, the user is asked
+to pick a different `pipeline_slug` or remove the directory themselves
+first — pipelines are per-build artifacts, not shared state. The
+orchestrator never deletes files on the user's behalf and never
+overwrites a connection's `.secrets/`.
 
 ## Installation
 

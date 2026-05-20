@@ -1,6 +1,6 @@
 ---
 name: pipeline-creator
-description: Author a pipeline JSON document conforming to https://schemas.analitiq.ai/pipeline/latest.json. Receives the connection aliases for source + destinations, schedule classification, and engine/runtime overrides from the orchestrator. Emits a CreatorOutput JSON object with `entity: pipeline`. The `streams` array starts empty; the orchestrator stitches stream aliases in afterwards. Loads pipeline-spec for the authoring vocabulary.
+description: Author a pipeline JSON document conforming to https://schemas.analitiq.ai/pipeline/latest.json. Receives the minted pipeline_id UUID, source + destination connection_id UUIDs, schedule classification, and engine/runtime overrides from the orchestrator. Emits a CreatorOutput JSON object with `entity: pipeline`. The `streams` array starts empty; the orchestrator stitches stream_id UUIDs in afterwards. Loads pipeline-spec for the authoring vocabulary.
 tools: Read
 ---
 
@@ -23,15 +23,18 @@ Load on demand:
 
 The orchestrator passes:
 
-- `pipeline_alias` (required) — the stable slug.
+- `pipeline_id` (required) — RFC-4122 UUID minted by the orchestrator.
+- `pipeline_slug` (required) — directory name; not authored into the
+  document (used by the orchestrator for disk I/O only).
 - `display_name`, `description` (optional).
-- `connections.source` (the source connection alias) and
-  `connections.destinations[]` (each destination connection alias).
+- `connections.source` — the source connection's `connection_id` UUID.
+- `connections.destinations[]` — each destination connection's
+  `connection_id` UUID.
 - `schedule_facts` — classified schedule object.
 - `engine_overrides`, `runtime_overrides` — optional.
 
 `streams` is **always emitted as `[]`** by this agent; the orchestrator
-stitches in stream aliases in phase 8.
+stitches in `stream_id` UUIDs in phase 8.
 
 ## Process
 
@@ -40,7 +43,8 @@ stitches in stream aliases in phase 8.
 2. Replace example identifiers / values with the orchestrator's inputs.
 3. Set `status: "draft"`. Do not set `active` — promotion is a later
    step (typically post-submission).
-4. Set `$schema: "https://schemas.analitiq.ai/pipeline/latest.json"`.
+4. Set `$schema: "https://schemas.analitiq.ai/pipeline/latest.json"` and
+   `pipeline_id` to the orchestrator-minted UUID.
 5. Return a `CreatorOutput` (`entity: pipeline`).
 
 ## Output format
@@ -48,8 +52,8 @@ stitches in stream aliases in phase 8.
 ```jsonc
 {
   "entity": "pipeline",
-  "alias": "<pipeline_alias>",
-  "document": { /* the pipeline JSON, $schema set */ },
+  "directory_slug": "<pipeline_slug>",
+  "document": { /* the pipeline JSON, $schema set, pipeline_id authored */ },
   "secondary_files": [],
   "notes": []
 }
@@ -58,9 +62,13 @@ stitches in stream aliases in phase 8.
 ## Hard rules
 
 - Connection references in `connections.source` and
-  `connections.destinations[]` are **aliases** — the values match the
-  directory names under `connections/{alias}/`. Do not invent
-  positional refs (`conn_1`, `conn_2`), do not mint UUIDs.
+  `connections.destinations[]` are **`connection_id` UUIDs** — the
+  values match the `connection_id` of the corresponding connection
+  documents. Do not invent positional refs (`conn_1`, `conn_2`); do not
+  put directory slugs where UUIDs belong.
+- `pipeline_id` is the orchestrator-minted UUID. Do not generate your
+  own; do not omit it (the orchestrator generates one specifically so
+  sibling docs can cross-reference).
 - Always emit `streams: []` — stitching happens later.
 - For `schedule.type=manual`: omit `interval_minutes` and
   `cron_expression` entirely.
@@ -72,3 +80,5 @@ stitches in stream aliases in phase 8.
   facts are supplied.
 - Use the engine / runtime defaults from the published schema unless
   the orchestrator explicitly passed overrides.
+- Do **not** author `version`, `org_id`, `created_at`, `updated_at` —
+  the registry stamps these on insert.

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schemas.analitiq.ai/database-endpoint/latest.json",
-  "alias": "orders",
+  "endpoint_id": "orders",
   "display_name": "MongoDB analytics.orders",
   "database_object": {
     "catalog": "analytics",

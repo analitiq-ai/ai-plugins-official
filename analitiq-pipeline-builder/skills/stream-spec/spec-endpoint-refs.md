@@ -5,8 +5,8 @@ Source and every destination carry an `endpoint_ref`:
 ```jsonc
 {
   "scope": "connector" | "connection",   // closed enum
-  "connection_id": "<connection-alias>",
-  "alias": "<endpoint alias>"
+  "connection_id": "<connection-uuid>",
+  "endpoint_id": "<endpoint slug>"
 }
 ```
 
@@ -25,24 +25,24 @@ on API endpoints.
 
 ## `connection_id`
 
-The **connection alias** the parent pipeline selected for that side —
-source for `stream.source.endpoint_ref`, destinations for
-`stream.destinations[].endpoint_ref`. The field name historically
-implies a UUID, but the published schema accepts any non-empty string
-and the engine resolves the alias at runtime. The value matches one of
-`pipeline.connections.source` or `pipeline.connections.destinations[]`.
+The **`connection_id` UUID** of the connection the parent pipeline
+selected for that side — source for `stream.source.endpoint_ref`,
+destinations for `stream.destinations[].endpoint_ref`. The value must
+match one of `pipeline.connections.source` or
+`pipeline.connections.destinations[]`.
 
-## `alias`
+## `endpoint_id`
 
-The stable endpoint alias chosen from endpoint discovery. For API
+The stable endpoint identifier chosen from endpoint discovery. For API
 endpoints, this matches a key from the connector's
 `definition/endpoints/*.json`. For database endpoints, this matches the
-alias the discovery workflow assigned to the table/view.
+`endpoint_id` on the introspection-authored endpoint document
+(`^[a-z0-9][a-z0-9_-]*$`).
 
 ## Uniqueness
 
-Destination `endpoint_ref` tuples `(scope, connection_id, alias)` must
-be unique within a single stream. The `endpoint-ref-shape` validator
+Destination `endpoint_ref` tuples `(scope, connection_id, endpoint_id)`
+must be unique within a single stream. The `endpoint-ref-shape` validator
 catches duplicates.
 
 ## Cross-document consistency

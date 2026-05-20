@@ -1,14 +1,14 @@
 {
   "$schema": "https://schemas.analitiq.ai/stream/latest.json",
-  "alias": "balances_to_warehouse",
+  "stream_id": "41414141-4141-4141-8141-414141414141",
   "display_name": "Balances to warehouse (passthrough)",
   "description": "Default mapping — every source field copied 1:1 to the destination.",
-  "pipeline_id": "wise_to_postgresql",
+  "pipeline_id": "10101010-1010-4010-8010-101010101010",
   "source": {
     "endpoint_ref": {
       "scope": "connector",
-      "connection_id": "wise",
-      "alias": "balances"
+      "connection_id": "01010101-0101-4101-8101-010101010101",
+      "endpoint_id": "balances"
     },
     "replication": {"method": "full_refresh"}
   },
@@ -16,8 +16,8 @@
     {
       "endpoint_ref": {
         "scope": "connection",
-        "connection_id": "postgresql",
-        "alias": "public_balances"
+        "connection_id": "05050505-0505-4505-8505-050505050505",
+        "endpoint_id": "public_balances"
       },
       "write": {"mode": "insert"}
     }

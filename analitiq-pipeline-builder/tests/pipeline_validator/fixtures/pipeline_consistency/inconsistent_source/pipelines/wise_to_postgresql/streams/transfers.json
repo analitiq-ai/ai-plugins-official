@@ -1,12 +1,12 @@
 {
   "$schema": "https://schemas.analitiq.ai/stream/latest.json",
-  "alias": "transfers",
-  "pipeline_id": "wise_to_postgresql",
+  "stream_id": "aaaaaaaa-4444-4444-8444-aaaaaaaaaaaa",
+  "pipeline_id": "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa",
   "source": {
     "endpoint_ref": {
       "scope": "connector",
-      "connection_id": "stripe",
-      "alias": "transfers"
+      "connection_id": "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb",
+      "endpoint_id": "transfers"
     },
     "replication": {
       "method": "full_refresh"
@@ -16,8 +16,8 @@
     {
       "endpoint_ref": {
         "scope": "connection",
-        "connection_id": "postgresql",
-        "alias": "warehouse_transfers"
+        "connection_id": "aaaaaaaa-3333-4333-8333-aaaaaaaaaaaa",
+        "endpoint_id": "warehouse_transfers"
       },
       "write": {
         "mode": "insert"

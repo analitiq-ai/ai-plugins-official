@@ -1,6 +1,6 @@
 {
   "$schema": "https://schemas.analitiq.ai/database-endpoint/latest.json",
-  "alias": "shop_customers",
+  "endpoint_id": "shop_customers",
   "display_name": "Customers",
   "database_object": {
     "schema": "shop",

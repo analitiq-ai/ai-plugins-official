@@ -23,10 +23,12 @@ The agent has three modes; one invocation runs exactly one mode.
 
 ### Mode 1: `discover-schemas`
 
-1. Read the connection JSON to get host, port, username, database.
+1. Read the connection JSON at
+   `connections/<connection-slug>/connection.json` to get host, port,
+   username, database (from the `values` envelope).
 2. Read the matching secret values from
-   `connections/{alias}/.secrets/credentials.json` (the user must have
-   filled this in).
+   `connections/<connection-slug>/.secrets/credentials.json` (the user
+   must have filled this in).
 3. Connect to the database. Use the appropriate driver / CLI tool
    (`psql`, `mysql`, `mongosh`, `bq`, `sqlcmd`, etc.).
 4. Query the user-visible schemas / namespaces. Exclude system schemas
@@ -73,12 +75,12 @@ The agent has three modes; one invocation runs exactly one mode.
    ```jsonc
    {
      "$schema": "https://schemas.analitiq.ai/database-endpoint/latest.json",
-     "alias": "<schema>_<name>",                  // matches ^[a-z0-9][a-z0-9_-]*$; lowercase
+     "endpoint_id": "<schema>_<name>",            // matches ^[a-z0-9][a-z0-9_-]*$; lowercase; unique within the owning connection
      "display_name": "<schema>.<name>",
      "database_object": {
        "schema": "<schema>",                       // verbatim
        "name": "<name>",                           // verbatim
-       "object_type": "table" | "view" | "materialized_view"
+       "object_type": "table"               // open string; common values: table, view, materialized_view, external_table, collection
      },
      "columns": [ /* per spec-columns.md */ ],
      "primary_keys": [ /* if any */ ]
@@ -105,14 +107,18 @@ The agent has three modes; one invocation runs exactly one mode.
      "outputs": [
        {
          "entity": "database_endpoint",
-         "alias": "public_orders",
-         "document": { /* the endpoint JSON, $schema set */ },
+         "directory_slug": "public_orders",
+         "document": { /* the endpoint JSON, $schema + endpoint_id set */ },
          "secondary_files": [],
          "notes": []
        }
      ]
    }
    ```
+
+   `directory_slug` matches the endpoint's `endpoint_id` and becomes the
+   filename stem
+   (`connections/<connection-slug>/endpoints/<endpoint_id>.json`).
 
 ## Required reading
 
@@ -127,10 +133,10 @@ Load on demand:
 - Identifier strings (`schema`, `name`, column `name`, `native_type`)
   are preserved **verbatim** from introspection. No case-folding, no
   quoting, no normalization.
-- The endpoint `alias` is the **only** identifier you may lowercase
-  / slug-ify (from `<schema>_<name>`), because alias is a slug
-  (`^[a-z0-9][a-z0-9_-]*$`). The underlying `database_object.{schema,
-  name}` keep their original case.
+- The endpoint `endpoint_id` is the **only** identifier you may
+  lowercase / slug-ify (from `<schema>_<name>`), because `endpoint_id`
+  is a slug (`^[a-z0-9][a-z0-9_-]*$`). The underlying
+  `database_object.{schema, name}` keep their original case.
 - Never run DDL. Discovery is read-only. No `CREATE`, `ALTER`, `DROP`.
 - Never embed credentials. The driver reads them from the
   `.secrets/credentials.json` file the user already populated.
@@ -141,3 +147,5 @@ Load on demand:
   `database_object.catalog`.
 - If the connection cannot be reached (network error, bad credentials),
   surface the underlying error verbatim and stop. Do not retry.
+- Do **not** author `version`, `connection_id`, `connector_id`,
+  `connector_version`, or `schema_hash` — those are server-managed.

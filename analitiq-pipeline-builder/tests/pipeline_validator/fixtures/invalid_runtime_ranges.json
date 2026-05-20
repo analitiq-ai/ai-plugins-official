@@ -1,6 +1,5 @@
 {
   "$schema": "https://schemas.analitiq.ai/pipeline/latest.json",
-  "alias": "wise_to_postgresql",
   "connections": {
     "source": "wise",
     "destinations": ["postgresql"]

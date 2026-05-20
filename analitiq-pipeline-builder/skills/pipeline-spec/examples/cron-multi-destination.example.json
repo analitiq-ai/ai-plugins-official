@@ -1,18 +1,18 @@
 {
   "$schema": "https://schemas.analitiq.ai/pipeline/latest.json",
-  "alias": "stripe_to_warehouse_and_lake",
+  "pipeline_id": "30303030-3030-4030-8030-303030303030",
   "display_name": "Stripe to warehouse + lake",
   "description": "Replicates Stripe events to PostgreSQL and S3 daily at 02:00 Berlin time.",
   "status": "draft",
   "connections": {
-    "source": "stripe",
+    "source": "31313131-3131-4131-8131-313131313131",
     "destinations": [
-      "postgresql_warehouse",
-      "s3_lake"
+      "05050505-0505-4505-8505-050505050505",
+      "02020202-0202-4202-8202-020202020202"
     ]
   },
   "streams": [
-    "stripe_events_to_warehouse_and_lake"
+    "32323232-3232-4232-8232-323232323232"
   ],
   "schedule": {
     "type": "cron",

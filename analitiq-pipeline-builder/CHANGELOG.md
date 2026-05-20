@@ -3,41 +3,76 @@
 ## [unreleased]
 
 ### Changed
-- `arrow_type` is now **required** on every column and every mapping
-  assignment, and must be the **fully-qualified** Apache Arrow canonical
-  type string from the shared vocabulary. Bare parameterized forms
-  (`Timestamp`, `Decimal128`, `Time64`, `Duration`, `Interval`,
-  `FixedSizeBinary`, `List`, `Struct`, `Map`, …) are rejected by the
-  published `database-endpoint/latest.json` and `stream/latest.json`
-  schemas. Authored documents must carry parameters:
-  `Timestamp(MICROSECOND, UTC)`, `Decimal128(12, 2)`,
-  `Time64(MICROSECOND)`, `List<Int64>`, `Struct<id:Int64, name:Utf8>`,
-  etc. `skills/endpoint-spec/spec-columns.md` documents the three
-  shapes (bare / `( )` / `< >`), the `TimeUnit` / `IntervalUnit`
-  identifiers, and the `Timestamp` timezone forms;
-  `skills/stream-spec/spec-mapping.md` cross-references it. The
-  `private-endpoint-creator` agent now derives a fully-qualified
-  `arrow_type` for every column (carrying `(p, s)` from `numeric(p,s)`
-  / `DECIMAL(p,s)`) instead of omitting it when ambiguous; for
-  schemaless or opaque containers it falls back to `Utf8` or `Binary`
-  with a note. All endpoint-spec / stream-spec example fixtures and
-  pipeline-validator fixtures rewritten to the new format.
-- Identifiers in authored documents are now **aliases**, not versioned
-  UUIDs. `connections.source`, `connections.destinations[]`, `streams[]`,
-  `endpoint_ref.connection_id`, and stream `pipeline_id` all hold alias
-  strings the engine resolves at runtime. The published schemas already
-  accept any non-empty string for these slots; the previous UUID
-  placeholders were a plugin-side convention the engine did not require.
-- Removed the orchestrator's phase-4 "mint placeholder versioned UUIDs"
-  step. The pipeline is now a 10-phase contract (numbering shifted in
-  `references/pipeline.md`).
-- Removed the `versioned-id-format` Layer 2 validator and its
-  supporting helpers. Layer 1's `string`/`minLength: 1`/`uniqueItems`
-  constraints on these fields remain in force via the published schema.
-- `pipeline-stream-consistency` now compares stream `pipeline_id` to
-  the parent pipeline's `alias` directly (no UUID derivation).
-- `references/identity-and-versioning.md` rewritten as a one-page
-  "aliases are the identifier" reference.
+- **Identity migration: `alias` → `{object}_id`.** Aligns the plugin
+  with the published Analitiq schema contracts at `schemas.analitiq.ai`,
+  which now enforce typed identity fields:
+  - `pipeline.pipeline_id`, `stream.stream_id`,
+    `connection.connection_id` are **RFC-4122 UUIDs**. The plugin
+    generates a fresh UUID per document at authoring time and threads
+    it through cross-references; the registry assigns one on ingest if
+    omitted.
+  - `connection.connector_id` is a **slug** (or UUID — schema does not
+    constrain). Authored as the connector slug downloaded from the
+    DIP registry.
+  - `database_endpoint.endpoint_id` is a **slug**
+    (`^[a-z0-9][a-z0-9_-]*$`), authored verbatim from
+    `<schema>_<name>`.
+  - `endpoint_ref` inner field renamed `alias` → `endpoint_id`.
+  - Cross-references (`pipeline.connections.source`,
+    `pipeline.connections.destinations[]`, `pipeline.streams[]`,
+    `stream.pipeline_id`, `endpoint_ref.connection_id`) carry the
+    referenced document's UUID identity.
+  - Directory layout stays slug-based and human-readable
+    (`pipelines/<pipeline-slug>/`, `connections/<connection-slug>/`,
+    `connections/<connection-slug>/endpoints/<endpoint-slug>.json`,
+    `pipelines/<pipeline-slug>/streams/<stream-slug>.json`). The slug
+    is independent of the UUID identity stored inside the document.
+
+- **Connection envelope: `parameters` + `secret_refs` → single
+  `values`.** The closed `connection/latest.json` schema accepts only
+  `$schema`, `connection_id`, `connector_id`, `display_name`,
+  `description`, `values`, and `tags` (with `connector_id` the only
+  required field). The plugin now writes a single flat `values`
+  envelope keyed by connection-contract input name. For inputs whose
+  connector contract bucket is `secrets`, the plugin writes a
+  human-readable placeholder (`"<see .secrets/credentials.json>"`)
+  into `values` and emits a `.secrets/credentials.json` template the
+  user fills in. The user (or CI) merges secret values from
+  `.secrets/` into `values` before submitting the connection to the
+  registry. The server routes `values` entries into the persisted
+  parameters / selections / secrets buckets per the connector
+  contract.
+
+- **Closed-schema sweep.** Every published schema now declares
+  `additionalProperties: false`. Authored documents emit only fields
+  in the published `properties` list — no `x-*` extensions, no legacy
+  fields. `references/extension-policy.md` rewritten to reflect
+  closed-schema behavior.
+
+### Validator
+- Renamed `endpoint_ref.alias` → `endpoint_ref.endpoint_id` in the
+  destination-uniqueness key.
+- Removed the `secret-ref-format` Layer 2 validator (the closed
+  connection schema rejects `secret_refs` entirely; the `.secrets/`
+  template is a local-only file).
+- `pipeline-stream-consistency` and `status-lifecycle` derive the
+  pipeline's directory slug from the document path (used only to scope
+  stream-file discovery) and compare stream `pipeline_id` against the
+  authored `pipeline.pipeline_id` UUID for cross-document matching.
+- `reserved-field` validator lists no longer reserve
+  `pipeline_id` / `stream_id` / `connection_id` / `endpoint_id` /
+  `connector_id` — those are authored fields under the new contract.
+
+### Fixtures + examples
+- All `valid_*.json` and `invalid_*.json` validator fixtures and all
+  `skills/*/examples/*.example.json` reference examples rewritten to
+  the new identity + envelope contract.
+
+### Migration
+- Pipelines, connections, and endpoint files from prior plugin
+  releases are not migrated and must be regenerated. The validator's
+  closed-schema enforcement will reject the legacy shape with a clear
+  `additionalProperties` finding.
 
 ## [4.0.0] - 2026-05-11
 

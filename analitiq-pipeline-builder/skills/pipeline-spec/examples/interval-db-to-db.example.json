@@ -1,17 +1,17 @@
 {
   "$schema": "https://schemas.analitiq.ai/pipeline/latest.json",
-  "alias": "mysql_to_postgresql",
+  "pipeline_id": "20202020-2020-4020-8020-202020202020",
   "display_name": "MySQL to PostgreSQL",
   "status": "draft",
   "connections": {
-    "source": "mysql_source",
+    "source": "21212121-2121-4121-8121-212121212121",
     "destinations": [
-      "postgresql_warehouse"
+      "05050505-0505-4505-8505-050505050505"
     ]
   },
   "streams": [
-    "mysql_users_to_postgresql_users",
-    "mysql_orders_to_postgresql_orders"
+    "22222222-2222-4222-8222-222222222222",
+    "23232323-2323-4323-8323-232323232323"
   ],
   "schedule": {
     "type": "interval",

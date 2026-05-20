@@ -1,6 +1,6 @@
 ---
 name: registry-browser
-description: Download a connector from the Analitiq DIP registry (https://github.com/analitiq-ai/analitiq-dip-registry) into `connectors/{alias}/`, including its `definition/connector.json` and (for API connectors) `definition/endpoints/*.json`. Validate the downloaded connector against the published connector schema. Multiple registry-browser invocations may run in parallel (one per side of the pipeline) within a single orchestrator turn. Never modifies the downloaded connector — it is read-only input to the rest of the chain.
+description: Download a connector from the Analitiq DIP registry (https://github.com/analitiq-ai/analitiq-dip-registry) into `connectors/<connector-slug>/`, including its `definition/connector.json` and (for API connectors) `definition/endpoints/*.json`. Validate the downloaded connector against the published connector schema. Multiple registry-browser invocations may run in parallel (one per side of the pipeline) within a single orchestrator turn. Never modifies the downloaded connector — it is read-only input to the rest of the chain.
 tools: WebFetch, Bash, Read
 ---
 
@@ -12,9 +12,9 @@ and you do not author anything.
 
 ## Inputs
 
-- `connector_alias` (required) — the slug under
-  `https://github.com/analitiq-ai/analitiq-dip-registry`.
-- `target_dir` (optional, default `connectors/{connector_alias}/`).
+- `connector_slug` (required) — the connector slug as a registry
+  directory name (also used as the connection's `connector_id`).
+- `target_dir` (optional, default `connectors/<connector_slug>/`).
 
 ## Process
 
@@ -29,7 +29,7 @@ and you do not author anything.
    `connector.json` is:
 
    ```
-   https://raw.githubusercontent.com/analitiq-ai/analitiq-dip-registry/main/{connector_alias}/definition/connector.json
+   https://raw.githubusercontent.com/analitiq-ai/analitiq-dip-registry/main/{connector_slug}/definition/connector.json
    ```
 
    Fetch via `WebFetch`. If the fetch fails, return a structured
@@ -38,11 +38,11 @@ and you do not author anything.
    decide how to surface it.
 3. **Parse `connector.json`.** Read `kind`. For `kind = "api"`, read
    the `endpoints` array (if present) to get the list of endpoint
-   aliases.
-4. **Fetch endpoint files** (API only). For each endpoint alias, fetch:
+   identifiers (`endpoint_id` slugs).
+4. **Fetch endpoint files** (API only). For each endpoint id, fetch:
 
    ```
-   https://raw.githubusercontent.com/analitiq-ai/analitiq-dip-registry/main/{connector_alias}/definition/endpoints/{endpoint-alias}.json
+   https://raw.githubusercontent.com/analitiq-ai/analitiq-dip-registry/main/{connector_slug}/definition/endpoints/{endpoint_id}.json
    ```
 
    On any endpoint-fetch failure, return a structured refusal with
@@ -53,11 +53,11 @@ and you do not author anything.
 5. **Write to disk:**
 
    ```
-   connectors/{connector_alias}/
+   connectors/<connector_slug>/
    └── definition/
        ├── connector.json
        └── endpoints/                # api only
-           └── {endpoint-alias}.json
+           └── <endpoint_id>.json
    ```
 
    The downloaded files are read-only inputs. Do not edit them.
@@ -72,11 +72,11 @@ and you do not author anything.
    ```jsonc
    {
      "status": "downloaded",
-     "connector_alias": "<alias>",
+     "connector_slug": "<slug>",
      "kind": "api" | "database" | "file" | "s3" | "stdout",
      "auth_type": "<connector.auth.type>",
-     "endpoint_aliases": ["transfers", "balances"],     // empty for non-api
-     "target_dir": "connectors/<alias>",
+     "endpoint_ids": ["transfers", "balances"],         // empty for non-api
+     "target_dir": "connectors/<slug>",
      "validation": {"passed": true | "skipped", "findings": []}
    }
    ```
@@ -94,8 +94,8 @@ whenever any of the following trips:
 {
   "status": "refused",
   "reason": "target_exists" | "fetch_failed" | "registry_missing",
-  "connector_alias": "<alias>",
-  "target_dir": "connectors/<alias>",
+  "connector_slug": "<slug>",
+  "target_dir": "connectors/<slug>",
   "detail": "<human-readable single sentence — e.g. the HTTP status+body verbatim, or the on-disk path that already exists>"
 }
 ```
@@ -103,8 +103,8 @@ whenever any of the following trips:
 `reason` discriminator (normative):
 
 - `target_exists` — step 1: the target directory is already on disk.
-- `registry_missing` — HTTP 404 on any fetch. The alias does not
-  exist in the registry (or the endpoint file is missing for an
+- `registry_missing` — HTTP 404 on any fetch. The connector slug does
+  not exist in the registry (or the endpoint file is missing for an
   API connector).
 - `fetch_failed` — any other non-2xx response, transport error,
   DNS failure, or timeout.
@@ -117,9 +117,9 @@ the orchestrator surfaces `detail` verbatim to the user.
 
 - Never edit downloaded connector / endpoint JSON. The downloaded
   files are the source of truth for the rest of the chain.
-- Never overwrite an existing `connectors/{alias}/` directory.
+- Never overwrite an existing `connectors/<slug>/` directory.
 - Never invent endpoints. If `connector.json#/endpoints` is absent
-  for an API connector, return `endpoint_aliases: []` and let the
+  for an API connector, return `endpoint_ids: []` and let the
   orchestrator surface that to the user.
 - Storage kinds (`file`, `s3`, `stdout`) are downloaded normally —
   the downstream `stream-creator` will issue a structured refusal

@@ -2,27 +2,27 @@
 
 ## `streams`
 
-An array of **stream aliases**. Each entry references a stream defined
-in a sibling `streams/{stream-alias}.json` file.
+An array of **stream UUIDs**. Each entry is the `stream_id` of a stream
+defined in a sibling `streams/<stream-slug>.json` file.
 
 ```jsonc
 {
   "streams": [
-    "wise_users_to_postgresql_users",
-    "wise_transfers_to_postgresql_transfers"
+    "22222222-2222-4222-8222-222222222222",
+    "23232323-2323-4323-8323-232323232323"
   ]
 }
 ```
 
 Rules:
 
-- Aliases are unique within the array (`uniqueItems: true` in the
-  schema).
+- UUIDs are unique within the array (`uniqueItems: true` in the schema).
 - Each referenced stream's `pipeline_id` must equal this pipeline's
-  `alias`. The `pipeline-stream-consistency` Layer 2 validator enforces
-  this when `--bundle-root` is supplied.
-- Empty array is allowed; required when the pipeline is in `draft` or
-  `inactive` status.
+  `pipeline_id`. The `pipeline-stream-consistency` Layer 2 validator
+  enforces this when `--bundle-root` is supplied.
+- An empty `streams` array is permitted in `draft` or `inactive`
+  status. Only `status: active` requires non-empty `streams` (see
+  `status-lifecycle` validator below).
 
 ## `status`
 
@@ -39,8 +39,8 @@ can't read stream files to verify per-stream status).
 
 ## Authoring sequence
 
-The orchestrator authors the pipeline shell with `streams: []` in
-phase 6, then stitches the stream aliases back in phase 8 after the
-parallel `stream-creator` dispatch returns. The shell starts in
-`status: draft`. Promotion to `active` happens later (typically when
+The orchestrator authors the pipeline shell with `streams: []` in phase
+6, then stitches the stream UUIDs back in phase 8 after the parallel
+`stream-creator` dispatch returns each new `stream_id`. The shell starts
+in `status: draft`. Promotion to `active` happens later (typically when
 the user submits the pipeline to the registry).

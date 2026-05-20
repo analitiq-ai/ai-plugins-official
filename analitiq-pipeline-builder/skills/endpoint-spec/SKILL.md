@@ -26,7 +26,7 @@ API endpoints come from the connector document, not from here. This
 skill is **database-only**. API endpoints in stream `endpoint_ref`s use
 `scope: connector` and point at the connector's `definition/endpoints/`.
 Database endpoints use `scope: connection` and live under
-`connections/{alias}/endpoints/`.
+`connections/<connection-slug>/endpoints/`.
 
 ## What this skill covers
 
@@ -50,8 +50,9 @@ Every authored document must:
 
 1. Declare `$schema: "https://schemas.analitiq.ai/database-endpoint/latest.json"`
    (the schema marks this as a `const`-required field).
-2. Include `alias` (`[a-z0-9][a-z0-9_-]*`), `database_object`, and a
-   non-empty `columns[]`.
+2. Include `endpoint_id` (`^[a-z0-9][a-z0-9_-]*$`), `database_object`,
+   `columns` (non-empty), and `$schema` — these are the schema-required
+   top-level fields.
 3. Preserve identifier strings verbatim from introspection.
 4. Pass `python scripts/validate_pipeline.py --entity database_endpoint
    --document <path>` with zero error findings.

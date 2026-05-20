@@ -7,15 +7,15 @@ the next phase relies on.
 
 | # | Phase | Agent | Postcondition |
 |---|---|---|---|
-| 0 | Pre-flight pipeline-directory check | _orchestrator_ | `pipelines/{pipeline_alias}/` does not exist on disk. Existing `connectors/` and `connections/` directories are reused, not blocked. |
+| 0 | Pre-flight pipeline-directory check | _orchestrator_ | `pipelines/<pipeline-slug>/` does not exist on disk. Existing `connectors/` and `connections/` directories are reused, not blocked. |
 | 1 | Research | `pipeline-provider-researcher` | A `PipelineFacts` JSON object is captured (see `io-contracts.md`). |
-| 2 | Connector download or reuse | `registry-browser` × {0,1,2} (parallel per missing side) | `connectors/{source}/` and `connectors/{destination}/` exist with `definition/connector.json` + (api only) `definition/endpoints/`. Sides that were already on disk are reused as-is. |
-| 3 | Classify | _orchestrator_ | `schedule.type`, `replication.method`, `write.mode` resolved against closed enums. |
-| 4 | Connections (author or reuse) | `connection-creator` × {0,1,2} (parallel per side missing on disk) | One `connections/{alias}/connection.json` plus `connections/{alias}/.secrets/credentials.json` per side, each validating against `connection/latest.json`. Sides already present (with matching `connector_alias`) are reused, including their existing `.secrets/`. |
-| 5 | Endpoint discovery | `private-endpoint-creator` × M (DB only, parallel across connections) | `connections/{alias}/endpoints/*.json` for selected tables, each validating against `database-endpoint/latest.json`. Endpoint files already on disk for the chosen tables are reused; only new tables run introspection. |
-| 6 | Pipeline shell | `pipeline-creator` | `pipelines/{alias}/pipeline.json` with `streams: []`, validating against `pipeline/latest.json`. |
-| 7 | Streams | `stream-creator` × K (parallel) | `pipelines/{alias}/streams/{stream-alias}.json` per selected endpoint, each validating against `stream/latest.json`. |
-| 8 | Stitch | _orchestrator_ | `pipeline.json#/streams` is populated with the K stream aliases; bundle validates with `--bundle-root .`. |
+| 2 | Connector download or reuse | `registry-browser` × {0,1,2} (parallel per missing side) | `connectors/<connector-slug>/` exists for each side with `definition/connector.json` + (api only) `definition/endpoints/`. Sides already on disk are reused as-is. |
+| 3 | Classify | _orchestrator_ | `schedule.type`, `replication.method`, `write.mode` resolved against closed enums. UUIDs minted for `pipeline_id` and each `connection_id` and `stream_id` the orchestrator will author. |
+| 4 | Connections (author or reuse) | `connection-creator` × {0,1,2} (parallel per side missing on disk) | One `connections/<connection-slug>/connection.json` plus `connections/<connection-slug>/.secrets/credentials.json` per side, each validating against `connection/latest.json`. Sides already present (with matching `connector_id`) are reused, including their existing `.secrets/`. |
+| 5 | Endpoint discovery | `private-endpoint-creator` × M (DB only, parallel across connections) | `connections/<connection-slug>/endpoints/*.json` for selected tables, each validating against `database-endpoint/latest.json`. Endpoint files already on disk for the chosen tables are reused; only new tables run introspection. |
+| 6 | Pipeline shell | `pipeline-creator` | `pipelines/<pipeline-slug>/pipeline.json` with `streams: []`, validating against `pipeline/latest.json`. |
+| 7 | Streams | `stream-creator` × K (parallel) | `pipelines/<pipeline-slug>/streams/<stream-slug>.json` per selected endpoint, each validating against `stream/latest.json`. |
+| 8 | Stitch | _orchestrator_ | `pipeline.json#/streams` is populated with the K `stream_id` UUIDs; bundle validates with `--bundle-root .`. |
 | 9 | Validate | `pipeline-schema-validator` (looped, ≤ 5 passes) | Every artifact has zero `error`-severity findings. |
 | 10 | Drift (optional) | `pipeline-drift-classifier` | A structural diff vs. `previous_release_path`; informational only. |
 
@@ -23,12 +23,12 @@ the next phase relies on.
 
 The orchestrator must halt (and surface a clear message) when:
 
-- Phase 0 finds an existing `pipelines/{pipeline_alias}/` directory.
+- Phase 0 finds an existing `pipelines/<pipeline-slug>/` directory.
   (Existing `connectors/` and `connections/` directories are reused,
   not blocked.)
-- Phase 1's required inputs are missing (`source_connector_alias`,
-  `destination_connector_alias`, `pipeline_alias`).
-- Phase 2 finds an on-disk `connectors/{alias}/definition/connector.json`
+- Phase 1's required inputs are missing (`source_connector_id`,
+  `destination_connector_id`, `pipeline_slug`).
+- Phase 2 finds an on-disk `connectors/<connector-slug>/definition/connector.json`
   that fails to parse as JSON. The user is asked to fix or remove
   the file themselves.
 - Phase 2's `registry-browser` returns `status: "refused"` with
@@ -40,9 +40,9 @@ The orchestrator must halt (and surface a clear message) when:
   branch.)
 - Phase 3's enum mappers fail to map an input (the user supplied
   something outside the closed set).
-- Phase 4 finds an existing `connections/{alias}/connection.json` whose
-  `connector_alias` does not match the side's connector. The user is
-  asked to pick a different `connection_alias` or remove the existing
+- Phase 4 finds an existing `connections/<connection-slug>/connection.json` whose
+  `connector_id` does not match the side's connector slug. The user is
+  asked to pick a different `connection-slug` or remove the existing
   file themselves.
 - Phase 4's reuse-validation of an existing `connection.json` against
   `connection/latest.json` fails. The orchestrator surfaces the
@@ -70,6 +70,14 @@ phase, and do not auto-retry without user input.
 Phases that dispatch multiple agents in parallel (2, 4, 7) issue all
 calls in a single message — multiple tool invocations in one turn — so
 they run concurrently. Do not sequence them artificially.
+
+## Identity minting (phase 3)
+
+The orchestrator generates RFC-4122 UUIDs for `pipeline_id`,
+`connection_id` (one per side), and `stream_id` (one per selected
+endpoint) and threads them through the creator agents so cross-document
+references are consistent. Reused on-disk connections contribute their
+existing `connection_id` UUIDs instead.
 
 ## Fix-and-revalidate loop (phase 9)
 

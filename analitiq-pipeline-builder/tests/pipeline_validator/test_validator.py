@@ -328,20 +328,16 @@ def test_examples_glob_is_non_empty():
 @pytest.mark.parametrize(
     "entity,field,sentinel",
     [
-        ("pipeline", "pipeline_id", "abc-123"),
         ("pipeline", "version", 1),
         ("pipeline", "org_id", "d7a11991-2795-49d1-a858-c7e58ee5ecc6"),
         ("pipeline", "created_at", "2026-05-09T00:00:00Z"),
-        ("stream", "stream_id", "abc-123"),
         ("stream", "schema_hash", "sha256:deadbeef"),
         ("stream", "assignments_hash", "deadbeef"),
         ("stream", "source_to_generic", {"id": "string"}),
-        ("connection", "connection_id", "abc-123"),
-        ("connection", "connector_id", "abc-456"),
         ("connection", "connector_version", "1.0.0"),
         ("connection", "auth_state", {"type": "api_key"}),
-        ("database_endpoint", "endpoint_id", "abc-789"),
         ("database_endpoint", "schema_hash", "sha256:cafebabe"),
+        ("database_endpoint", "connector_id", "abc-456"),
     ],
 )
 def test_reserved_field_caught(tmp_path, entity, field, sentinel):
@@ -537,21 +533,6 @@ def test_filter_operators_caught():
 
 
 # ---------------------------------------------------------------------------
-# Layer 2 — secret-ref-format
-# ---------------------------------------------------------------------------
-
-
-def test_secret_ref_format_caught():
-    result = run_validator(
-        FIXTURES / "invalid_connection_secret_ref.json", "connection", "--semantic-only"
-    )
-    errs = errors_of(result, "secret-ref-format")
-    paths = sorted(e["path"] for e in errs)
-    assert "/secret_refs/password" in paths
-    assert "/secret_refs/ssl_ca_certificate" in paths
-
-
-# ---------------------------------------------------------------------------
 # Layer 2 — column-uniqueness
 # ---------------------------------------------------------------------------
 
@@ -615,6 +596,75 @@ def test_pipeline_stream_consistency_warning_without_bundle():
     assert warns, f"expected a warning when --bundle-root is omitted; got {result['findings']}"
 
 
+def test_pipeline_stream_consistency_warns_when_streams_listed_but_no_files(tmp_path):
+    """Pipeline references streams[] but the streams/ dir is empty → warning, not silent skip."""
+    bundle = tmp_path / "bundle"
+    p_dir = bundle / "pipelines" / "wise_to_postgresql"
+    (p_dir / "streams").mkdir(parents=True)
+    (p_dir / "pipeline.json").write_text(json.dumps({
+        "$schema": "https://schemas.analitiq.ai/pipeline/latest.json",
+        "pipeline_id": "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa",
+        "connections": {"source": "s", "destinations": ["d"]},
+        "streams": ["aaaaaaaa-4444-4444-8444-aaaaaaaaaaaa"],
+        "schedule": {"type": "manual"},
+    }))
+    result = run_validator(
+        p_dir / "pipeline.json", "pipeline",
+        "--semantic-only", "--bundle-root", str(bundle),
+    )
+    warns = warnings_of(result, "pipeline-stream-consistency")
+    assert any("no stream files were found" in w["message"] for w in warns), (
+        f"expected no-stream-files warning; got {warns}"
+    )
+
+
+def test_pipeline_stream_consistency_warns_on_asymmetric_pipeline_id(tmp_path):
+    """Stream carries pipeline_id but the pipeline omits it → warning (identity pinning skipped)."""
+    import shutil
+    bundle = tmp_path / "bundle"
+    shutil.copytree(FIXTURES / "pipeline_consistency" / "consistent", bundle)
+    p = bundle / "pipelines" / "wise_to_postgresql" / "pipeline.json"
+    pdoc = json.loads(p.read_text())
+    pdoc.pop("pipeline_id", None)
+    p.write_text(json.dumps(pdoc))
+    result = run_validator(p, "pipeline", "--semantic-only", "--bundle-root", str(bundle))
+    warns = warnings_of(result, "pipeline-stream-consistency")
+    assert any("identity pinning is not enforceable" in w["message"] for w in warns), (
+        f"expected asymmetric-pipeline_id warning; got {warns}"
+    )
+
+
+def test_pipeline_stream_consistency_uuid_mismatch_errors(tmp_path):
+    """Stream pipeline_id is a different UUID than pipeline.pipeline_id → error."""
+    import shutil
+    bundle = tmp_path / "bundle"
+    shutil.copytree(FIXTURES / "pipeline_consistency" / "consistent", bundle)
+    sf = bundle / "pipelines" / "wise_to_postgresql" / "streams" / "transfers.json"
+    sdoc = json.loads(sf.read_text())
+    sdoc["pipeline_id"] = "ffffffff-ffff-4fff-8fff-ffffffffffff"
+    sf.write_text(json.dumps(sdoc))
+    p = bundle / "pipelines" / "wise_to_postgresql" / "pipeline.json"
+    result = run_validator(p, "pipeline", "--semantic-only", "--bundle-root", str(bundle))
+    errs = errors_of(result, "pipeline-stream-consistency")
+    assert any("does not match pipeline.pipeline_id" in e["message"] for e in errs), (
+        f"expected pipeline_id UUID-mismatch error; got {errs}"
+    )
+
+
+def test_pipeline_stream_consistency_warns_without_document_path():
+    """In-process callers passing bundle_root but no document_path get a warning, not silent pass."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("validate_pipeline", SCRIPT)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    doc = json.loads((FIXTURES / "valid_pipeline.json").read_text())
+    findings = mod.check_pipeline_stream_consistency(doc, FIXTURES, None)
+    warns = [f for f in findings if f["severity"] == "warning"]
+    assert any("cannot derive pipeline directory slug" in w["message"] for w in warns), (
+        f"expected slug-derivation warning when document_path is None; got {findings}"
+    )
+
+
 def test_pipeline_stream_consistency_ignores_sibling_pipelines(tmp_path):
     """A bundle containing a second pipeline must not pollute the current pipeline's check.
 
@@ -632,7 +682,6 @@ def test_pipeline_stream_consistency_ignores_sibling_pipelines(tmp_path):
     (other_dir / "streams").mkdir(parents=True)
     (other_dir / "pipeline.json").write_text(json.dumps({
         "$schema": "https://schemas.analitiq.ai/pipeline/latest.json",
-        "alias": "other_pipeline",
         "connections": {
             "source": "other_source",
             "destinations": ["other_dest"],
@@ -642,18 +691,17 @@ def test_pipeline_stream_consistency_ignores_sibling_pipelines(tmp_path):
     }))
     (other_dir / "streams" / "stray.json").write_text(json.dumps({
         "$schema": "https://schemas.analitiq.ai/stream/latest.json",
-        "alias": "stray",
         "pipeline_id": "other_pipeline",
         "source": {
             "endpoint_ref": {"scope": "connector",
                              "connection_id": "other_source",
-                             "alias": "x"},
+                             "endpoint_id": "x"},
             "replication": {"method": "full_refresh"},
         },
         "destinations": [{
             "endpoint_ref": {"scope": "connection",
                              "connection_id": "other_dest",
-                             "alias": "y"},
+                             "endpoint_id": "y"},
             "write": {"mode": "insert"},
         }],
     }))
@@ -812,15 +860,16 @@ def test_strip_required_server_fields_walks_nested_required():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
 
-    # Use pipeline-reserved fields (pipeline_id, version, org_id) at every
-    # level so the strip is expected to remove them; keep `alias` and
-    # `user_field` as authored fields that must survive.
+    # Use pipeline-reserved fields (version, org_id, created_at) at every
+    # level so the strip is expected to remove them; keep `pipeline_id` (now
+    # optional authored, not reserved) and `user_field` as authored fields
+    # that must survive.
     schema = {
-        "required": ["pipeline_id", "alias", "version"],
+        "required": ["version", "pipeline_id", "org_id"],
         "properties": {
             "mapping": {
                 "type": "object",
-                "required": ["assignments", "pipeline_id"],
+                "required": ["assignments", "version"],
                 "properties": {"assignments": {"type": "array"}},
             },
         },
@@ -828,23 +877,23 @@ def test_strip_required_server_fields_walks_nested_required():
             "Inner": {"required": ["org_id", "user_field"]},
         },
         "allOf": [
-            {"required": ["created_at", "alias"]},
+            {"required": ["created_at", "pipeline_id"]},
         ],
     }
     out = mod._strip_required_server_fields(schema, "pipeline")
-    assert out["required"] == ["alias"], f"top-level required not stripped: {out['required']}"
+    assert out["required"] == ["pipeline_id"], f"top-level required not stripped: {out['required']}"
     assert out["properties"]["mapping"]["required"] == ["assignments"], (
         f"nested required not stripped: {out['properties']['mapping']['required']}"
     )
     assert out["$defs"]["Inner"]["required"] == ["user_field"], (
         f"$defs required not stripped: {out['$defs']['Inner']['required']}"
     )
-    assert out["allOf"][0]["required"] == ["alias"], (
+    assert out["allOf"][0]["required"] == ["pipeline_id"], (
         f"allOf branch required not stripped: {out['allOf'][0]['required']}"
     )
     # Input schema was deep-cloned, not mutated.
-    assert schema["required"] == ["pipeline_id", "alias", "version"], "input schema was mutated"
-    assert schema["properties"]["mapping"]["required"] == ["assignments", "pipeline_id"], (
+    assert schema["required"] == ["version", "pipeline_id", "org_id"], "input schema was mutated"
+    assert schema["properties"]["mapping"]["required"] == ["assignments", "version"], (
         "nested input was mutated"
     )
 
@@ -853,7 +902,7 @@ def test_schema_fetch_failure_does_not_suppress_semantic_findings(tmp_path):
     """Layer 1 fetch failure records a finding but Layer 2 still runs."""
     # Build a doc that violates a Layer 2 rule (reserved-field).
     base = json.loads((FIXTURES / "valid_pipeline.json").read_text())
-    base["pipeline_id"] = "should-not-be-here"
+    base["version"] = 1
     p = tmp_path / "p.json"
     p.write_text(json.dumps(base))
     # Bad fetch URL — Layer 1 will fail, Layer 2 should still report reserved-field.
@@ -872,7 +921,7 @@ def test_schema_fetch_failure_does_not_suppress_semantic_findings(tmp_path):
 def test_multiple_validators_all_fire(tmp_path):
     """A pipeline that violates schedule-shape AND has a reserved field should report both."""
     base = json.loads((FIXTURES / "invalid_schedule_manual_with_cron.json").read_text())
-    base["pipeline_id"] = "abc-123"
+    base["version"] = 1
     doc = tmp_path / "multi.json"
     doc.write_text(json.dumps(base))
     result = run_validator(doc, "pipeline", "--semantic-only")

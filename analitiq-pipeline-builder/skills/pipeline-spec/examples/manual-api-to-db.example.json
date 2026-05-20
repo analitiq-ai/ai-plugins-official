@@ -1,13 +1,13 @@
 {
   "$schema": "https://schemas.analitiq.ai/pipeline/latest.json",
-  "alias": "wise_to_postgresql",
+  "pipeline_id": "10101010-1010-4010-8010-101010101010",
   "display_name": "Wise to PostgreSQL",
   "description": "Replicates Wise transfers to a PostgreSQL warehouse on demand.",
   "status": "draft",
   "connections": {
-    "source": "wise",
+    "source": "01010101-0101-4101-8101-010101010101",
     "destinations": [
-      "postgresql"
+      "05050505-0505-4505-8505-050505050505"
     ]
   },
   "streams": [],
