@@ -866,57 +866,62 @@ def check_pipeline_stream_consistency(
     streams_listed = doc.get("streams") or []
     if not isinstance(streams_listed, list) or not streams_listed:
         return findings
+
+    cross_doc_rule = "pipelines/pipeline-schema-parameterization.md#cross-doc-consistency"
+
+    def warn(message: str) -> dict:
+        return finding(
+            "pipeline-stream-consistency",
+            "warning",
+            "/streams",
+            message,
+            rule_doc=cross_doc_rule,
+        )
+
     if bundle_root is None:
         return [
-            finding(
-                "pipeline-stream-consistency",
-                "warning",
-                "/streams",
+            warn(
                 "pipeline-stream cross-doc consistency not checked; pass --bundle-root to "
-                "verify stream files match pipeline references.",
-                rule_doc="pipelines/pipeline-schema-parameterization.md#cross-doc-consistency",
+                "verify stream files match pipeline references."
             )
         ]
     # Pipeline identity is the authored `pipeline_id` (RFC-4122 UUID). The
     # directory layout (`<bundle>/pipelines/<slug>/`) is a human-readable
     # convention used only for stream-file discovery, not for cross-doc
     # matching.
-    pipeline_id = doc.get("pipeline_id")
     pipeline_slug = document_path.parent.name if document_path is not None else None
-    if pipeline_slug is None:
+    # `not pipeline_slug` catches both None (no path supplied by an in-process
+    # caller) and "" (`Path("pipeline.json").parent.name == ""` — the user ran
+    # the validator on a bare filename). Either way, stream-file discovery is
+    # unreliable; emit a warning instead of silently passing the empty slug
+    # through `_stream_files_for_pipeline`.
+    if not pipeline_slug:
         findings.append(
-            finding(
-                "pipeline-stream-consistency",
-                "warning",
-                "/streams",
+            warn(
                 "stream-file discovery skipped: cannot derive pipeline directory slug "
-                "without a document path. Cross-document consistency was NOT checked.",
-                rule_doc="pipelines/pipeline-schema-parameterization.md#cross-doc-consistency",
+                "from the document path. Cross-document consistency was NOT checked."
             )
         )
         return findings
+
+    stream_files = _stream_files_for_pipeline(bundle_root, pipeline_slug)
+    if not stream_files:
+        findings.append(
+            warn(
+                f"pipeline.streams is non-empty but no stream files were found under "
+                f"pipelines/{pipeline_slug}/streams/ (or {bundle_root}/streams/). "
+                "Cross-document consistency was NOT checked."
+            )
+        )
+        return findings
+
+    pipeline_id = doc.get("pipeline_id")
     connections = doc.get("connections") or {}
     source_id = connections.get("source") if isinstance(connections, dict) else None
     dest_ids = connections.get("destinations") if isinstance(connections, dict) else None
     dest_set = set(dest_ids) if isinstance(dest_ids, list) else set()
 
-    stream_files = _stream_files_for_pipeline(bundle_root, pipeline_slug)
-    if not stream_files:
-        findings.append(
-            finding(
-                "pipeline-stream-consistency",
-                "warning",
-                "/streams",
-                f"pipeline.streams is non-empty but no stream files were found under "
-                f"pipelines/{pipeline_slug}/streams/ (or {bundle_root}/streams/). "
-                "Cross-document consistency was NOT checked.",
-                rule_doc="pipelines/pipeline-schema-parameterization.md#cross-doc-consistency",
-            )
-        )
-        return findings
-    loaded = _load_stream_files(stream_files, findings, "pipeline-stream-consistency")
-
-    for sf, sdoc in loaded:
+    for sf, sdoc in _load_stream_files(stream_files, findings, "pipeline-stream-consistency"):
         spid = sdoc.get("pipeline_id")
         if isinstance(pipeline_id, str) and isinstance(spid, str) and spid != pipeline_id:
             findings.append(
@@ -1015,6 +1020,22 @@ def check_status_lifecycle(
         )
         return findings
     pipeline_slug = document_path.parent.name if document_path is not None else None
+    if not pipeline_slug:
+        # Same empty/None guard as `check_pipeline_stream_consistency`. Without
+        # a slug we cannot locate stream files; emit a warning instead of
+        # falsely reporting "no referenced stream file has status='active'"
+        # when the real issue is that the validator couldn't find them.
+        findings.append(
+            finding(
+                "status-lifecycle",
+                "warning",
+                "/status",
+                "stream-file discovery skipped: cannot derive pipeline directory slug "
+                "from the document path. status='active' lifecycle gate was NOT checked.",
+                rule_doc="shared/lifecycle-status.md",
+            )
+        )
+        return findings
     stream_files = _stream_files_for_pipeline(bundle_root, pipeline_slug)
     any_active = False
     for _, sdoc in _load_stream_files(stream_files, findings, "status-lifecycle"):

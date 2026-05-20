@@ -596,6 +596,75 @@ def test_pipeline_stream_consistency_warning_without_bundle():
     assert warns, f"expected a warning when --bundle-root is omitted; got {result['findings']}"
 
 
+def test_pipeline_stream_consistency_warns_when_streams_listed_but_no_files(tmp_path):
+    """Pipeline references streams[] but the streams/ dir is empty → warning, not silent skip."""
+    bundle = tmp_path / "bundle"
+    p_dir = bundle / "pipelines" / "wise_to_postgresql"
+    (p_dir / "streams").mkdir(parents=True)
+    (p_dir / "pipeline.json").write_text(json.dumps({
+        "$schema": "https://schemas.analitiq.ai/pipeline/latest.json",
+        "pipeline_id": "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa",
+        "connections": {"source": "s", "destinations": ["d"]},
+        "streams": ["aaaaaaaa-4444-4444-8444-aaaaaaaaaaaa"],
+        "schedule": {"type": "manual"},
+    }))
+    result = run_validator(
+        p_dir / "pipeline.json", "pipeline",
+        "--semantic-only", "--bundle-root", str(bundle),
+    )
+    warns = warnings_of(result, "pipeline-stream-consistency")
+    assert any("no stream files were found" in w["message"] for w in warns), (
+        f"expected no-stream-files warning; got {warns}"
+    )
+
+
+def test_pipeline_stream_consistency_warns_on_asymmetric_pipeline_id(tmp_path):
+    """Stream carries pipeline_id but the pipeline omits it → warning (identity pinning skipped)."""
+    import shutil
+    bundle = tmp_path / "bundle"
+    shutil.copytree(FIXTURES / "pipeline_consistency" / "consistent", bundle)
+    p = bundle / "pipelines" / "wise_to_postgresql" / "pipeline.json"
+    pdoc = json.loads(p.read_text())
+    pdoc.pop("pipeline_id", None)
+    p.write_text(json.dumps(pdoc))
+    result = run_validator(p, "pipeline", "--semantic-only", "--bundle-root", str(bundle))
+    warns = warnings_of(result, "pipeline-stream-consistency")
+    assert any("identity pinning is not enforceable" in w["message"] for w in warns), (
+        f"expected asymmetric-pipeline_id warning; got {warns}"
+    )
+
+
+def test_pipeline_stream_consistency_uuid_mismatch_errors(tmp_path):
+    """Stream pipeline_id is a different UUID than pipeline.pipeline_id → error."""
+    import shutil
+    bundle = tmp_path / "bundle"
+    shutil.copytree(FIXTURES / "pipeline_consistency" / "consistent", bundle)
+    sf = bundle / "pipelines" / "wise_to_postgresql" / "streams" / "transfers.json"
+    sdoc = json.loads(sf.read_text())
+    sdoc["pipeline_id"] = "ffffffff-ffff-4fff-8fff-ffffffffffff"
+    sf.write_text(json.dumps(sdoc))
+    p = bundle / "pipelines" / "wise_to_postgresql" / "pipeline.json"
+    result = run_validator(p, "pipeline", "--semantic-only", "--bundle-root", str(bundle))
+    errs = errors_of(result, "pipeline-stream-consistency")
+    assert any("does not match pipeline.pipeline_id" in e["message"] for e in errs), (
+        f"expected pipeline_id UUID-mismatch error; got {errs}"
+    )
+
+
+def test_pipeline_stream_consistency_warns_without_document_path():
+    """In-process callers passing bundle_root but no document_path get a warning, not silent pass."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("validate_pipeline", SCRIPT)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    doc = json.loads((FIXTURES / "valid_pipeline.json").read_text())
+    findings = mod.check_pipeline_stream_consistency(doc, FIXTURES, None)
+    warns = [f for f in findings if f["severity"] == "warning"]
+    assert any("cannot derive pipeline directory slug" in w["message"] for w in warns), (
+        f"expected slug-derivation warning when document_path is None; got {findings}"
+    )
+
+
 def test_pipeline_stream_consistency_ignores_sibling_pipelines(tmp_path):
     """A bundle containing a second pipeline must not pollute the current pipeline's check.
 
