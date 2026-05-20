@@ -1011,35 +1011,55 @@ def _collect_endpoint_natives(endpoint_doc: dict) -> list[tuple[str, str]]:
     """Walk an api-endpoint document and yield (native_string, json_pointer).
 
     Sources:
-    - operations.read.response.schema (JSON Schema, recursive into properties / items / *Of branches)
-    - operations.read.params[*] and operations.write.params[*]
+    - operations.read.response.schema and operations.read.params[*]
+    - operations.write.<mode>.input.schema and operations.write.<mode>.params[*]
+      where <mode> is `insert` or `upsert` (write is mode-keyed per the
+      published api-endpoint schema).
     """
     out: list[tuple[str, str]] = []
     operations = endpoint_doc.get("operations") or {}
     if not isinstance(operations, dict):
         return out
-    for op_name in ("read", "write"):
-        op = operations.get(op_name)
-        if not isinstance(op, dict):
-            continue
-        # response.schema (read only — write usually has no records-style response)
-        response = op.get("response")
-        if isinstance(response, dict):
-            schema = response.get("schema")
-            if isinstance(schema, dict):
-                _collect_natives_from_jsonschema(
-                    schema, f"/operations/{op_name}/response/schema", out
-                )
-        # params
-        params = op.get("params")
-        if isinstance(params, dict):
-            for pname, pspec in params.items():
-                if not isinstance(pspec, dict):
-                    continue
-                native = _native_from_type_format(pspec.get("type"), pspec.get("format"))
-                if native:
-                    out.append((native, f"/operations/{op_name}/params/{pname}"))
+
+    read = operations.get("read")
+    if isinstance(read, dict):
+        _collect_op_natives(read, "/operations/read", schema_field="response", out=out)
+
+    write = operations.get("write")
+    if isinstance(write, dict):
+        for mode, mode_op in write.items():
+            if not isinstance(mode_op, dict):
+                continue
+            _collect_op_natives(
+                mode_op, f"/operations/write/{mode}", schema_field="input", out=out
+            )
     return out
+
+
+def _collect_op_natives(
+    op: dict, base_pointer: str, *, schema_field: str, out: list[tuple[str, str]]
+) -> None:
+    """Collect natives from one operation block (read or one write mode).
+
+    `schema_field` is `response` for read (records + schema) or `input`
+    for write modes (schema). The schema sub-document is walked as JSON
+    Schema; params are scanned as flat type/format pairs.
+    """
+    body = op.get(schema_field)
+    if isinstance(body, dict):
+        schema = body.get("schema")
+        if isinstance(schema, dict):
+            _collect_natives_from_jsonschema(
+                schema, f"{base_pointer}/{schema_field}/schema", out
+            )
+    params = op.get("params")
+    if isinstance(params, dict):
+        for pname, pspec in params.items():
+            if not isinstance(pspec, dict):
+                continue
+            native = _native_from_type_format(pspec.get("type"), pspec.get("format"))
+            if native:
+                out.append((native, f"{base_pointer}/params/{pname}"))
 
 
 def _native_from_type_format(t: Any, f: Any) -> str | None:

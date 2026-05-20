@@ -3,6 +3,28 @@
 ## [unreleased]
 
 ### Changed
+- API endpoint authoring realigned with the published
+  `api-endpoint/latest.json` schema (engine PR #51):
+  - Endpoint documents now carry `endpoint_id` (pattern
+    `^[a-z0-9][a-z0-9_-]*$`); the previous top-level `alias` is
+    rejected. `endpoint-creator` agent, `io-contracts.md`
+    `EndpointCreatorOutput`, on-disk filename convention
+    (`endpoints/{endpoint_id}.json`), and the four api-endpoint test
+    fixtures updated accordingly.
+  - `operations.write` is now a mode-keyed map (`insert` / `upsert`
+    only); each mode block requires `request` + `input.schema` and
+    accepts optional `batching` (`{max_records ≥ 2}`), `params`,
+    `response`. `endpoint-creator` step 4 and `connector-spec-api`
+    SKILL cross-reference rewritten.
+  - `operations.read` guidance restated to match the published shape:
+    `request` and `response` required; `params`, `pagination`,
+    `replication` optional. Dropped the `from_param` wording — the
+    schema binds request shape directly via value expressions, with
+    `Param` objects declared under `params`.
+  - `scripts/validate_connector.py` type-map coverage walker now
+    descends into `operations.write.<mode>.input.schema` and
+    `operations.write.<mode>.params[*]` instead of treating `write`
+    as a single op.
 - `type_maps.native_to_arrow.rules[].canonical` values aligned with the
   fully-qualified Apache Arrow vocabulary used by the pipeline-builder's
   endpoint `arrow_type` contract. Renamed every `"canonical": "String"`

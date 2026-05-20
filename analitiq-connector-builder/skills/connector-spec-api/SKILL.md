@@ -35,6 +35,21 @@ Pick what you need for the auth and pagination styles you're authoring:
 - Pagination styles (offset / cursor / page / link).
 - Replication for incremental sync.
 
+## Endpoint `operations` shape (cross-reference)
+
+Endpoint authoring lives in the `endpoint-creator` agent, but the
+operations vocabulary it consumes is API-specific and worth pinning here:
+
+- `operations.read` is a single object with required `request` + `response`
+  and optional `params` / `pagination` / `replication`.
+- `operations.write` is a **mode-keyed map** — keys are restricted to
+  `insert` and `upsert`. Each mode block holds required `request` +
+  `input` (`{"schema": <JsonSchemaPropertyNode>}` for one destination
+  record) and optional `batching` (`{"max_records": <int ≥ 2>}`),
+  `params`, `response`.
+- At least one of `read` / `write` must be present; omit the other when
+  the resource is one-directional.
+
 ## What this skill does NOT cover
 
 - DSN URL templates, bindings, or encoding enums (that's `connector-spec-db`).
