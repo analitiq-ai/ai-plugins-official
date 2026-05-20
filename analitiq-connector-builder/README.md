@@ -90,7 +90,7 @@ For each successfully built connector:
 ├── definition/
 │   ├── connector.json              # the connector body
 │   └── endpoints/                  # api connectors only
-│       └── {endpoint-alias}.json
+│       └── {endpoint_id}.json      # filename matches the document's endpoint_id
 └── README.md
 ```
 

@@ -120,7 +120,7 @@ predictable paths:
 ├── definition/
 │   ├── connector.json
 │   └── endpoints/
-│       └── {endpoint-alias}.json   # api connectors only — one file per endpoint
+│       └── {endpoint_id}.json      # api connectors only — one file per endpoint; filename = document.endpoint_id
 └── README.md
 ```
 

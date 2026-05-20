@@ -1,6 +1,6 @@
 {
   "$schema": "https://schemas.analitiq.ai/api-endpoint/latest.json",
-  "alias": "users",
+  "endpoint_id": "users",
   "operations": {
     "read": {
       "request": { "method": "GET", "path": "/users" },

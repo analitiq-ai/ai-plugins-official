@@ -292,6 +292,54 @@ def test_api_endpoint_coverage_flags_uncovered_natives():
     assert "'date-time'" in messages, f"expected uncovered 'date-time' to be flagged; got {errs}"
 
 
+def test_api_endpoint_write_coverage_passes_when_input_and_params_covered():
+    """API connector with write-side input.schema + params natives fully covered by type_maps."""
+    result = run_validator(
+        FIXTURES / "api_endpoints_write_covered" / "connector.json",
+        "--semantic-only",
+    )
+    errs = errors_of(result, "type-map-coverage")
+    assert not errs, f"expected no coverage errors when write fully covered; got {errs}"
+
+
+def test_api_endpoint_write_coverage_flags_uncovered_input_and_params():
+    """Write-side natives in operations.write.<mode>.input.schema and .params must be walked."""
+    result = run_validator(
+        FIXTURES / "api_endpoints_write_uncovered" / "connector.json",
+        "--semantic-only",
+    )
+    errs = errors_of(result, "type-map-coverage")
+    messages = " ".join(e["message"] for e in errs)
+    assert "'uuid'" in messages, f"expected uncovered write input 'uuid' to be flagged; got {errs}"
+    assert "'date-time'" in messages, f"expected uncovered write input 'date-time' to be flagged; got {errs}"
+    assert "'boolean'" in messages, f"expected uncovered write param 'boolean' to be flagged; got {errs}"
+    # JSON pointers must locate the natives under the mode-keyed write path,
+    # not at the bare operations/write level — guards against the walker
+    # dropping the <mode> layer.
+    assert "/operations/write/insert/input/schema" in messages, \
+        f"expected /operations/write/insert/input/schema in pointers; got {messages}"
+    assert "/operations/write/insert/params/" in messages, \
+        f"expected /operations/write/insert/params/ in pointers; got {messages}"
+
+
+def test_api_endpoint_write_coverage_walks_all_modes():
+    """Both insert and upsert modes must be walked — guards the per-mode loop."""
+    result = run_validator(
+        FIXTURES / "api_endpoints_write_multimode" / "connector.json",
+        "--semantic-only",
+    )
+    errs = errors_of(result, "type-map-coverage")
+    messages = " ".join(e["message"] for e in errs)
+    # insert.input.schema declares uuid; upsert.input.schema declares date-time.
+    # A regression that hardcoded only one mode would fail one of these.
+    assert "'uuid'" in messages, f"expected insert-mode 'uuid' to be flagged; got {errs}"
+    assert "'date-time'" in messages, f"expected upsert-mode 'date-time' to be flagged; got {errs}"
+    assert "/operations/write/insert/input/schema" in messages, \
+        f"expected insert pointer; got {messages}"
+    assert "/operations/write/upsert/input/schema" in messages, \
+        f"expected upsert pointer; got {messages}"
+
+
 # ---------------------------------------------------------------------------
 # Edge cases
 # ---------------------------------------------------------------------------

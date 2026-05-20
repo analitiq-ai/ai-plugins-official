@@ -233,12 +233,16 @@ Returned by `api-connector-creator` and `db-connector-creator`.
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["alias", "document"],
+        "required": ["endpoint_id", "document"],
         "properties": {
-          "alias": { "type": "string" },
+          "endpoint_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]*$",
+            "description": "Stable endpoint identifier; mirrors document.endpoint_id and is used by the orchestrator to derive the on-disk filename."
+          },
           "document": {
             "type": "object",
-            "description": "One endpoint document body. Must validate against https://schemas.analitiq.ai/api-endpoint/latest.json."
+            "description": "One endpoint document body. Must validate against https://schemas.analitiq.ai/api-endpoint/latest.json and carry the same endpoint_id at its top level."
           }
         }
       }
