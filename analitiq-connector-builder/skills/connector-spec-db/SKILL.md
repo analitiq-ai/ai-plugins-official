@@ -34,8 +34,10 @@ populate `transports`, `auth`, `connection_contract`, and
   columns at connection time.
 - Authoring the standalone `type-map.json` covering native database
   types (see `spec-type-maps.md`).
-- Driver names and per-driver DSN layout idioms (`postgresql+asyncpg`,
-  `mysql+asyncmy`, etc.).
+- Transport types: `adbc` (preferred when an ADBC driver exists —
+  carries `dialect` plus optional `db_kwargs`) and `sqlalchemy` (carries
+  `driver`, e.g. `postgresql+asyncpg`, `mysql+asyncmy`). Both use the
+  same `dsn.kind: "url_template"` shape.
 - `auth.type: "db"` — credentials live in `connection_contract.inputs`;
   `auth.test` is the connection test operation.
 

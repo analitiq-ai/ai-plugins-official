@@ -36,10 +36,14 @@ declines until engine support lands.
 | Input fact | Output `transport_type` |
 |---|---|
 | Provider is a REST API | `http` |
-| Provider is a SQL database accessible via SQLAlchemy driver | `sqlalchemy` |
+| Provider is a database with a published ADBC driver (PostgreSQL, SQLite, BigQuery, Snowflake, DuckDB, Flight SQL, …) | `adbc` (preferred) |
+| Provider is a SQL database without ADBC support; SQLAlchemy driver available | `sqlalchemy` |
 | Provider is local file storage | `file` |
 | Provider is S3 / object storage | `s3` |
 | Provider is stdout sink | `stdout` |
+
+For database providers with both options, prefer `adbc` — it exchanges
+Arrow columns natively and avoids the SQLAlchemy row-to-Arrow conversion.
 
 ## Failing closed
 

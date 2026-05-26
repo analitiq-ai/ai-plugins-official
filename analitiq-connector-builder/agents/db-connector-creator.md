@@ -33,15 +33,24 @@ The `connector-spec-db` skill is preloaded. Beyond that, read:
    `connector_id` (set equal to `alias`), `display_name`, `description`,
    `tags`, `version` (start at `1.0.0`).
 2. **Transports** — populate `transports` with one entry per logical
-   transport. For SQL drivers use `transport_type: "sqlalchemy"` with
-   `driver` set per provider facts. Author `dsn.kind: "url_template"` with
-   a connector-specific `template` and one binding per logical field
-   (`host`, `port`, `database`, `username`, `password`, etc.). Each binding
-   carries a `value` expression and an `encoding` from the closed enum
-   (`raw`, `host`, `url_userinfo`, `url_path_segment`, `url_query_key`,
-   `url_query_value`). Author `tls.mode` (referencing
-   `connection.parameters.ssl_mode`) and `tls.ca_certificate` (referencing
-   `secrets.ssl_ca_certificate`). Set `default_transport`.
+   transport. Set `default_transport`. Pick `transport_type` per
+   `TransportTypeMapper`:
+   - **`adbc` (preferred)** for databases with a published ADBC driver
+     (PostgreSQL, SQLite, BigQuery, Snowflake, DuckDB, Flight SQL).
+     Carry `dialect` (string, e.g. `"postgresql"`, `"snowflake"`),
+     `dsn` (the same `url_template` shape used for sqlalchemy), and
+     optional `db_kwargs` (key/value object of driver-specific options).
+   - **`sqlalchemy`** when no ADBC driver exists. Carry `driver` (e.g.
+     `"postgresql+asyncpg"`) and `dsn`.
+
+   Both transport types use the same `dsn.kind: "url_template"` with a
+   connector-specific `template` and one binding per logical field
+   (`host`, `port`, `database`, `username`, `password`, etc.). Each
+   binding carries a `value` expression and an `encoding` from the
+   closed enum (`raw`, `host`, `url_userinfo`, `url_path_segment`,
+   `url_query_key`, `url_query_value`). Author `tls.mode` (referencing
+   `connection.parameters.ssl_mode`) and `tls.ca_certificate`
+   (referencing `secrets.ssl_ca_certificate`).
 3. **Auth** — `auth.type: "db"`. Author `auth.test` as a no-op connection
    test if the driver supports a lightweight ping.
 4. **Connection contract** — declare the canonical DB inputs: `host`,
