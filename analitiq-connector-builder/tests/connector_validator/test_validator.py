@@ -465,6 +465,43 @@ def test_valid_type_map_passes_semantic():
     assert not errs, f"expected no errors on valid type-map; got {errs}"
 
 
+def test_type_map_python_named_group_caught():
+    """ECMA-262 is the contract; (?P<name>...) Python syntax must be rejected."""
+    result = run_validator(
+        FIXTURES / "invalid_type_map_python_syntax.json",
+        "--semantic-only",
+        schema_url=TYPE_MAP_SCHEMA_URL,
+    )
+    errs = errors_of(result, "type-map-rule")
+    assert any("Python-style" in e["message"] and "(?P<" in e["message"] for e in errs), \
+        f"expected Python-syntax finding; got {errs}"
+
+
+def test_type_map_broken_regex_caught_without_template():
+    """A regex rule with a malformed native must be flagged even when canonical has no ${...}."""
+    result = run_validator(
+        FIXTURES / "invalid_type_map_broken_regex.json",
+        "--semantic-only",
+        schema_url=TYPE_MAP_SCHEMA_URL,
+    )
+    errs = errors_of(result, "type-map-rule")
+    assert any("not a valid regex" in e["message"] and e["path"] == "/0/native" for e in errs), \
+        f"expected broken-regex finding on rule 0; got {errs}"
+
+
+def test_connector_validation_surfaces_sibling_rule_errors():
+    """check_type_map_coverage must run rule checks on the sibling so a broken regex
+    in type-map.json is caught when validating the connector, not only when invoked
+    against the type-map directly."""
+    result = run_validator(
+        FIXTURES / "connector_with_broken_type_map" / "connector.json",
+        "--semantic-only",
+    )
+    errs = errors_of(result, "type-map-rule")
+    assert any("not a valid regex" in e["message"] for e in errs), \
+        f"expected broken sibling regex to surface via connector path; got {errs}"
+
+
 # ---------------------------------------------------------------------------
 # Edge cases
 # ---------------------------------------------------------------------------

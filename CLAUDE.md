@@ -36,9 +36,9 @@ Builds data integration pipelines using pre-defined connectors from the DIP regi
 
 ## Key Concepts
 
-- **Connector:** Reusable provider transport + auth contract. Lives in `{alias}/definition/connector.json` and validates against `https://schemas.analitiq.ai/connector/latest.json`. Top-level fields: `$schema`, `kind` (one of `api`, `database`, `file`, `s3`, `stdout`), `alias`, `version`, `default_transport`, `transports`, `auth`, `connection_contract`, optional `resource_discovery` and `type_maps`. Server-managed fields (`connector_id`, `created_at`, `updated_at`) are stamped by the registry on insert and must NOT appear in authored documents.
+- **Connector:** Reusable provider transport + auth contract. Lives in `{alias}/definition/connector.json` and validates against `https://schemas.analitiq.ai/connector/latest.json`. Top-level fields: `$schema`, `kind` (one of `api`, `database`, `file`, `s3`, `stdout`), `connector_id` (author-supplied, set equal to `alias`), `version`, `default_transport`, `transports`, `auth`, `connection_contract`, optional `resource_discovery`. Registry-stamped fields (`created_at`, `updated_at`) must NOT appear in authored documents.
 - **Endpoint:** Operation template for a single resource. API endpoints live in `{alias}/definition/endpoints/{endpoint_id}.json` (filename matches the document's `endpoint_id`, pattern `^[a-z0-9][a-z0-9_-]*$`) and validate against `https://schemas.analitiq.ai/api-endpoint/latest.json`. Database endpoints validate against `database-endpoint/latest.json` but are connection-scoped — the plugin does not author them; they are produced from the connector's `resource_discovery` workflow at runtime. Endpoint documents do not carry a `kind` field; the parent connector's `kind` selects the endpoint schema.
-- **Type map:** Map from native types to Arrow canonical types. Authored as `connector.type_maps.native_to_arrow.rules` (an array of `{method, native, canonical}` entries with `method` ∈ `exact` | `regex`). For OLTP databases, the connector ships a comprehensive type map; for warehouses and document stores, restrict to documented native types. Connection-level supplements may extend coverage at runtime (e.g. PostGIS `GEOMETRY`).
+- **Type map:** Native → Arrow canonical mapping authored as a **standalone** `{alias}/definition/type-map.json` file (top-level array of `{match, native, canonical}` rules), validated against `https://schemas.analitiq.ai/type-map/latest.json`. First-match-wins; required and non-empty for both API and DB. Regex rules may template the canonical with `${name}` substitutions backed by ECMA-262 `(?<name>…)` named captures. Schemaless natives (e.g. `jsonb`, `VARIANT`) map to `Json`. Connection-level supplements may extend coverage at runtime (e.g. PostGIS `GEOMETRY`).
 - **TLS declaration:** Database transports declare TLS via `transports.<name>.tls` with `mode` (refs `connection.parameters.ssl_mode`) and `ca_certificate` (refs `secrets.ssl_ca_certificate`). The runtime materializer translates this generic declaration into driver-specific arguments. The canonical SSL mode enum is `none | require | verify-ca | verify-full | prefer`.
 - **Value expression:** One of `ref` / `template` / `literal` / `function`. Refs and template variables target the closed scope list: `secrets.*`, `connection.parameters.*`, `connection.selections.*`, `connection.discovered.*`, `auth.*`, `runtime.*`, `stream.*`. Inline functions: `basic_auth`, `jwt_sign`, `url_encode`. Unknown scopes/functions are validation errors.
 - **DSN bindings:** Database transports use `dsn.kind: "url_template"` with a `template` containing `{placeholder}` markers and a `bindings` map. Each binding has a `value` (value expression) and an `encoding` (closed enum: `raw`, `host`, `url_userinfo`, `url_path_segment`, `url_query_key`, `url_query_value`). Authors must NEVER pre-encode binding values; the runtime owns percent-encoding.
@@ -56,19 +56,21 @@ Version is bumped automatically by GitHub Actions on PR merge via labels (`versi
 ├── README.md
 └── definition/
     ├── connector.json              # validates against connector/latest.json
+    ├── type-map.json               # validates against type-map/latest.json
     └── endpoints/
         └── {endpoint_id}.json      # filename = document.endpoint_id; validates against api-endpoint/latest.json
 ```
 
-**Database connectors** (no authored endpoints; `type_maps` and `tls` declared inside `connector.json`):
+**Database connectors** (no authored endpoints; `tls` declared inside `connector.json`):
 ```
 {alias}/
 ├── README.md
 └── definition/
-    └── connector.json              # validates against connector/latest.json
+    ├── connector.json              # validates against connector/latest.json
+    └── type-map.json               # validates against type-map/latest.json
 ```
 
-Server-managed fields (`connector_id`, `created_at`, `updated_at`) never appear in authored files.
+`connector_id` is author-supplied (set equal to `alias`). Registry-stamped fields (`created_at`, `updated_at`) never appear in authored files.
 
 ## Supported Auth Types
 

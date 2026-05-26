@@ -1,8 +1,7 @@
 {
-  "x-comment": "Reference example, not normative. Models MongoDB document store via SQLAlchemy adapter.",
   "$schema": "https://schemas.analitiq.ai/connector/latest.json",
   "kind": "database",
-  "alias": "mongodb-example",
+  "connector_id": "mongodb-example",
   "display_name": "MongoDB Example",
   "description": "Reference connector for MongoDB exposing collections as discoverable resources.",
   "tags": [

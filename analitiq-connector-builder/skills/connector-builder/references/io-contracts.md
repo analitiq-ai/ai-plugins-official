@@ -145,7 +145,8 @@ Pin every I/O between phases and sub-agents as a JSON Schema fragment.
               "dsn-binding",
               "auth-shape",
               "tls-consistency",
-              "type-map-coverage"
+              "type-map-coverage",
+              "type-map-rule"
             ]
           },
           "severity": { "type": "string", "enum": ["error", "warning"] },
@@ -185,7 +186,9 @@ Pin every I/O between phases and sub-agents as a JSON Schema fragment.
               "non-optional-input-added", "auth-shape-changed",
               "discovery-shape-changed", "optional-input-added",
               "optional-output-added", "optional-endpoint-added",
-              "type-map-added", "bug-fix", "doc-fix", "tuning"
+              "type-map-rule-added", "type-map-rule-removed",
+              "type-map-rule-reordered", "type-map-canonical-changed",
+              "bug-fix", "doc-fix", "tuning"
             ]
           },
           "note": { "type": "string" }

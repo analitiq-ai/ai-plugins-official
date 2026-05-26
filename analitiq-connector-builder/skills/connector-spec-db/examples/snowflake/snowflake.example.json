@@ -1,8 +1,7 @@
 {
-  "x-comment": "Reference example, not normative. Models Snowflake via SQLAlchemy with account/warehouse/role connection params.",
   "$schema": "https://schemas.analitiq.ai/connector/latest.json",
   "kind": "database",
-  "alias": "snowflake-example",
+  "connector_id": "snowflake-example",
   "display_name": "Snowflake Example",
   "description": "Reference connector for Snowflake using the snowflake driver.",
   "tags": [

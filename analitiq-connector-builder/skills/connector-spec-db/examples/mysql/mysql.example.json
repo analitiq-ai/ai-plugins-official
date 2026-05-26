@@ -1,8 +1,7 @@
 {
-  "x-comment": "Reference example, not normative. Models MySQL via SQLAlchemy with the asyncmy driver.",
   "$schema": "https://schemas.analitiq.ai/connector/latest.json",
   "kind": "database",
-  "alias": "mysql-example",
+  "connector_id": "mysql-example",
   "display_name": "MySQL Example",
   "description": "Reference connector for MySQL using the asyncmy driver with TLS support.",
   "tags": [

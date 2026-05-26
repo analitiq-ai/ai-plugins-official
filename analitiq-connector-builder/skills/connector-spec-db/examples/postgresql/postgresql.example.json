@@ -1,8 +1,7 @@
 {
-  "x-comment": "Reference example, not normative. Models PostgreSQL via SQLAlchemy with full DSN url_template, bindings, and TLS.",
   "$schema": "https://schemas.analitiq.ai/connector/latest.json",
   "kind": "database",
-  "alias": "postgresql-example",
+  "connector_id": "postgresql-example",
   "display_name": "PostgreSQL Example",
   "description": "Reference connector for PostgreSQL using the asyncpg driver with TLS support.",
   "tags": [

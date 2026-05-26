@@ -872,6 +872,7 @@ def check_phase_resolvability(doc: dict) -> list[dict]:
 _PLACEHOLDER_RE = re.compile(r"\$\{([^}]+)\}")
 _NARROWING_ARROW_TYPES = {"Object", "List"}
 _ECMA_NAMED_GROUP = re.compile(r"\(\?<([A-Za-z_][A-Za-z0-9_]*)>")
+_PYTHON_NAMED_GROUP = re.compile(r"\(\?P<[A-Za-z_][A-Za-z0-9_]*>")
 
 
 def _to_python_regex(pattern: str) -> str:
@@ -880,8 +881,10 @@ def _to_python_regex(pattern: str) -> str:
     The published `type-map.json` schema documents ECMA-262 regex syntax;
     Python's `re` module only accepts the `(?P<…>)` spelling, so the
     validator translates the well-defined named-group form before
-    compiling. Anonymous groups (`(...)`), non-capturing (`(?:…)`), and
-    Python-style names (`(?P<…>)`) are passed through unchanged.
+    compiling. Anonymous groups (`(...)`) and non-capturing (`(?:…)`)
+    are passed through unchanged. Python-style names (`(?P<…>)`) are a
+    contract violation flagged separately by `check_type_map_rules`;
+    this helper is for compilation, not enforcement.
     """
     return _ECMA_NAMED_GROUP.sub(r"(?P<\1>", pattern)
 
@@ -954,6 +957,11 @@ def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dic
         )
         return findings
 
+    # Surface rule-shape errors from the sibling (broken regex, Python-syntax,
+    # duplicates, etc.) at connector-validation time, not just when the
+    # validator is invoked directly against type-map.json.
+    findings.extend(check_type_map_rules(tm_doc))
+
     if kind == "database":
         return findings
 
@@ -1014,11 +1022,16 @@ def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dic
 def check_type_map_rules(doc: Any) -> list[dict]:
     """Validate self-contained rules in a `type-map.json` document.
 
-    Runs only against a top-level array (the on-disk shape of
+    Runs against a top-level array (the on-disk shape of
     `type-map.json`). Enforces, beyond what JSON Schema covers:
 
     - `match: "exact"` rules must not use `${...}` substitution in
       `canonical` (those are regex-only).
+    - `match: "regex"` rules' `native` must compile as a valid regex
+      (regardless of whether `canonical` is templated) — a broken pattern
+      anywhere is a hard error.
+    - `match: "regex"` rules must use ECMA-262 named-group syntax
+      `(?<name>…)`; Python-style `(?P<name>…)` is a contract violation.
     - `match: "regex"` rules referencing `${name}` in `canonical` must
       define a matching named capture group `(?<name>…)` in `native`.
     - Duplicate `(match, native)` pairs are flagged as warnings —
@@ -1064,20 +1077,35 @@ def check_type_map_rules(doc: Any) -> list[dict]:
                 )
             )
             continue
-        if match == "regex" and placeholders and isinstance(native, str):
-            try:
-                compiled = re.compile(_to_python_regex(native))
-            except re.error as exc:
-                findings.append(
-                    finding(
-                        "type-map-rule",
-                        "error",
-                        f"/{i}/native",
-                        f"native is not a valid regex ({exc}); cannot validate substitution.",
-                        rule_doc="shared/type-maps.md",
-                    )
+        if match != "regex" or not isinstance(native, str):
+            continue
+        # Contract: ECMA-262 syntax only. Python-style (?P<name>...) is a violation.
+        if _PYTHON_NAMED_GROUP.search(native):
+            findings.append(
+                finding(
+                    "type-map-rule",
+                    "error",
+                    f"/{i}/native",
+                    "native uses Python-style '(?P<name>…)' named groups; the contract requires ECMA-262 '(?<name>…)'.",
+                    rule_doc="shared/type-maps.md",
                 )
-                continue
+            )
+            continue
+        # Every regex rule's native must compile, whether or not canonical templates groups.
+        try:
+            compiled = re.compile(_to_python_regex(native))
+        except re.error as exc:
+            findings.append(
+                finding(
+                    "type-map-rule",
+                    "error",
+                    f"/{i}/native",
+                    f"native is not a valid regex ({exc}).",
+                    rule_doc="shared/type-maps.md",
+                )
+            )
+            continue
+        if placeholders:
             capture_names = set(compiled.groupindex.keys())
             for name in placeholders:
                 if name not in capture_names:
