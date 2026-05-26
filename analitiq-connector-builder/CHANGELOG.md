@@ -3,6 +3,41 @@
 ## [unreleased]
 
 ### Changed
+- **Type maps now standalone files.** Aligned the plugin with the
+  published `https://schemas.analitiq.ai/type-map/latest.json` contract:
+  - Connector JSON no longer carries an embedded `type_maps` block; the
+    connector schema rejects unknown fields at the top level.
+  - Authors emit a sibling `{alias}/definition/type-map.json` — a
+    top-level array of `{match, native, canonical}` rules (renamed
+    from `method` → `match`; dropped the `native_to_arrow.rules`
+    wrapper). Required and non-empty for both API and DB.
+  - Regex rules may template the canonical with `${name}` substitutions
+    backed by ECMA-262 `(?<name>…)` named capture groups in `native`
+    (e.g. `Decimal128(${precision}, ${scale})`). The validator
+    translates to Python's `(?P<…>)` form internally.
+  - Schemaless natives (`jsonb`, `VARIANT`, `OBJECT`, `ARRAY`, MySQL
+    `json`, MongoDB documents) map to `"Json"`. `Object` / `List` are
+    endpoint-only markers (carry sibling `properties` / `items`) and
+    are accepted as narrowings of a `Json`-resolved rule in API
+    coverage.
+  - `scripts/validate_connector.py` rewritten: drops the
+    connector-body `type_maps` path; loads sibling `type-map.json`;
+    walks API endpoints for `(native_type, arrow_type)` pairs and
+    asserts each `native_type` resolves to the field's declared
+    `arrow_type` (rendering templated canonicals before comparison);
+    new `type-map-rule` validator enforces `exact`-no-template,
+    `regex`-named-capture, and duplicate-rule rules. New schema URL
+    `https://schemas.analitiq.ai/type-map/latest.json` added to the
+    validator agent and orchestrator phase 5.
+  - All 6 endpoint fixtures, 4 DB examples, 6 API examples migrated to
+    the new layout (each example moved into its own subdirectory with
+    a sibling `type-map.json`).
+- **Plugin now authors `connector_id` (set equal to `alias`).** Per the
+  published connector contract, `connector_id` is an optional
+  author-supplied identifier. Reserved-field rules narrowed to
+  `created_at` / `updated_at` only. Drift table adds
+  `type-map-canonical-changed` (major) and `type-map-rule-added`
+  (minor).
 - API endpoint authoring realigned with the published
   `api-endpoint/latest.json` schema (engine PR #51):
   - Endpoint documents now carry `endpoint_id` (pattern

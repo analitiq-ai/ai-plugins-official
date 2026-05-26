@@ -25,11 +25,11 @@ The warning must include:
 
 **Why this exists.** The plugin authors connectors against the
 published schema contract. Pre-existing connectors authored against
-older shapes (with `placeholders` arrays, separate `manifest.json` /
-`type-map.json` / `ssl-mode-map.json` files) are not migrated by this
-plugin. Stopping early avoids partial-state writes and keeps the build
-path simple. A future migrator agent could relax this check; for now,
-manual removal is the contract.
+older shapes (e.g. with `placeholders` arrays or a `manifest.json`,
+or with the plugin pre-rewriting on top of an existing tree) are not
+migrated by this plugin. Stopping early avoids partial-state writes
+and keeps the build path simple. A future migrator agent could relax
+this check; for now, manual removal is the contract.
 
 **Failure mode.** If the user reports they cannot remove the directory
 (permissions, dirty tree under VCS, etc.), do not attempt workarounds.
@@ -85,8 +85,10 @@ combinations are connection-scoped and discovered at runtime via
 ### 5. Validate
 
 Invoke `connector-schema-validator` with the connector document and
-`schema_url=https://schemas.analitiq.ai/connector/latest.json`. For each
-endpoint document, invoke the validator with the kind-specific URL:
+`schema_url=https://schemas.analitiq.ai/connector/latest.json`. Also
+validate the standalone `type-map.json` against
+`https://schemas.analitiq.ai/type-map/latest.json`. For each endpoint
+document, invoke the validator with the kind-specific URL:
 
 - API endpoint → `https://schemas.analitiq.ai/api-endpoint/latest.json`.
 - Database endpoint (when applicable in future) →
@@ -119,6 +121,7 @@ predictable paths:
 {alias}/
 ├── definition/
 │   ├── connector.json
+│   ├── type-map.json               # required for both api and db; standalone file
 │   └── endpoints/
 │       └── {endpoint_id}.json      # api connectors only — one file per endpoint; filename = document.endpoint_id
 └── README.md

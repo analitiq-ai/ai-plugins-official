@@ -1,7 +1,7 @@
 {
   "$schema": "https://schemas.analitiq.ai/connector/latest.json",
   "kind": "api",
-  "alias": "fixture-api",
+  "connector_id": "fixture-api",
   "display_name": "Fixture API",
   "version": "1.0.0",
   "default_transport": "api",

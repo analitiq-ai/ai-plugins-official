@@ -1,0 +1,4 @@
+[
+  { "match": "exact", "native": "uuid", "canonical": "Utf8" },
+  { "match": "exact", "native": "json", "canonical": "Json" }
+]

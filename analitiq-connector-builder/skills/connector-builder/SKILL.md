@@ -72,6 +72,7 @@ sub-agents own those skills.
    parallel — dispatch them in a single message.
 5. **Validate** — invoke `connector-schema-validator`:
    - Connector → `https://schemas.analitiq.ai/connector/latest.json`.
+   - Type map → `https://schemas.analitiq.ai/type-map/latest.json`.
    - API endpoint → `https://schemas.analitiq.ai/api-endpoint/latest.json`.
    - Database endpoint → `https://schemas.analitiq.ai/database-endpoint/latest.json`.
 
@@ -93,6 +94,7 @@ sub-agents own those skills.
    {alias}/
    ├── definition/
    │   ├── connector.json
+   │   ├── type-map.json               # required for both api and db; standalone file
    │   └── endpoints/
    │       └── {endpoint_id}.json      # api connectors only — one file per endpoint; filename = document.endpoint_id
    └── README.md
@@ -109,8 +111,9 @@ Report to the user:
 
 ## Hard rules
 
-- Never set server-managed fields: `connector_id`, `created_at`,
-  `updated_at`. These are stamped by the registry.
+- The plugin authors `connector_id = alias`. Other server-managed
+  fields (`created_at`, `updated_at`) are stamped by the registry and
+  must not appear in authored documents.
 - Do not author the connector body yourself. Always dispatch to the
   matching creator sub-agent.
 - Do not load kind-specific spec skills (`connector-spec-api` /

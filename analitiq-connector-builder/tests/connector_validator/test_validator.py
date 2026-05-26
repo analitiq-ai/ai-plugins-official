@@ -21,8 +21,10 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "validate_connector.py"
 FIXTURES = Path(__file__).parent / "fixtures"
-EXAMPLES_GLOB = list(REPO_ROOT.glob("skills/connector-spec-*/examples/*.example.json"))
+VALID_API_CONNECTOR = FIXTURES / "valid_api_connector" / "connector.json"
+EXAMPLES_GLOB = list(REPO_ROOT.glob("skills/connector-spec-*/examples/*/*.example.json"))
 SCHEMA_URL = "https://schemas.analitiq.ai/connector/latest.json"
+TYPE_MAP_SCHEMA_URL = "https://schemas.analitiq.ai/type-map/latest.json"
 
 
 def run_validator(document_path: Path, *extra: str, schema_url: str = SCHEMA_URL) -> dict:
@@ -54,7 +56,7 @@ def test_layer1_valid_api_connector_passes_against_live_schema():
 
     All other tests run with --semantic-only and are offline-safe.
     """
-    result = run_validator(FIXTURES / "valid_api_connector.json")
+    result = run_validator(VALID_API_CONNECTOR)
     error_findings = [f for f in result["findings"] if f["severity"] == "error"]
     assert not error_findings, f"unexpected errors: {error_findings}"
     assert result["passed"] is True
@@ -62,7 +64,7 @@ def test_layer1_valid_api_connector_passes_against_live_schema():
 
 def test_schema_fetch_failure_is_diagnosed():
     bad_url = "http://127.0.0.1:1/nonexistent.json"
-    result = run_validator(FIXTURES / "valid_api_connector.json", schema_url=bad_url)
+    result = run_validator(VALID_API_CONNECTOR, schema_url=bad_url)
     fetch_errors = [f for f in result["findings"] if f["validator"] == "json-schema" and "fetch" in f["message"].lower()]
     assert fetch_errors, f"expected a schema-fetch finding; got {result['findings']}"
     assert result["passed"] is False
@@ -95,9 +97,9 @@ def test_examples_glob_is_non_empty():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("field", ["connector_id", "created_at", "updated_at"])
+@pytest.mark.parametrize("field", ["created_at", "updated_at"])
 def test_reserved_field_caught(tmp_path, field):
-    base = json.loads((FIXTURES / "valid_api_connector.json").read_text())
+    base = json.loads((VALID_API_CONNECTOR).read_text())
     base[field] = "should-not-be-here"
     doc_path = tmp_path / f"reserved_{field}.json"
     doc_path.write_text(json.dumps(base))
@@ -206,14 +208,31 @@ def test_post_auth_input_referenced_in_auth_caught():
         f"expected cross-phase finding for tenant_id in auth.authorize; got {errs}"
 
 
-def test_type_map_coverage_warns_on_empty_rules():
-    result = run_validator(FIXTURES / "invalid_type_map_empty_rules.json", "--semantic-only")
-    warns = warnings_of(result, "type-map-coverage")
-    assert warns, f"expected a type-map-coverage warning for empty rules; got {result['findings']}"
+def test_type_map_missing_sibling_caught(tmp_path):
+    """A connector with no sibling type-map.json triggers a coverage error."""
+    base = json.loads(VALID_API_CONNECTOR.read_text())
+    doc_path = tmp_path / "connector.json"
+    doc_path.write_text(json.dumps(base))
+    result = run_validator(doc_path, "--semantic-only")
+    errs = errors_of(result, "type-map-coverage")
+    assert any("type-map.json" in e["message"] and "missing" in e["message"] for e in errs), \
+        f"expected missing-sibling finding; got {errs}"
+
+
+def test_type_map_empty_array_caught(tmp_path):
+    """A sibling type-map.json that is an empty array triggers a coverage error."""
+    base = json.loads(VALID_API_CONNECTOR.read_text())
+    doc_path = tmp_path / "connector.json"
+    doc_path.write_text(json.dumps(base))
+    (tmp_path / "type-map.json").write_text("[]")
+    result = run_validator(doc_path, "--semantic-only")
+    errs = errors_of(result, "type-map-coverage")
+    assert any("non-empty" in e["message"] for e in errs), \
+        f"expected non-empty finding; got {errs}"
 
 
 def test_api_endpoint_coverage_passes_when_all_natives_covered():
-    """API connector with type_maps covering every (type, format) pair from sibling endpoints."""
+    """API connector with sibling type-map.json covering every (native_type, arrow_type) pair."""
     result = run_validator(
         FIXTURES / "api_endpoints_covered" / "connector.json",
         "--semantic-only",
@@ -271,25 +290,83 @@ def test_api_endpoint_coverage_walks_combiners_and_array_items():
     errs = errors_of(result, "type-map-coverage")
     messages = " ".join(e["message"] for e in errs)
     # The endpoint declares ipv6 (oneOf branch), email + uri (items as list).
-    # The connector only covers string + integer, so all three formats must be flagged.
+    # The sibling type-map only covers string + integer, so the three rare natives must be flagged.
     assert "'ipv6'" in messages, f"expected ipv6 from oneOf to be flagged; got {messages}"
     assert "'email'" in messages, f"expected email from items[0] to be flagged; got {messages}"
     assert "'uri'" in messages, f"expected uri from items[1] to be flagged; got {messages}"
 
 
 def test_api_endpoint_coverage_flags_uncovered_natives():
-    """API connector missing rules for natives present in sibling endpoints."""
+    """API connector with sibling type-map.json missing rules for endpoint natives."""
     result = run_validator(
         FIXTURES / "api_endpoints_uncovered" / "connector.json",
         "--semantic-only",
     )
     errs = errors_of(result, "type-map-coverage")
     messages = " ".join(e["message"] for e in errs)
-    # The uncovered fixture's endpoint references uuid, boolean, date-time —
-    # the connector only declares string + integer.
+    # The sibling type-map covers string + integer but the endpoint references uuid, boolean, date-time.
     assert "'uuid'" in messages, f"expected uncovered 'uuid' to be flagged; got {errs}"
     assert "'boolean'" in messages, f"expected uncovered 'boolean' to be flagged; got {errs}"
     assert "'date-time'" in messages, f"expected uncovered 'date-time' to be flagged; got {errs}"
+
+
+def test_api_endpoint_arrow_mismatch_caught():
+    """Endpoint arrow_type that disagrees with the sibling type-map's rendered canonical is an error."""
+    result = run_validator(
+        FIXTURES / "api_endpoints_arrow_mismatch" / "connector.json",
+        "--semantic-only",
+    )
+    errs = errors_of(result, "type-map-coverage")
+    messages = " ".join(e["message"] for e in errs)
+    # id: native=uuid, arrow=Int64 vs type-map resolves uuid → Utf8 → mismatch
+    assert "'Utf8'" in messages and "'Int64'" in messages, \
+        f"expected uuid/Utf8 vs Int64 mismatch finding; got {errs}"
+    # metadata: native=json, arrow=Object; type-map resolves json → Json; narrowing OK.
+    # That site must NOT appear as an error.
+    assert "'Object'" not in messages, \
+        f"narrowing Json → Object should not be flagged; got {errs}"
+
+
+def test_api_endpoint_arrow_template_substitution_renders():
+    """A regex rule with ${name} substitution renders before comparison."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        td = Path(td)
+        connector = json.loads(VALID_API_CONNECTOR.read_text())
+        (td / "connector.json").write_text(json.dumps(connector))
+        (td / "type-map.json").write_text(json.dumps([
+            {
+                "match": "regex",
+                "native": "^numeric\\((?<precision>[0-9]+),(?<scale>[0-9]+)\\)$",
+                "canonical": "Decimal128(${precision}, ${scale})",
+            }
+        ]))
+        (td / "endpoints").mkdir()
+        (td / "endpoints" / "items.json").write_text(json.dumps({
+            "$schema": "https://schemas.analitiq.ai/api-endpoint/latest.json",
+            "endpoint_id": "items",
+            "operations": {
+                "read": {
+                    "request": {"method": "GET", "path": "/items"},
+                    "response": {
+                        "records": {"ref": "response.body"},
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "amount": {
+                                    "type": "string",
+                                    "native_type": "numeric(10,2)",
+                                    "arrow_type": "Decimal128(10, 2)",
+                                }
+                            },
+                        },
+                    },
+                }
+            },
+        }))
+        result = run_validator(td / "connector.json", "--semantic-only")
+        errs = errors_of(result, "type-map-coverage")
+        assert not errs, f"expected templated canonical to render and match; got {errs}"
 
 
 def test_api_endpoint_write_coverage_passes_when_input_and_params_covered():
@@ -341,6 +418,54 @@ def test_api_endpoint_write_coverage_walks_all_modes():
 
 
 # ---------------------------------------------------------------------------
+# type-map.json self-validation
+# ---------------------------------------------------------------------------
+
+
+def test_type_map_exact_rule_with_template_caught():
+    result = run_validator(
+        FIXTURES / "invalid_type_map_exact_with_template.json",
+        "--semantic-only",
+        schema_url=TYPE_MAP_SCHEMA_URL,
+    )
+    errs = errors_of(result, "type-map-rule")
+    assert any("exact" in e["message"] and "${" in e["message"] for e in errs), \
+        f"expected exact-with-template finding; got {errs}"
+
+
+def test_type_map_regex_missing_capture_caught():
+    result = run_validator(
+        FIXTURES / "invalid_type_map_regex_missing_capture.json",
+        "--semantic-only",
+        schema_url=TYPE_MAP_SCHEMA_URL,
+    )
+    errs = errors_of(result, "type-map-rule")
+    assert any("precision" in e["message"] and "capture" in e["message"] for e in errs), \
+        f"expected missing-capture finding; got {errs}"
+
+
+def test_type_map_duplicate_rule_warned():
+    result = run_validator(
+        FIXTURES / "invalid_type_map_duplicate.json",
+        "--semantic-only",
+        schema_url=TYPE_MAP_SCHEMA_URL,
+    )
+    warns = warnings_of(result, "type-map-rule")
+    assert any("duplicate" in w["message"] and "BIGINT" in w["message"] for w in warns), \
+        f"expected duplicate-rule warning; got {warns}"
+
+
+def test_valid_type_map_passes_semantic():
+    result = run_validator(
+        FIXTURES / "valid_type_map.json",
+        "--semantic-only",
+        schema_url=TYPE_MAP_SCHEMA_URL,
+    )
+    errs = errors_of(result, "type-map-rule")
+    assert not errs, f"expected no errors on valid type-map; got {errs}"
+
+
+# ---------------------------------------------------------------------------
 # Edge cases
 # ---------------------------------------------------------------------------
 
@@ -367,7 +492,7 @@ def test_semantic_and_json_only_are_mutually_exclusive(tmp_path):
         [
             sys.executable, str(SCRIPT),
             "--schema-url", SCHEMA_URL,
-            "--document", str(FIXTURES / "valid_api_connector.json"),
+            "--document", str(VALID_API_CONNECTOR),
             "--semantic-only", "--json-only",
         ],
         capture_output=True,
@@ -381,7 +506,7 @@ def test_semantic_and_json_only_are_mutually_exclusive(tmp_path):
 def test_multiple_validators_all_fire(tmp_path):
     """A doc that triggers reserved-field AND auth-shape should report both."""
     base = json.loads((FIXTURES / "invalid_auth_shape_oauth_cc.json").read_text())
-    base["connector_id"] = "should-not-be-here"
+    base["created_at"] = "should-not-be-here"
     doc_path = tmp_path / "multi.json"
     doc_path.write_text(json.dumps(base))
     result = run_validator(doc_path, "--semantic-only")

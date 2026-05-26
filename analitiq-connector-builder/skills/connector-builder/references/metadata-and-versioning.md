@@ -21,15 +21,21 @@ and `connectors/connector-schema-parameterization.md`.
 | `auth` | Yes | Auth workflow definition. |
 | `connection_contract` | Yes | Connection-contract shape. |
 | `resource_discovery` | No | Resource discovery declarations. |
-| `type_maps` | No (db: should declare) | Connector-packaged type maps. |
 | `x-*` | No | Extension metadata. |
 
-## Server-managed fields (NEVER author)
+Note: the connector's type map is **not** a top-level field. It ships
+as a separate sibling artifact at
+`{alias}/definition/type-map.json` and validates against
+`https://schemas.analitiq.ai/type-map/latest.json`. See
+`connector-spec-db/spec-type-maps.md` for authoring.
 
-These fields are stamped by the registry on insert/update and must
-not appear in authored documents:
+## `connector_id` and server-managed fields
 
-- `connector_id`
+The plugin authors `connector_id = alias` on the connector document.
+
+The remaining server-managed fields are stamped by the registry on
+insert/update and must not appear in authored documents:
+
 - `created_at`
 - `updated_at`
 
@@ -45,8 +51,8 @@ the connector release table:
 | Bump | Meaning | Examples |
 |---|---|---|
 | Patch | No connection drift. | Bug fixes, doc fixes, transport implementation tuning. |
-| Minor | Additive, non-drifting. | Optional input added, optional discovery output added, optional endpoint added, type-map entries added. |
-| Major | Possible connection drift. | Input removed, renamed, type-changed, enum narrowed, storage moved, non-optional input added, auth-shape change, discovery-shape change. |
+| Minor | Additive, non-drifting. | Optional input added, optional discovery output added, optional endpoint added, type-map rule added. |
+| Major | Possible connection drift. | Input removed, renamed, type-changed, enum narrowed, storage moved, non-optional input added, auth-shape change, discovery-shape change, type-map rule removed, `canonical` changed for an existing `native`. |
 
 The drift-classifier sub-agent computes this bump from a diff between
 the previous release and the new draft.

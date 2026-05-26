@@ -16,13 +16,5 @@
     "inputs": {
       "api_key": { "source": "user", "phase": "auth", "storage": "secrets", "type": "string", "required": true, "secret": true }
     }
-  },
-  "type_maps": {
-    "native_to_arrow": {
-      "rules": [
-        { "method": "exact", "native": "string",  "canonical": "Utf8" },
-        { "method": "exact", "native": "integer", "canonical": "Int64" }
-      ]
-    }
   }
 }

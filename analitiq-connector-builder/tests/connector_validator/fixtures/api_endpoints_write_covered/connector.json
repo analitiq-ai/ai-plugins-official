@@ -21,16 +21,5 @@
         "type": "string", "required": true, "secret": true
       }
     }
-  },
-  "type_maps": {
-    "native_to_arrow": {
-      "rules": [
-        { "method": "exact", "native": "uuid",      "canonical": "Utf8" },
-        { "method": "exact", "native": "date-time", "canonical": "Timestamp(MICROSECOND, UTC)" },
-        { "method": "exact", "native": "string",    "canonical": "Utf8" },
-        { "method": "exact", "native": "integer",   "canonical": "Int64" },
-        { "method": "exact", "native": "boolean",   "canonical": "Boolean" }
-      ]
-    }
   }
 }

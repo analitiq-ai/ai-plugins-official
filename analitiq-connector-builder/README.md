@@ -56,12 +56,13 @@ The plugin includes a Python validator script
 
 1. **JSON Schema validation** (Draft 2020-12) against the published schema:
    - Connector → `https://schemas.analitiq.ai/connector/latest.json`
+   - Type map → `https://schemas.analitiq.ai/type-map/latest.json`
    - API endpoint → `https://schemas.analitiq.ai/api-endpoint/latest.json`
    - Database endpoint → `https://schemas.analitiq.ai/database-endpoint/latest.json`
 2. **Semantic validators** for rules JSON Schema can't express:
    - `reserved-field`, `expression-resolver`, `phase-resolvability`,
      `transport-ref`, `dsn-binding`, `auth-shape`, `tls-consistency`,
-     `type-map-coverage`.
+     `type-map-coverage`, `type-map-rule`.
 
 Run directly:
 
@@ -89,13 +90,14 @@ For each successfully built connector:
 {alias}/
 ├── definition/
 │   ├── connector.json              # the connector body
+│   ├── type-map.json               # standalone native→canonical rules (required, non-empty)
 │   └── endpoints/                  # api connectors only
 │       └── {endpoint_id}.json      # filename matches the document's endpoint_id
 └── README.md
 ```
 
-Server-managed fields (`connector_id`, `created_at`, `updated_at`)
-are NEVER written to disk — the registry stamps them on insert/update.
+`connector_id` is author-supplied (set equal to `alias`). Registry-stamped
+fields (`created_at`, `updated_at`) are NEVER written to disk.
 
 ### Existing directories are not overwritten
 
@@ -103,9 +105,9 @@ If a directory matching the connector's `{alias}` already exists in
 the current working directory, the orchestrator halts and asks the
 user to remove it manually before re-running. The plugin does not
 migrate legacy-shape connectors — pre-existing files (with
-`placeholders` arrays, separate `manifest.json` / `type-map.json` /
-`ssl-mode-map.json`) must be deleted first so the rebuild can produce
-a clean schema-aligned connector from scratch. The orchestrator never
+`placeholders` arrays or an embedded `type_maps` block inside
+`connector.json`) must be deleted first so the rebuild can produce a
+clean schema-aligned connector from scratch. The orchestrator never
 deletes files on the user's behalf.
 
 ## Installation

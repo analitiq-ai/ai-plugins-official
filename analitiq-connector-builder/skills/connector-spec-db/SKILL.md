@@ -8,8 +8,9 @@ disable-model-invocation: true
 
 This skill is loaded by `db-connector-creator` when authoring a database
 connector. It carries the DB-specific vocabulary and examples needed to
-populate `transports`, `auth`, `connection_contract`, `resource_discovery`,
-and `type_maps` for `kind: "database"`.
+populate `transports`, `auth`, `connection_contract`, and
+`resource_discovery` for `kind: "database"`, plus the standalone
+`type-map.json` shipped alongside the connector.
 
 ## Required reading (load on demand)
 
@@ -17,8 +18,10 @@ and `type_maps` for `kind: "database"`.
 - This skill's `spec-tls.md` — TLS declaration mechanics.
 - This skill's `spec-resource-discovery.md` — schema/table enumeration at
   connection time.
-- This skill's `spec-type-maps.md` — native → Arrow canonical mapping.
-- The matching example under `examples/`.
+- This skill's `spec-type-maps.md` — native → Arrow canonical mapping
+  authored into the standalone `type-map.json` file.
+- The matching example under `examples/<name>/`, which contains both
+  `<name>.example.json` (connector body) and a sibling `type-map.json`.
 
 ## What this skill covers
 
@@ -29,7 +32,8 @@ and `type_maps` for `kind: "database"`.
   (`verify-ca` / `verify-full` require `ssl_ca_certificate` input).
 - `resource_discovery` declarations for enumerating schemas / tables /
   columns at connection time.
-- Connector-level `type_maps` covering native database types.
+- Authoring the standalone `type-map.json` covering native database
+  types (see `spec-type-maps.md`).
 - Driver names and per-driver DSN layout idioms (`postgresql+asyncpg`,
   `mysql+asyncmy`, etc.).
 - `auth.type: "db"` — credentials live in `connection_contract.inputs`;

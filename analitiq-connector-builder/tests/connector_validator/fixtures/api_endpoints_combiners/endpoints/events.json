@@ -14,18 +14,18 @@
               "items": {
                 "type": "object",
                 "properties": {
-                  "id": { "type": "string" },
+                  "id": { "type": "string", "native_type": "string", "arrow_type": "Utf8" },
                   "amount": {
                     "oneOf": [
-                      { "type": "string", "format": "ipv6" },
-                      { "type": "integer" }
+                      { "type": "string",  "native_type": "ipv6",    "arrow_type": "Utf8" },
+                      { "type": "integer", "native_type": "integer", "arrow_type": "Int64" }
                     ]
                   },
                   "tags": {
                     "type": "array",
                     "items": [
-                      { "type": "string", "format": "email" },
-                      { "type": "string", "format": "uri" }
+                      { "type": "string", "native_type": "email", "arrow_type": "Utf8" },
+                      { "type": "string", "native_type": "uri",   "arrow_type": "Utf8" }
                     ]
                   }
                 }

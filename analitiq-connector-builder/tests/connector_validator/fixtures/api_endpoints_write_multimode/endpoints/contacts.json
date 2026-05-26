@@ -9,7 +9,7 @@
           "schema": {
             "type": "object",
             "properties": {
-              "id": { "type": "string", "format": "uuid" }
+              "id": { "type": "string", "native_type": "uuid", "arrow_type": "Utf8" }
             }
           }
         }
@@ -20,7 +20,7 @@
           "schema": {
             "type": "object",
             "properties": {
-              "updated_at": { "type": "string", "format": "date-time" }
+              "updated_at": { "type": "string", "native_type": "date-time", "arrow_type": "Timestamp(MICROSECOND, UTC)" }
             }
           }
         }

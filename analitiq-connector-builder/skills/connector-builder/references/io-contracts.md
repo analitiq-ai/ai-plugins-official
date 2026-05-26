@@ -204,12 +204,32 @@ Returned by `api-connector-creator` and `db-connector-creator`.
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["connector"],
+  "required": ["connector", "type_map"],
   "properties": {
     "connector": {
       "anyOf": [
         { "type": "object", "description": "Assembled connector body, ready for validation against https://schemas.analitiq.ai/connector/latest.json." },
         { "type": "null", "description": "Returned by stub agents (e.g. storage-connector-creator) that decline to author." }
+      ]
+    },
+    "type_map": {
+      "anyOf": [
+        {
+          "type": "array",
+          "minItems": 1,
+          "description": "On-disk shape of the standalone type-map.json: a top-level, non-empty array of {match, native, canonical} rule objects. Written by the orchestrator to {alias}/definition/type-map.json and validated against https://schemas.analitiq.ai/type-map/latest.json.",
+          "items": {
+            "type": "object",
+            "required": ["match", "native", "canonical"],
+            "additionalProperties": false,
+            "properties": {
+              "match":     { "enum": ["exact", "regex"] },
+              "native":    { "type": "string", "minLength": 1 },
+              "canonical": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        { "type": "null", "description": "Returned by stub agents that decline to author." }
       ]
     },
     "notes": {

@@ -21,12 +21,5 @@
         "type": "string", "required": true, "secret": true
       }
     }
-  },
-  "type_maps": {
-    "native_to_arrow": {
-      "rules": [
-        { "method": "exact", "native": "string", "canonical": "Utf8" }
-      ]
-    }
   }
 }
