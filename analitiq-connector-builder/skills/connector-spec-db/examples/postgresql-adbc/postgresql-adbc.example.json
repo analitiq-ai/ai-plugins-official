@@ -15,7 +15,7 @@
   "transports": {
     "database": {
       "transport_type": "adbc",
-      "dialect": "postgresql",
+      "driver": "postgresql",
       "dsn": {
         "kind": "url_template",
         "template": "postgresql://{username}:{password}@{host}:{port}/{database}",
@@ -52,16 +52,10 @@
           }
         }
       },
-      "tls": {
-        "mode": {
-          "ref": "connection.parameters.ssl_mode"
-        },
-        "ca_certificate": {
-          "ref": "secrets.ssl_ca_certificate"
-        }
-      },
       "db_kwargs": {
-        "adbc.postgresql.client_encoding": "UTF8"
+        "adbc.postgresql.client_encoding": "UTF8",
+        "adbc.postgresql.sslmode": { "ref": "connection.parameters.ssl_mode" },
+        "adbc.postgresql.sslrootcert": { "ref": "secrets.ssl_ca_certificate" }
       }
     }
   },

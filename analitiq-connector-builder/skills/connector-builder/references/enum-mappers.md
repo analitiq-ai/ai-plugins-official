@@ -36,8 +36,8 @@ declines until engine support lands.
 | Input fact | Output `transport_type` |
 |---|---|
 | Provider is a REST API | `http` |
-| Provider is a database with a published ADBC driver (PostgreSQL, SQLite, BigQuery, Snowflake, DuckDB, Flight SQL, …) | `adbc` (preferred) |
-| Provider is a SQL database without ADBC support; SQLAlchemy driver available | `sqlalchemy` |
+| Provider is a database with a shipped engine ADBC driver — closed enum: `postgresql`, `snowflake`, `bigquery` | `adbc` (preferred) |
+| Provider is a SQL database not in the ADBC enum; SQLAlchemy driver available | `sqlalchemy` |
 | Provider is local file storage | `file` |
 | Provider is S3 / object storage | `s3` |
 | Provider is stdout sink | `stdout` |

@@ -34,10 +34,11 @@ populate `transports`, `auth`, `connection_contract`, and
   columns at connection time.
 - Authoring the standalone `type-map.json` covering native database
   types (see `spec-type-maps.md`).
-- Transport types: `adbc` (preferred when an ADBC driver exists —
-  carries `dialect` plus optional `db_kwargs`) and `sqlalchemy` (carries
-  `driver`, e.g. `postgresql+asyncpg`, `mysql+asyncmy`). Both use the
-  same `dsn.kind: "url_template"` shape.
+- Transport types: `adbc` (preferred — closed `driver` enum
+  `postgresql | snowflake | bigquery`; optional `db_kwargs`; TLS lives
+  inside `db_kwargs`) and `sqlalchemy` (carries `driver`, e.g.
+  `postgresql+asyncpg`, `mysql+asyncmy`; supports the generic `tls`
+  block). Both use the same `dsn.kind: "url_template"` shape.
 - `auth.type: "db"` — credentials live in `connection_contract.inputs`;
   `auth.test` is the connection test operation.
 

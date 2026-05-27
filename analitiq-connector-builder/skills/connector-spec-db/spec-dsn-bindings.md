@@ -7,11 +7,13 @@ fields are:
 
 | `transport_type` | Identity field | Extras |
 |---|---|---|
-| `sqlalchemy` | `driver` (e.g. `"postgresql+asyncpg"`) | — |
-| `adbc` | `dialect` (e.g. `"postgresql"`, `"snowflake"`) | optional `db_kwargs` (key/value object of driver-specific options) |
+| `sqlalchemy` | `driver` (e.g. `"postgresql+asyncpg"`) | optional `tls` block (canonical `ssl_mode` + `ssl_ca_certificate` refs) |
+| `adbc` | `driver` — closed enum: `postgresql`, `snowflake`, `bigquery` | optional `db_kwargs` (object; values may be value expressions). TLS lives inside `db_kwargs` (e.g. `adbc.postgresql.sslmode`); no `tls` block. At least one of `dsn` / `db_kwargs` is required. |
 
-For databases with a published ADBC driver, prefer `adbc` — it exchanges
+For databases in the ADBC driver enum, prefer `adbc` — it exchanges
 Arrow columns natively and avoids the SQLAlchemy row-to-Arrow conversion.
+ADBC drivers that accept all connection state via `db_kwargs` (e.g.
+Snowflake) may omit `dsn` entirely.
 
 ## Shape
 

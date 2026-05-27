@@ -33,16 +33,16 @@
     the new layout (each example moved into its own subdirectory with
     a sibling `type-map.json`).
 - **ADBC transport added.** `TransportTypeMapper` now recognizes `adbc`
-  as the preferred `transport_type` for databases with a published ADBC
-  driver (PostgreSQL, SQLite, BigQuery, Snowflake, DuckDB, Flight SQL).
-  ADBC transports carry `dialect` (string) + the shared `dsn`
-  url-template shape + optional `db_kwargs`; SQLAlchemy keeps `driver`.
-  `db-connector-creator` step 2, `connector-spec-db` SKILL, and
-  `spec-dsn-bindings.md` updated. New `examples/postgresql-adbc/`
-  reference example shipped alongside the existing `examples/postgresql/`
-  (sqlalchemy) variant. Schema changes land separately in
-  `connector/latest.json`; this PR prepares the plugin ahead of the
-  schema bump.
+  as the preferred `transport_type` for databases in the engine's ADBC
+  driver enum (closed: `postgresql`, `snowflake`, `bigquery`). ADBC
+  transports carry required `driver` (the enum identifier) plus the
+  shared `dsn` url-template shape and/or `db_kwargs` (at least one
+  required). `db_kwargs` values may be value expressions; TLS for ADBC
+  is expressed via `db_kwargs` entries (e.g. `adbc.postgresql.sslmode`)
+  — the generic `tls` block is SQLAlchemy-only. `db-connector-creator`
+  step 2, `connector-spec-db` SKILL, and `spec-dsn-bindings.md`
+  updated. New `examples/postgresql-adbc/` reference example shipped
+  alongside the existing `examples/postgresql/` (sqlalchemy) variant.
 - **Plugin now authors `connector_id` (set equal to `alias`).** Per the
   published connector contract, `connector_id` is an optional
   author-supplied identifier. Reserved-field rules narrowed to
