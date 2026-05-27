@@ -146,7 +146,8 @@ Pin every I/O between phases and sub-agents as a JSON Schema fragment.
               "auth-shape",
               "tls-consistency",
               "type-map-coverage",
-              "type-map-rule"
+              "type-map-rule",
+              "endpoint-annotations"
             ]
           },
           "severity": { "type": "string", "enum": ["error", "warning"] },

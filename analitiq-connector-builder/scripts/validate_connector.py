@@ -101,8 +101,14 @@ def finding(
     message: str,
     rule_doc: str | None = None,
 ) -> dict:
-    assert validator in VALIDATOR_IDS, f"unknown validator id: {validator}"
-    assert severity in ("error", "warning"), f"unknown severity: {severity}"
+    # Use explicit `raise` (not `assert`) so the invariant checks survive
+    # `python -O`, which strips assertions. A silently-emitted finding with
+    # an unregistered validator id or unknown severity would defeat the
+    # whole crash-handler contract.
+    if validator not in VALIDATOR_IDS:
+        raise ValueError(f"unknown validator id: {validator!r}")
+    if severity not in ("error", "warning"):
+        raise ValueError(f"unknown severity: {severity!r}")
     out = {
         "validator": validator,
         "severity": severity,
@@ -201,28 +207,38 @@ def _walk(node: Any, path: str = ""):
             yield from _walk(v, f"{path}/{i}")
 
 
-def _is_value_expression(node: Any) -> str | None:
-    """Return the expression kind ('ref'/'template'/'literal'/'function'),
-    `"malformed-<kind>"` if the keying matches but the value is non-string,
-    or None.
+_EXPRESSION_KEYS = ("ref", "template", "literal", "function")
 
-    The malformed-kind sentinels let `check_expressions` surface the
-    structural problem instead of silently dropping a node like
-    `{"ref": 123}` (which is what the previous strict-isinstance gate
-    did under `--semantic-only`).
+
+def _is_value_expression(node: Any) -> str | None:
+    """Return the expression kind, a malformation sentinel, or None.
+
+    Return values:
+    - `"ref"` / `"template"` / `"function"` — corresponding key present
+      with a string value (the legal value-expression shapes).
+    - `"literal"` — `literal` key present (any value type is valid per
+      the contract; `literal` payloads are opaque to the validator).
+    - `"malformed-ref"` / `"malformed-template"` / `"malformed-function"`
+      — corresponding key present but value is non-string.
+    - `"multi-keyed"` — more than one of the four expression keys is
+      present. The contract requires exactly one (`oneOf`); Layer 1
+      rejects multi-keyed nodes, but `--semantic-only` would otherwise
+      let them through by silently picking the first kind in iteration
+      order.
+    - `None` — node is not a value expression (no expression keys, or
+      not a dict).
     """
     if not isinstance(node, dict):
         return None
-    keys = set(node.keys())
-    if "ref" in keys:
-        return "ref" if isinstance(node["ref"], str) else "malformed-ref"
-    if "template" in keys:
-        return "template" if isinstance(node["template"], str) else "malformed-template"
-    if "literal" in keys:
+    present = [k for k in _EXPRESSION_KEYS if k in node]
+    if not present:
+        return None
+    if len(present) > 1:
+        return "multi-keyed"
+    kind = present[0]
+    if kind == "literal":
         return "literal"
-    if "function" in keys:
-        return "function" if isinstance(node["function"], str) else "malformed-function"
-    return None
+    return kind if isinstance(node[kind], str) else f"malformed-{kind}"
 
 
 _SINGLE_TOKEN_SCOPES = {s for s in KNOWN_SCOPES if "." not in s}
@@ -253,6 +269,18 @@ def check_expressions(doc: dict) -> list[dict]:
     for path, node in _walk(doc):
         kind = _is_value_expression(node)
         if not kind:
+            continue
+        if kind == "multi-keyed":
+            present = sorted(k for k in _EXPRESSION_KEYS if k in node)
+            findings.append(
+                finding(
+                    "expression-resolver",
+                    "error",
+                    path,
+                    f"value expression must declare exactly one of {list(_EXPRESSION_KEYS)}; got {present}.",
+                    rule_doc="shared/value-expression-parameterization.md",
+                )
+            )
             continue
         if kind.startswith("malformed-"):
             expr_kind = kind.removeprefix("malformed-")
@@ -671,27 +699,72 @@ _PAGINATION_RUNTIME_KEYS = {"offset"}
 _OAUTH_RUNTIME_KEYS = {"code", "state", "redirect_uri", "pkce_verifier"}
 
 
-def _index_inputs(doc: dict) -> dict[str, dict]:
+_INDEXED_STORAGE = ("connection.parameters", "secrets")
+
+
+def _index_inputs(doc: dict) -> tuple[dict[str, dict], list[dict]]:
     """Map storage-scoped reference path -> input record, for declared inputs.
 
     Keys are like `connection.parameters.host` and `secrets.password`.
     Values carry the `phase` so the resolvability check can assert it.
+
+    Returns `(index, warnings)`. Warnings flag inputs the index dropped
+    silently for shape reasons — non-dict spec, unknown `storage`, or
+    unknown `phase`. Without these, downstream refs would surface
+    misdirected "input is not declared" errors when the real problem
+    is the input declaration itself.
     """
     out: dict[str, dict] = {}
+    warnings: list[dict] = []
     cc = doc.get("connection_contract")
     if not isinstance(cc, dict):
-        return out
+        return out, warnings
     inputs = cc.get("inputs") or {}
     if not isinstance(inputs, dict):
-        return out
+        return out, warnings
     for name, spec in inputs.items():
         if not isinstance(spec, dict):
+            warnings.append(
+                finding(
+                    "phase-resolvability",
+                    "warning",
+                    f"/connection_contract/inputs/{name}",
+                    f"inputs.{name} must be an object; got {type(spec).__name__}.",
+                    rule_doc="shared/lifecycle-phases.md",
+                )
+            )
             continue
         storage = spec.get("storage")
         phase = spec.get("phase", "pre_auth")
-        if storage in ("connection.parameters", "secrets"):
+        if phase not in _PHASE_ORDER:
+            warnings.append(
+                finding(
+                    "phase-resolvability",
+                    "warning",
+                    f"/connection_contract/inputs/{name}",
+                    f"inputs.{name} declares phase {phase!r}, which is outside the closed phase enum {_PHASE_ORDER}. Refs to this input will surface as phase-mismatch errors at the referring site — fix the declaration here.",
+                    rule_doc="shared/lifecycle-phases.md",
+                )
+            )
+            continue
+        if storage in _INDEXED_STORAGE:
             out[f"{storage}.{name}"] = {"phase": phase, "input_name": name, "via": "input"}
-    return out
+        elif storage is not None:
+            # Storage value the resolver doesn't index — could be a typo
+            # (`connection.parameter` singular), an unknown but legal value
+            # (`connection.selections` lives elsewhere), or a future enum
+            # addition. Surface so downstream "not declared" errors don't
+            # misattribute.
+            warnings.append(
+                finding(
+                    "phase-resolvability",
+                    "warning",
+                    f"/connection_contract/inputs/{name}",
+                    f"inputs.{name} declares storage {storage!r}; the input resolver indexes only {list(_INDEXED_STORAGE)}. Refs to this input will fail as 'not declared' — verify the storage value.",
+                    rule_doc="shared/lifecycle-phases.md",
+                )
+            )
+    return out, warnings
 
 
 def _index_post_auth_outputs(doc: dict) -> tuple[dict[str, dict], list[dict]]:
@@ -1017,7 +1090,8 @@ def check_phase_resolvability(doc: dict) -> list[dict]:
             )
         )
 
-    input_idx = _index_inputs(doc)
+    input_idx, input_warnings = _index_inputs(doc)
+    findings.extend(input_warnings)
     output_idx, malformed = _index_post_auth_outputs(doc)
     findings.extend(malformed)
 
@@ -2189,6 +2263,39 @@ def run_semantic_validators(doc: Any, doc_path: Path | None = None) -> list[dict
         return findings
     is_conn = is_connector_doc(doc)
     is_tm = is_type_map_doc(doc)
+    # Dict roots that don't look like any recognized artifact (connector,
+    # api-endpoint, or pre-migration type-map shape) get a warning so
+    # `--semantic-only` can't silently green-light an unrecognized shape.
+    # The most common case is a DB endpoint document (`endpoint_id` +
+    # `columns[]` but no `operations`) — explicitly out of scope for this
+    # plugin per CLAUDE.md, but the silent pass would be misleading. The
+    # legacy-shape hint emitted below covers connector docs and standalone
+    # type-map shapes; this warning covers everything else.
+    if (
+        isinstance(doc, dict)
+        and not is_conn
+        and not is_ep
+        and not _looks_like_legacy_type_map(doc)
+        and "endpoint_id" not in doc  # let DB endpoints fall through with a specific hint below
+    ):
+        findings.append(
+            finding(
+                "json-schema",
+                "warning",
+                "/",
+                "document does not look like any recognized artifact (connector / api-endpoint / type-map). No semantic validators apply; rerun without `--semantic-only` so Layer 1 can identify the shape.",
+            )
+        )
+    elif isinstance(doc, dict) and "endpoint_id" in doc and not is_ep:
+        # endpoint_id without `operations` ≡ DB endpoint, out of plugin scope.
+        findings.append(
+            finding(
+                "json-schema",
+                "warning",
+                "/",
+                "document carries `endpoint_id` without `operations` (looks like a database-endpoint). Database endpoints are produced at runtime by `resource_discovery` and are not authored by this plugin — rerun against the published `database-endpoint/latest.json` schema for Layer 1 validation.",
+            )
+        )
     # Empty top-level array. Today only type-map.json has a list root, so
     # this nearly always means an empty type-map; phrase the warning to be
     # informative without presuming intent. The warning fires from any
