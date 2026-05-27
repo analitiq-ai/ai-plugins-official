@@ -749,18 +749,20 @@ def _index_inputs(doc: dict) -> tuple[dict[str, dict], list[dict]]:
             continue
         if storage in _INDEXED_STORAGE:
             out[f"{storage}.{name}"] = {"phase": phase, "input_name": name, "via": "input"}
-        elif storage is not None:
-            # Storage value the resolver doesn't index — could be a typo
-            # (`connection.parameter` singular), an unknown but legal value
-            # (`connection.selections` lives elsewhere), or a future enum
-            # addition. Surface so downstream "not declared" errors don't
-            # misattribute.
+        else:
+            # Storage value the resolver doesn't index — `None` (key absent),
+            # a typo (`connection.parameter` singular), an unknown but legal
+            # value (`connection.selections` lives elsewhere), or a future
+            # enum addition. Surface so downstream "not declared" errors
+            # don't misattribute. The post-auth-outputs sibling helper uses
+            # the same "not in valid set" treatment; keeping these parallel
+            # avoids silent drops on missing-storage inputs.
             warnings.append(
                 finding(
                     "phase-resolvability",
                     "warning",
                     f"/connection_contract/inputs/{name}",
-                    f"inputs.{name} declares storage {storage!r}; the input resolver indexes only {list(_INDEXED_STORAGE)}. Refs to this input will fail as 'not declared' — verify the storage value.",
+                    f"inputs.{name} declares storage {storage!r}; the input resolver indexes only {list(_INDEXED_STORAGE)}. Refs to this input will fail as 'not declared' — add or correct the `storage` field.",
                     rule_doc="shared/lifecycle-phases.md",
                 )
             )
@@ -1956,7 +1958,8 @@ def _walk_jsonschema_asymmetric(node: Any, pointer: str, out: list[tuple[str, st
                     _walk_jsonschema_asymmetric(v, f"{pointer}/{keyword}/{i}", out)
             else:
                 out.append((f"{pointer}/{keyword}", "non_dict_subtree"))
-    # `items` special: single schema OR tuple-list of schemas.
+    # `items` special: single schema, tuple-list, or boolean (Draft 2020-12
+    # allows boolean schemas wherever a sub-schema is accepted).
     if "items" in node:
         items = node["items"]
         if isinstance(items, dict):
@@ -1964,14 +1967,21 @@ def _walk_jsonschema_asymmetric(node: Any, pointer: str, out: list[tuple[str, st
         elif isinstance(items, list):
             for i, v in enumerate(items):
                 _walk_jsonschema_asymmetric(v, f"{pointer}/items/{i}", out)
+        elif isinstance(items, bool):
+            pass  # boolean schema — valid, nothing to recurse into
         else:
             out.append((f"{pointer}/items", "non_dict_subtree"))
-    # Single-schema keywords.
+    # Single-schema keywords. Per Draft 2020-12, these accept either a
+    # JSON Schema object OR a boolean (`additionalProperties: false` is the
+    # canonical strict-schema idiom). Booleans are valid-but-non-recursive;
+    # only non-dict/non-bool values are structural errors.
     for keyword in _JSONSCHEMA_SINGLE_KEYWORDS:
         if keyword in node:
             sub = node[keyword]
             if isinstance(sub, dict):
                 _walk_jsonschema_asymmetric(sub, f"{pointer}/{keyword}", out)
+            elif isinstance(sub, bool):
+                continue  # boolean schema — valid, nothing to recurse into
             else:
                 out.append((f"{pointer}/{keyword}", "non_dict_subtree"))
 
