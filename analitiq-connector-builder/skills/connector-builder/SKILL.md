@@ -113,9 +113,10 @@ Report to the user:
 
 - The plugin authors `connector_id` (the stable connector slug,
   matching `[a-z0-9_-]+`, same value as the on-disk `{connector_id}/`
-  directory name). Other server-managed fields (`created_at`,
-  `updated_at`) are stamped by the registry and must not appear in
-  authored documents.
+  directory name). The registry-stamped fields `created_at` and
+  `updated_at` are written by the registry on insert/update and must
+  not appear in authored documents — `connector_id` is NOT in that
+  set.
 - Do not author the connector body yourself. Always dispatch to the
   matching creator sub-agent.
 - Do not load kind-specific spec skills (`connector-spec-api` /

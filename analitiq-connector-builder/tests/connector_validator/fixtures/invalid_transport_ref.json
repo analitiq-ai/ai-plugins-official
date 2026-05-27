@@ -1,7 +1,7 @@
 {
   "$schema": "https://schemas.analitiq.ai/connector/latest.json",
   "kind": "api",
-  "alias": "fixture-bad-transport-ref",
+  "connector_id": "fixture-bad-transport-ref",
   "version": "1.0.0",
   "default_transport": "rest",
   "transports": {
@@ -12,13 +12,34 @@
   },
   "auth": {
     "type": "oauth2_authorization_code",
-    "authorize": { "transport_ref": "missing-auth-transport", "method": "GET", "path": "/oauth/authorize" },
-    "token_exchange": { "transport_ref": "api", "method": "POST", "path": "/oauth/token" }
+    "authorize": {
+      "transport_ref": "missing-auth-transport",
+      "method": "GET",
+      "path": "/oauth/authorize"
+    },
+    "token_exchange": {
+      "transport_ref": "api",
+      "method": "POST",
+      "path": "/oauth/token"
+    }
   },
   "connection_contract": {
     "inputs": {
-      "client_id":     { "source": "user", "phase": "auth", "storage": "connection.parameters", "type": "string", "required": true },
-      "client_secret": { "source": "user", "phase": "auth", "storage": "secrets", "type": "string", "required": true, "secret": true }
+      "client_id": {
+        "source": "user",
+        "phase": "auth",
+        "storage": "connection.parameters",
+        "type": "string",
+        "required": true
+      },
+      "client_secret": {
+        "source": "user",
+        "phase": "auth",
+        "storage": "secrets",
+        "type": "string",
+        "required": true,
+        "secret": true
+      }
     }
   }
 }

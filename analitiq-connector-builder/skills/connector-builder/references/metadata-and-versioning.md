@@ -58,7 +58,7 @@ the connector release table:
 
 | Bump | Meaning | Examples |
 |---|---|---|
-| Patch | No connection drift. | Bug fixes, doc fixes, transport implementation tuning. |
+| Patch | No connection drift. | Bug fixes, doc fixes, transport implementation tuning, type-map rule reordered (when the reorder does not change first-match resolution for any existing native). |
 | Minor | Additive, non-drifting. | Optional input added, optional discovery output added, optional endpoint added, type-map rule added. |
 | Major | Possible connection drift. | Input removed, renamed, type-changed, enum narrowed, storage moved, non-optional input added, auth-shape change, discovery-shape change, type-map rule removed, `canonical` changed for an existing `native`. |
 
