@@ -834,8 +834,10 @@ def test_type_map_python_backreference_caught():
 
 
 def test_unhashable_rule_value_does_not_crash(tmp_path):
-    """A `match`/`native` that isn't a primitive must not crash the dedupe set,
-    AND must surface a warning so the un-checkable rule isn't a silent skip."""
+    """A `match`/`native` that isn't a primitive must not crash the validator,
+    AND must surface a finding so the un-checkable rule isn't a silent skip.
+    The non-string-native check supersedes the unhashable-key path for most
+    cases (caught earlier with a clearer message)."""
     tm = tmp_path / "type-map.json"
     tm.write_text(json.dumps([
         {"match": "exact", "native": ["X"], "canonical": "Utf8"},
@@ -844,8 +846,8 @@ def test_unhashable_rule_value_does_not_crash(tmp_path):
     result = run_validator(tm, "--semantic-only", schema_url=TYPE_MAP_SCHEMA_URL)
     assert "findings" in result, f"expected structured output, got {result}"
     warns = warnings_of(result, "type-map-rule")
-    assert any("not hashable" in w["message"] for w in warns), \
-        f"expected unhashable-key warning so the rule isn't a silent skip; got {warns}"
+    assert any("native must be a string" in w["message"] for w in warns), \
+        f"expected non-string-native warning so the rule isn't a silent skip; got {warns}"
 
 
 def test_regex_rule_with_nonstring_canonical_still_compile_validated():
