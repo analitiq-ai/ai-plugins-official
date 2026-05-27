@@ -163,8 +163,8 @@ def test_phase_resolvability_caught():
     errs = errors_of(result, "phase-resolvability")
     assert errs, f"expected a phase-resolvability finding; got {result['findings']}"
     assert any("tenant_id" in e["message"] for e in errs)
-    # Importantly: paths must NOT contain the spurious '/t/' segment that
-    # used to appear in the pre-fix implementation.
+    # Paths must NOT contain a spurious '/t/' segment — the walker must not
+    # leak the iteration variable name as a JSON-pointer component.
     assert not any("/t/" in e["path"] for e in errs), f"finding path leaked '/t/' wrapper: {errs}"
 
 
@@ -733,7 +733,7 @@ def test_type_map_unknown_match_value_caught():
 
 
 def test_type_map_legacy_wrapped_shape_warned():
-    """The pre-PR-#41 wrapped `{native_to_arrow: {rules: [...]}}` shape is no
+    """The legacy wrapped `{native_to_arrow: {rules: [...]}}` shape is no
     longer the on-disk shape. Authors who haven't migrated must see a hint."""
     result = run_validator(
         FIXTURES / "invalid_type_map_legacy_wrapped.json",

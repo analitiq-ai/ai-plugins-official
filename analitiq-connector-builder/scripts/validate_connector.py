@@ -298,7 +298,18 @@ def check_expressions(doc: dict) -> list[dict]:
 
 def check_transport_refs(doc: dict) -> list[dict]:
     findings: list[dict] = []
-    transports = doc.get("transports", {})
+    if "transports" not in doc:
+        findings.append(
+            finding(
+                "transport-ref",
+                "error",
+                "/transports",
+                "transports is required on connector documents; Layer 1 enforces this — rerun without `--semantic-only` to see the schema error.",
+                rule_doc="connectors/connector-schema-parameterization.md#transport-contracts",
+            )
+        )
+        return findings
+    transports = doc["transports"]
     if not isinstance(transports, dict):
         findings.append(
             finding(
@@ -361,6 +372,17 @@ def check_dsn_bindings(doc: dict) -> list[dict]:
             continue
         path_prefix = f"/transports/{tname}/dsn"
         template = dsn.get("template", "")
+        if not isinstance(template, str):
+            findings.append(
+                finding(
+                    "dsn-binding",
+                    "error",
+                    f"{path_prefix}/template",
+                    f"template must be a string; got {type(template).__name__}.",
+                    rule_doc="connectors/connector-schema-parameterization.md#transport-contracts",
+                )
+            )
+            continue
         bindings = dsn.get("bindings", {})
         placeholders = set(placeholder_re.findall(template))
         binding_keys = set(bindings.keys()) if isinstance(bindings, dict) else set()
@@ -487,7 +509,24 @@ def check_tls_consistency(doc: dict) -> list[dict]:
     ssl_mode = inputs.get("ssl_mode", {})
     if not isinstance(ssl_mode, dict):
         return findings
-    enum = ssl_mode.get("enum") or []
+    enum = ssl_mode.get("enum")
+    if enum is None:
+        return findings
+    if not isinstance(enum, list):
+        # A non-list enum (e.g. `"verify-full"` instead of `["verify-full"]`)
+        # would iterate character-by-character via the `any(...)` below,
+        # silently mis-deciding the TLS branch. Layer 1 catches this — emit
+        # explicitly under `--semantic-only`.
+        findings.append(
+            finding(
+                "tls-consistency",
+                "error",
+                "/connection_contract/inputs/ssl_mode/enum",
+                f"ssl_mode.enum must be a list; got {type(enum).__name__}.",
+                rule_doc="connectors/connector-schema-parameterization.md#transport-contracts",
+            )
+        )
+        return findings
     requires_ca = any(v in {"verify-ca", "verify-full"} for v in enum)
     has_ca_input = "ssl_ca_certificate" in inputs
     if requires_ca and not has_ca_input:
@@ -923,9 +962,11 @@ def _to_python_regex(pattern: str) -> str:
 def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dict]:
     """Validate connector ↔ sibling `type-map.json` coverage and consistency.
 
-    Both kinds require a sibling `type-map.json` (non-empty array) per
-    `shared/type-maps.md`. The validator emits an error when the file is
-    missing, unreadable, or empty.
+    API and database kinds require a sibling `type-map.json` (non-empty
+    array) per `shared/type-maps.md`. The validator emits an error when
+    the file is missing, unreadable, or empty. Storage kinds (file / s3
+    / stdout) follow a separate branch where the sibling is optional
+    but, when present, is still rule-checked.
 
     For database connectors, presence of any rules is sufficient at
     author time — runtime discovery reconciles natives against the
@@ -944,6 +985,20 @@ def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dic
     """
     findings: list[dict] = []
     if not isinstance(doc, dict):
+        return findings
+    # Distinguish a real connector document from one that just has a stray
+    # `kind` field (e.g. an api-endpoint with `kind` accidentally added).
+    # Endpoints don't carry transports / connection_contract / default_transport
+    # — without at least one of those, demanding a sibling type-map.json
+    # would surface a misleading "type-map.json missing" error on a doc
+    # that's structurally an endpoint, not a connector. Layer 1 catches the
+    # spurious `kind` under default validation; under `--semantic-only` the
+    # other connector-only validators (transport-ref, dsn-binding, auth-shape)
+    # surface the real problem (missing connector fields).
+    looks_like_connector = any(
+        k in doc for k in ("transports", "connection_contract", "default_transport", "auth")
+    )
+    if not looks_like_connector:
         return findings
     if doc_path is None:
         findings.append(
@@ -1016,7 +1071,7 @@ def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dic
                     )
                 )
                 return findings
-            findings.extend(check_type_map_rules(tm_doc))
+            findings.extend(_safe_check_type_map_rules(tm_doc))
         return findings
 
     tm_path = doc_path.parent / "type-map.json"
@@ -1060,8 +1115,10 @@ def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dic
 
     # Surface rule-shape errors from the sibling (broken regex, Python-syntax,
     # duplicates, etc.) at connector-validation time, not just when the
-    # validator is invoked directly against type-map.json.
-    findings.extend(check_type_map_rules(tm_doc))
+    # validator is invoked directly against type-map.json. Use the safe wrapper
+    # so a crash in the inner validator can't discard the in-progress
+    # `findings` list we've accumulated.
+    findings.extend(_safe_check_type_map_rules(tm_doc))
 
     if kind == "database":
         return findings
@@ -1169,21 +1226,58 @@ def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dic
     return findings
 
 
+def _safe_check_type_map_rules(doc: Any) -> list[dict]:
+    """Call `check_type_map_rules` with a crash guard.
+
+    Used when one accumulating validator (e.g. `check_type_map_coverage`)
+    cross-dispatches to another. The top-level dispatch loop in
+    `run_semantic_validators` already wraps each validator call in
+    try/except, but cross-dispatch happens inside a validator that is
+    itself accumulating its own findings into a local list. An uncaught
+    exception in the inner call would discard the caller's in-progress
+    findings — so we catch here and convert to a structured finding.
+    """
+    try:
+        return check_type_map_rules(doc)
+    except Exception as exc:  # noqa: BLE001 — last-resort guard
+        return [
+            finding(
+                "type-map-rule",
+                "error",
+                "/",
+                f"sibling type-map rule validation crashed ({type(exc).__name__}: {exc}); coverage analysis continued with partial findings. This is a validator bug — please report.",
+                rule_doc="shared/type-maps.md",
+            )
+        ]
+
+
 def check_type_map_rules(doc: Any) -> list[dict]:
     """Validate self-contained rules in a `type-map.json` document.
 
     Runs against a top-level array (the on-disk shape of
     `type-map.json`). Enforces, beyond what JSON Schema covers:
 
+    - Rules missing required key(s) (`match`, `native`, `canonical`)
+      emit a warning and are skipped — Layer 1 owns the schema error.
+    - Rules with unknown / legacy key(s) (anything outside `{match,
+      native, canonical}`) emit a warning; the canonical case is a
+      partial migration that left a `method` key behind.
+    - `match` outside the closed `{"exact", "regex"}` enum errors out
+      (including `null`, typos, or future schema additions the
+      validator pre-dates).
     - `match: "exact"` rules must not use `${...}` substitution in
       `canonical` (those are regex-only).
+    - For `match: "exact"` or `"regex"`, `native` must be a string —
+      non-string values would silently shadow valid rules at runtime.
     - `match: "regex"` rules' `native` must compile as a valid regex
-      (regardless of whether `canonical` is templated) — a broken pattern
-      anywhere is a hard error.
+      (regardless of whether `canonical` is templated).
     - `match: "regex"` rules must use ECMA-262 named-group syntax
-      `(?<name>…)`; Python-style `(?P<name>…)` is a contract violation.
+      `(?<name>…)`; Python-only `(?P…)` syntax (declarations,
+      backreferences, recursive calls) is a contract violation.
     - `match: "regex"` rules referencing `${name}` in `canonical` must
       define a matching named capture group `(?<name>…)` in `native`.
+    - `canonical` must be a string — non-string values silently inert
+      a rule at runtime.
     - Duplicate `(match, native)` pairs are flagged as warnings —
       first-match-wins makes later duplicates unreachable.
 
@@ -1211,8 +1305,14 @@ def check_type_map_rules(doc: Any) -> list[dict]:
         canonical = rule.get("canonical")
         # Required keys. Layer 1 enforces `required: [match, native, canonical]`;
         # under `--semantic-only` an omitted key would silently shadow downstream
-        # validation. Treat key-absent here (`not in`); explicit `null` values
-        # fall through and are caught by the per-key isinstance gates below.
+        # validation. Treat key-absent here (`not in`). Explicit `null` per
+        # key is handled separately by the per-key gates below:
+        #   - `match: null` → caught by the closed-enum gate below (null is
+        #     not in {"exact","regex"}, so it's flagged as an unknown value).
+        #   - `native: null` with `match in {"exact","regex"}` → caught by the
+        #     non-string-native gate below.
+        #   - `canonical: null` → caught by the non-string-canonical gate at
+        #     the bottom of the loop.
         missing = [k for k in ("match", "native", "canonical") if k not in rule]
         if missing:
             findings.append(
@@ -1255,7 +1355,7 @@ def check_type_map_rules(doc: Any) -> list[dict]:
         # check above only if the key is absent — for a present `null` value
         # the rule falls through here and the per-`match` branches below
         # don't fire, so the rule resolves nothing at runtime).
-        if match is not None and match not in ("exact", "regex"):
+        if match not in ("exact", "regex"):
             findings.append(
                 finding(
                     "type-map-rule",
@@ -1312,9 +1412,11 @@ def check_type_map_rules(doc: Any) -> list[dict]:
             )
 
         # Regex compile + Python-syntax checks run BEFORE the canonical-string
-        # gate so that a broken regex with a non-string canonical (e.g.
-        # `canonical: null`) still surfaces as an error instead of being
-        # silently swallowed.
+        # gate so that a broken regex with a non-string canonical still
+        # surfaces as an error instead of being silently swallowed. Note: a
+        # regex rule with non-string `native` is short-circuited by the
+        # non-string-native gate above and never reaches this block, so the
+        # only way here is `match == "regex" and isinstance(native, str)`.
         if match == "regex" and isinstance(native, str):
             # Contract: ECMA-262 syntax only. Python-only `(?P<name>…)`
             # declarations, `(?P=name)` backreferences, and `(?P>name)`
@@ -1348,6 +1450,20 @@ def check_type_map_rules(doc: Any) -> list[dict]:
             compiled = None  # type: ignore[assignment]
 
         if not isinstance(canonical, str):
+            # Layer 1 enforces `canonical: string`; under `--semantic-only`
+            # a non-string canonical (`null`, list, etc.) would silently
+            # propagate to `_render_canonical`, which also skips non-string
+            # canonicals — meaning the rule never resolves any native at
+            # runtime. Surface it explicitly.
+            findings.append(
+                finding(
+                    "type-map-rule",
+                    "warning",
+                    f"/{i}/canonical",
+                    f"canonical must be a string; got {type(canonical).__name__}. Layer 1 enforces this — rerun without `--semantic-only` to see the schema error. The rule will not resolve any native at runtime.",
+                    rule_doc="shared/type-maps.md",
+                )
+            )
             continue
         placeholders = _PLACEHOLDER_RE.findall(canonical)
         if match == "exact" and placeholders:
@@ -1462,7 +1578,7 @@ def _collect_endpoint_native_arrow_pairs(endpoint_doc: dict) -> list[tuple[str, 
 
 
 def _collect_asymmetric_pairs(endpoint_doc: dict) -> list[tuple[str, str]]:
-    """Yield (pointer, kind) tuples for typed-field annotation problems.
+    """Return a list of (pointer, kind) tuples for typed-field annotation problems.
 
     `kind` is one of:
     - `"asymmetric"` — exactly one of `native_type` / `arrow_type` is declared.
@@ -1699,13 +1815,14 @@ _TYPE_MAP_ONLY = {"type-map-rule"}
 def is_connector_doc(doc: Any) -> bool:
     """Detect a connector-shaped document for dispatch purposes.
 
-    Permissive on `transports` (any value, present or absent): the
-    connector-only validators (`transport-ref`, `dsn-binding`,
-    `auth-shape`, `tls-consistency`, `type-map-coverage`) each emit
-    their own structural error when `transports` / `auth` is missing
-    or malformed. Gating those validators off on `transports` shape
-    would silently suppress the very errors they're supposed to
-    surface under `--semantic-only`.
+    Permissive: any dict with `kind` qualifies. The connector-only
+    validators (`transport-ref`, `dsn-binding`, `auth-shape`,
+    `tls-consistency`, `type-map-coverage`) each emit their own
+    structural error when their required substructures (`transports`,
+    `auth`, `connection_contract`, etc.) are missing or malformed.
+    Gating those validators off on substructure shape would silently
+    suppress the very errors they're supposed to surface under
+    `--semantic-only`.
     """
     return isinstance(doc, dict) and "kind" in doc
 
@@ -1749,14 +1866,14 @@ def _looks_like_legacy_type_map(doc: Any) -> bool:
        that explicit pointer.
     """
     # Variant 1 + 2: object shapes. Skip if the dict looks like a connector
-    # (has `kind` + `transports`) or an endpoint (has `endpoint_id` or
-    # `operations`). Connector docs are covered by the embedded-`type_maps`
-    # hint below; endpoint docs are covered by Layer 1's
-    # `additionalProperties` rule only (no dedicated Layer 2 hint, since
-    # endpoints don't carry type-map shapes today).
+    # (kept in sync with `is_connector_doc`: any dict with `kind`) or an
+    # endpoint (has `endpoint_id` or `operations`). Connector docs are
+    # covered by the embedded-`type_maps` hint below; endpoint docs are
+    # covered by Layer 1's `additionalProperties` rule only (no dedicated
+    # Layer 2 hint, since endpoints don't carry type-map shapes today).
     if isinstance(doc, dict):
         looks_like_other_artifact = (
-            ("kind" in doc and "transports" in doc)
+            "kind" in doc
             or "endpoint_id" in doc
             or "operations" in doc
         )
@@ -1860,9 +1977,12 @@ def run_semantic_validators(doc: Any, doc_path: Path | None = None) -> list[dict
             else:
                 findings.extend(fn(doc))
         except Exception as exc:  # noqa: BLE001 — last-resort guard
+            # Tag the finding with the failing validator id so the orchestrator
+            # can route it correctly. Every dispatched `vid` is guaranteed to
+            # be in VALIDATOR_IDS (registered at module load).
             findings.append(
                 finding(
-                    "json-schema",
+                    vid,
                     "error",
                     "",
                     f"validator {vid!r} crashed unexpectedly ({type(exc).__name__}: {exc}); other validators continued. This is a validator bug — please report.",
