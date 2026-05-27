@@ -29,11 +29,12 @@
     `regex`-named-capture, and duplicate-rule rules. New schema URL
     `https://schemas.analitiq.ai/type-map/latest.json` added to the
     validator agent and orchestrator phase 5.
-  - All endpoint fixtures (7 after the type-map migration plus the
-    arrow-mismatch addition) and the 10 spec examples (4 DB + 6 API)
-    migrated into per-example subdirectories, each with a sibling
-    `type-map.json`. The API examples gained a minimal `endpoints/`
-    directory so the strict per-kind contract holds.
+  - All 7 endpoint fixtures (including the new `api_endpoints_arrow_mismatch`)
+    and the 11 spec examples (5 DB — postgresql, postgresql-adbc,
+    mysql, snowflake, mongodb — plus 6 API) migrated into per-example
+    subdirectories, each with a sibling `type-map.json`. The API
+    examples gained a minimal `endpoints/` directory so the strict
+    per-kind contract holds.
 - **ADBC transport added.** `TransportTypeMapper` now recognizes `adbc`
   as the preferred `transport_type` for databases in the engine's ADBC
   driver enum (closed: `postgresql`, `snowflake`, `bigquery`). ADBC
@@ -54,9 +55,11 @@
   `connectors/{connector_id}/definition/`. The `alias` field is gone
   entirely — the slug now lives only in `connector_id`. Reserved-field
   rules narrowed to `created_at` / `updated_at` only. Drift table adds
-  `type-map-rule-added` (minor), `type-map-rule-removed`,
-  `type-map-rule-reordered` (patch), and `type-map-canonical-changed`
-  (major).
+  four new categories: `type-map-rule-added` (minor),
+  `type-map-rule-reordered` (patch — only when the reorder doesn't
+  change first-match resolution), `type-map-rule-removed` (major), and
+  `type-map-canonical-changed` (major — an existing `native` now
+  resolves to a different canonical).
 - API endpoint authoring realigned with the published
   `api-endpoint/latest.json` schema (engine PR #51):
   - Endpoint documents now carry `endpoint_id` (pattern

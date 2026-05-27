@@ -1104,25 +1104,75 @@ def check_type_map_rules(doc: Any) -> list[dict]:
         match = rule.get("match")
         native = rule.get("native")
         canonical = rule.get("canonical")
-        # Layer 1 should already reject non-string match/native, but
-        # `--semantic-only` bypasses Layer 1, so the dedupe set must
-        # tolerate unhashable rule values without crashing the run.
+        # Dedupe set. Layer 1 should already reject non-string match/native, but
+        # `--semantic-only` bypasses Layer 1, so the dedupe set must tolerate
+        # unhashable rule values. When the key can't be hashed, emit a warning
+        # so the un-checkable rule isn't a silent skip.
         try:
             key: tuple[Any, Any] = (match, native)
-            if key in seen:
+        except TypeError:
+            key = None  # type: ignore[assignment]
+        if key is not None:
+            try:
+                if key in seen:
+                    findings.append(
+                        finding(
+                            "type-map-rule",
+                            "warning",
+                            f"/{i}",
+                            f"duplicate rule for (match={match!r}, native={native!r}); first-match-wins makes later duplicates unreachable.",
+                            rule_doc="shared/type-maps.md",
+                        )
+                    )
+                else:
+                    seen.add(key)
+            except TypeError:
                 findings.append(
                     finding(
                         "type-map-rule",
                         "warning",
                         f"/{i}",
-                        f"duplicate rule for (match={match!r}, native={native!r}); first-match-wins makes later duplicates unreachable.",
+                        "rule's (match, native) key is not hashable; dedupe analysis skipped for this entry. Layer 1 should have rejected non-primitive values.",
                         rule_doc="shared/type-maps.md",
                     )
                 )
-            else:
-                seen.add(key)
-        except TypeError:
-            pass
+
+        # Regex compile + Python-syntax checks run BEFORE the canonical-string
+        # gate so that a broken regex with a non-string canonical (e.g.
+        # `canonical: null`) still surfaces as an error instead of being
+        # silently swallowed.
+        if match == "regex" and isinstance(native, str):
+            # Contract: ECMA-262 syntax only. Python-only `(?P<name>…)`
+            # declarations, `(?P=name)` backreferences, and `(?P>name)`
+            # recursive calls are all contract violations — none have
+            # ECMA-262 equivalents.
+            if _PYTHON_REGEX_FEATURE.search(native):
+                findings.append(
+                    finding(
+                        "type-map-rule",
+                        "error",
+                        f"/{i}/native",
+                        "native uses Python-only '(?P…)' regex syntax; the contract requires ECMA-262 (use '(?<name>…)' for named groups).",
+                        rule_doc="shared/type-maps.md",
+                    )
+                )
+                continue
+            try:
+                compiled = re.compile(_to_python_regex(native))
+            except re.error as exc:
+                findings.append(
+                    finding(
+                        "type-map-rule",
+                        "error",
+                        f"/{i}/native",
+                        f"native is not a valid regex ({exc}).",
+                        rule_doc="shared/type-maps.md",
+                    )
+                )
+                continue
+        else:
+            compiled = None  # type: ignore[assignment]
+
         if not isinstance(canonical, str):
             continue
         placeholders = _PLACEHOLDER_RE.findall(canonical)
@@ -1137,35 +1187,7 @@ def check_type_map_rules(doc: Any) -> list[dict]:
                 )
             )
             continue
-        if match != "regex" or not isinstance(native, str):
-            continue
-        # Contract: ECMA-262 syntax only. Python-only `(?P<name>…)` declarations,
-        # `(?P=name)` backreferences, and `(?P>name)` recursive calls are all
-        # contract violations — none have ECMA-262 equivalents.
-        if _PYTHON_REGEX_FEATURE.search(native):
-            findings.append(
-                finding(
-                    "type-map-rule",
-                    "error",
-                    f"/{i}/native",
-                    "native uses Python-only '(?P…)' regex syntax; the contract requires ECMA-262 (use '(?<name>…)' for named groups and '\\\\k<name>' style is unsupported).",
-                    rule_doc="shared/type-maps.md",
-                )
-            )
-            continue
-        # Every regex rule's native must compile, whether or not canonical templates groups.
-        try:
-            compiled = re.compile(_to_python_regex(native))
-        except re.error as exc:
-            findings.append(
-                finding(
-                    "type-map-rule",
-                    "error",
-                    f"/{i}/native",
-                    f"native is not a valid regex ({exc}).",
-                    rule_doc="shared/type-maps.md",
-                )
-            )
+        if compiled is None:
             continue
         if placeholders:
             capture_names = set(compiled.groupindex.keys())

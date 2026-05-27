@@ -42,14 +42,13 @@ The `connector-spec-db` skill is preloaded. Beyond that, read:
      (the `url_template` shape) when the driver accepts a URI
      (postgresql); otherwise carry connection state in `db_kwargs`
      (snowflake authenticates entirely via kwargs; bigquery typically
-     takes a project/dataset via kwargs as well, with no DSN). The
-     AdbcTransport contract requires **at least one of `dsn` /
-     `db_kwargs`**. Add `db_kwargs` (key/value object) for
-     driver-specific options; values may be literals or value
-     expressions (`{"ref": "..."}`, `{"template": "..."}`, `{"function":
-     "..."}`) — the runtime resolves them before invoking the driver.
-     **At least one of `dsn` / `db_kwargs` is required.** TLS for ADBC
-     transports is expressed via `db_kwargs` (e.g.
+     takes a project/dataset via kwargs as well, with no DSN).
+     `db_kwargs` is a key/value object of driver-specific options;
+     values may be literals or value expressions (`{"ref": "..."}`,
+     `{"template": "..."}`, `{"function": "..."}`) — the runtime
+     resolves them before invoking the driver. **The AdbcTransport
+     contract requires at least one of `dsn` / `db_kwargs`.** TLS for
+     ADBC transports is expressed via `db_kwargs` entries (e.g.
      `adbc.postgresql.sslmode`) — the generic `tls` block is
      SQLAlchemy-only.
    - **`sqlalchemy`** for other databases. Carry `driver` (e.g.

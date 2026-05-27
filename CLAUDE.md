@@ -70,7 +70,7 @@ Version is bumped automatically by GitHub Actions on PR merge via labels (`versi
     └── type-map.json               # validates against type-map/latest.json
 ```
 
-`connector_id` is author-supplied (set equal to `alias`). Registry-stamped fields (`created_at`, `updated_at`) never appear in authored files.
+`connector_id` is author-supplied and matches the on-disk `{connector_id}/` directory name. Registry-stamped fields (`created_at`, `updated_at`) never appear in authored files.
 
 ## Supported Auth Types
 

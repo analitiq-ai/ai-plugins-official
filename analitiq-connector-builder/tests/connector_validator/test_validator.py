@@ -653,15 +653,33 @@ def test_type_map_python_backreference_caught():
 
 
 def test_unhashable_rule_value_does_not_crash(tmp_path):
-    """A `match`/`native` that isn't a primitive must not crash the dedupe set."""
+    """A `match`/`native` that isn't a primitive must not crash the dedupe set,
+    AND must surface a warning so the un-checkable rule isn't a silent skip."""
     tm = tmp_path / "type-map.json"
     tm.write_text(json.dumps([
-        {"match": ["regex"], "native": "x", "canonical": "Utf8"},
+        {"match": "exact", "native": ["X"], "canonical": "Utf8"},
         {"match": "exact", "native": "BIGINT", "canonical": "Int64"}
     ]))
     result = run_validator(tm, "--semantic-only", schema_url=TYPE_MAP_SCHEMA_URL)
-    # The validator must produce a structured result, not crash.
     assert "findings" in result, f"expected structured output, got {result}"
+    warns = warnings_of(result, "type-map-rule")
+    assert any("not hashable" in w["message"] for w in warns), \
+        f"expected unhashable-key warning so the rule isn't a silent skip; got {warns}"
+
+
+def test_regex_rule_with_nonstring_canonical_still_compile_validated():
+    """A broken regex must surface even when `canonical` is non-string —
+    the canonical-string gate must not short-circuit regex compilation."""
+    result = run_validator(
+        FIXTURES / "invalid_type_map_regex_with_nonstring_canonical.json",
+        "--semantic-only",
+        schema_url=TYPE_MAP_SCHEMA_URL,
+    )
+    errs = errors_of(result, "type-map-rule")
+    assert any("not a valid regex" in e["message"] and e["path"] == "/0/native" for e in errs), \
+        f"expected broken-regex finding on rule 0 (canonical=null); got {errs}"
+    assert any("not a valid regex" in e["message"] and e["path"] == "/1/native" for e in errs), \
+        f"expected broken-regex finding on rule 1 (canonical=list); got {errs}"
 
 
 def test_is_type_map_doc_rejects_empty_list_in_semantic_only(tmp_path):

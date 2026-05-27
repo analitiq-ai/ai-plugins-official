@@ -53,9 +53,11 @@ The canonical `ssl_mode` values across drivers are:
 | `prefer` | TLS if available, fall back to plain. |
 
 If a driver uses different mode names (e.g. `disable`, `allow`,
-`require`), declare a `ssl-mode-map.json` alongside `connector.json` to
-translate driver-native values to the canonical enum. The runtime uses
-the map at materialization time.
+`require`), the engine's runtime materializer translates the canonical
+`ssl_mode` value into the driver-native equivalent — connector authors
+do not ship a separate translation file. Authored connectors carry only
+the canonical enum on `connection_contract.inputs.ssl_mode` and
+reference it via `tls.mode`.
 
 ## Authoring checklist
 
