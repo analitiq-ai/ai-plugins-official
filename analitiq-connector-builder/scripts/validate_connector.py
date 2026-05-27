@@ -202,18 +202,26 @@ def _walk(node: Any, path: str = ""):
 
 
 def _is_value_expression(node: Any) -> str | None:
-    """Return the expression kind ('ref'/'template'/'literal'/'function') or None."""
+    """Return the expression kind ('ref'/'template'/'literal'/'function'),
+    `"malformed-<kind>"` if the keying matches but the value is non-string,
+    or None.
+
+    The malformed-kind sentinels let `check_expressions` surface the
+    structural problem instead of silently dropping a node like
+    `{"ref": 123}` (which is what the previous strict-isinstance gate
+    did under `--semantic-only`).
+    """
     if not isinstance(node, dict):
         return None
     keys = set(node.keys())
-    if "ref" in keys and isinstance(node["ref"], str):
-        return "ref"
-    if "template" in keys and isinstance(node["template"], str):
-        return "template"
+    if "ref" in keys:
+        return "ref" if isinstance(node["ref"], str) else "malformed-ref"
+    if "template" in keys:
+        return "template" if isinstance(node["template"], str) else "malformed-template"
     if "literal" in keys:
         return "literal"
-    if "function" in keys and isinstance(node["function"], str):
-        return "function"
+    if "function" in keys:
+        return "function" if isinstance(node["function"], str) else "malformed-function"
     return None
 
 
@@ -245,6 +253,19 @@ def check_expressions(doc: dict) -> list[dict]:
     for path, node in _walk(doc):
         kind = _is_value_expression(node)
         if not kind:
+            continue
+        if kind.startswith("malformed-"):
+            expr_kind = kind.removeprefix("malformed-")
+            bad_value = node[expr_kind]
+            findings.append(
+                finding(
+                    "expression-resolver",
+                    "error",
+                    path,
+                    f"{expr_kind!r} must be a string; got {type(bad_value).__name__}.",
+                    rule_doc="shared/value-expression-parameterization.md",
+                )
+            )
             continue
         if kind == "ref":
             ref = node["ref"]
@@ -335,18 +356,30 @@ def check_transport_refs(doc: dict) -> list[dict]:
             )
         )
     for path, node in _walk(doc):
-        if isinstance(node, dict) and "transport_ref" in node and isinstance(node["transport_ref"], str):
-            ref = node["transport_ref"]
-            if ref not in transport_keys:
-                findings.append(
-                    finding(
-                        "transport-ref",
-                        "error",
-                        f"{path}/transport_ref",
-                        f"transport_ref '{ref}' is not defined in transports {sorted(transport_keys)}.",
-                        rule_doc="connectors/connector-schema-parameterization.md#transport-selection",
-                    )
+        if not isinstance(node, dict) or "transport_ref" not in node:
+            continue
+        ref = node["transport_ref"]
+        if not isinstance(ref, str):
+            findings.append(
+                finding(
+                    "transport-ref",
+                    "error",
+                    f"{path}/transport_ref",
+                    f"transport_ref must be a string; got {type(ref).__name__}.",
+                    rule_doc="connectors/connector-schema-parameterization.md#transport-selection",
                 )
+            )
+            continue
+        if ref not in transport_keys:
+            findings.append(
+                finding(
+                    "transport-ref",
+                    "error",
+                    f"{path}/transport_ref",
+                    f"transport_ref '{ref}' is not defined in transports {sorted(transport_keys)}.",
+                    rule_doc="connectors/connector-schema-parameterization.md#transport-selection",
+                )
+            )
     return findings
 
 
@@ -382,22 +415,32 @@ def check_dsn_bindings(doc: dict) -> list[dict]:
                 )
             )
             continue
-        dsn_kind = dsn.get("kind")
-        if dsn_kind != "url_template":
-            if dsn_kind is not None:
-                # Unknown / typo'd dsn.kind (Layer 1 catches via enum; surface
-                # under `--semantic-only` so an author with a typo doesn't get
-                # a silent green).
-                findings.append(
-                    finding(
-                        "dsn-binding",
-                        "error",
-                        f"/transports/{tname}/dsn/kind",
-                        f"dsn.kind must be 'url_template' (the only kind defined today); got {dsn_kind!r}.",
-                        rule_doc="connectors/connector-schema-parameterization.md#transport-contracts",
-                    )
+        if "kind" not in dsn:
+            findings.append(
+                finding(
+                    "dsn-binding",
+                    "error",
+                    f"/transports/{tname}/dsn",
+                    "dsn.kind is required (must be 'url_template'); Layer 1 enforces this — rerun without `--semantic-only` to see the schema error.",
+                    rule_doc="connectors/connector-schema-parameterization.md#transport-contracts",
                 )
-            continue  # Layer 1 catches missing required `kind`
+            )
+            continue
+        dsn_kind = dsn["kind"]
+        if dsn_kind != "url_template":
+            # Unknown / typo'd dsn.kind (Layer 1 catches via enum; surface
+            # under `--semantic-only` so an author with a typo doesn't get
+            # a silent green).
+            findings.append(
+                finding(
+                    "dsn-binding",
+                    "error",
+                    f"/transports/{tname}/dsn/kind",
+                    f"dsn.kind must be 'url_template' (the only kind defined today); got {dsn_kind!r}.",
+                    rule_doc="connectors/connector-schema-parameterization.md#transport-contracts",
+                )
+            )
+            continue
         path_prefix = f"/transports/{tname}/dsn"
         template = dsn.get("template", "")
         if not isinstance(template, str):
@@ -551,8 +594,23 @@ def check_tls_consistency(doc: dict) -> list[dict]:
     inputs = cc.get("inputs", {})
     if not isinstance(inputs, dict):
         return findings
-    ssl_mode = inputs.get("ssl_mode", {})
+    ssl_mode = inputs.get("ssl_mode")
+    if ssl_mode is None:
+        return findings  # no ssl_mode input declared; nothing to check
     if not isinstance(ssl_mode, dict):
+        # ssl_mode declared but as a flat value instead of an input descriptor
+        # (e.g. `"ssl_mode": "verify-full"` instead of
+        # `"ssl_mode": {"source": "...", ..., "enum": [...]}`). Surface
+        # explicitly; Layer 1 catches the type but `--semantic-only` bypasses.
+        findings.append(
+            finding(
+                "tls-consistency",
+                "error",
+                "/connection_contract/inputs/ssl_mode",
+                f"ssl_mode input must be an object descriptor (with `source`, `phase`, `enum`, …); got {type(ssl_mode).__name__}.",
+                rule_doc="connectors/connector-schema-parameterization.md#transport-contracts",
+            )
+        )
         return findings
     enum = ssl_mode.get("enum")
     if enum is None:
@@ -900,7 +958,11 @@ def check_phase_resolvability(doc: dict) -> list[dict]:
     deeper analysis tracked separately.
 
     Also emits a warning when a `post_auth_outputs` entry is malformed
-    (bad storage, missing/invalid value_path).
+    (bad storage, missing/invalid value_path), and an error when
+    `connection_contract.inputs`, `connection_contract.post_auth_outputs`,
+    or `transports` is present-but-non-object (the index helpers would
+    otherwise silently coerce to {} and produce misdirected "not
+    declared" diagnostics).
     """
     findings: list[dict] = []
     if not isinstance(doc, dict):
@@ -1035,8 +1097,10 @@ def check_phase_resolvability(doc: dict) -> list[dict]:
 _PLACEHOLDER_RE = re.compile(r"\$\{([^}]+)\}")
 _NARROWING_ARROW_TYPES = {"Object", "List"}
 _ECMA_NAMED_GROUP = re.compile(r"\(\?<([A-Za-z_][A-Za-z0-9_]*)>")
-# Catches all Python-only group syntax: declaration (?P<name>...), backreference
-# (?P=name), and recursive call (?P>name). ECMA-262 uses none of these.
+# Catches all non-ECMA `(?P…` regex extensions: Python stdlib's named-group
+# declaration `(?P<name>…)` and backreference `(?P=name)`, plus the
+# `regex`-library recursive-call `(?P>name)`. None are valid ECMA-262, so all
+# three are rejected by `check_type_map_rules`.
 _PYTHON_REGEX_FEATURE = re.compile(r"\(\?P[<=>]")
 
 
@@ -1047,10 +1111,12 @@ def _to_python_regex(pattern: str) -> str:
     Python's `re` module only accepts the `(?P<…>)` spelling, so the
     validator translates the well-defined named-group form before
     compiling. Anonymous groups (`(...)`) and non-capturing (`(?:…)`)
-    are passed through unchanged. Python-only `(?P<…>)` declarations,
-    `(?P=…)` backreferences, and `(?P>…)` recursive calls are contract
-    violations flagged separately by `check_type_map_rules`; this
-    helper is for compilation, not enforcement.
+    are passed through unchanged. The `(?P[<=>]…)` extensions are
+    contract violations flagged separately by `check_type_map_rules`:
+    `(?P<…>)` declarations and `(?P=…)` backreferences are Python
+    stdlib syntax, `(?P>…)` recursive calls are PyPI `regex`-library
+    syntax — none are valid ECMA-262. This helper is for compilation,
+    not enforcement.
     """
     return _ECMA_NAMED_GROUP.sub(r"(?P<\1>", pattern)
 
@@ -1366,8 +1432,9 @@ def check_type_map_rules(doc: Any) -> list[dict]:
     - `match: "regex"` rules' `native` must compile as a valid regex
       (regardless of whether `canonical` is templated).
     - `match: "regex"` rules must use ECMA-262 named-group syntax
-      `(?<name>…)`; Python-only `(?P…)` syntax (declarations,
-      backreferences, recursive calls) is a contract violation.
+      `(?<name>…)`; non-ECMA `(?P[<=>]…)` extensions (Python stdlib's
+      `(?P<…>)` / `(?P=…)`, PyPI `regex`-library's `(?P>…)`) are
+      contract violations.
     - `match: "regex"` rules referencing `${name}` in `canonical` must
       define a matching named capture group `(?<name>…)` in `native`.
     - `canonical` must be a string — non-string values silently inert
@@ -1907,7 +1974,7 @@ def check_endpoint_annotations(doc: Any) -> list[dict]:
         if problem_kind == "asymmetric":
             findings.append(
                 finding(
-                    "type-map-coverage",
+                    "endpoint-annotations",
                     "error",
                     "/",
                     f"endpoint field at {problem_pointer} declares exactly one of native_type / arrow_type; both are required per the api-endpoint schema.",
@@ -1917,7 +1984,7 @@ def check_endpoint_annotations(doc: Any) -> list[dict]:
         elif problem_kind == "both_non_string":
             findings.append(
                 finding(
-                    "type-map-coverage",
+                    "endpoint-annotations",
                     "error",
                     "/",
                     f"endpoint field at {problem_pointer} declares native_type / arrow_type with non-string value(s); both must be strings per the api-endpoint schema.",
@@ -1927,7 +1994,7 @@ def check_endpoint_annotations(doc: Any) -> list[dict]:
         elif problem_kind == "non_dict_subtree":
             findings.append(
                 finding(
-                    "type-map-coverage",
+                    "endpoint-annotations",
                     "warning",
                     "/",
                     f"endpoint sub-tree at {problem_pointer} is not a JSON object; the asymmetric-pair walker could not recurse here, so any annotations beneath it are not checked. Edit the endpoint to make that sub-tree a JSON object, or rerun without `--semantic-only` to see the Layer 1 schema error.",
@@ -1956,16 +2023,21 @@ _CONNECTOR_ONLY = {"transport-ref", "dsn-binding", "auth-shape", "tls-consistenc
 _TYPE_MAP_ONLY = {"type-map-rule"}
 _ENDPOINT_ONLY = {"endpoint-annotations"}
 
-# Module-load invariant: every validator id we dispatch MUST be registered in
-# VALIDATOR_IDS, otherwise the crash-handler in `run_semantic_validators` and
-# `_safe_check_type_map_rules` would raise an AssertionError inside `finding()`
-# that propagates uncaught. This guarantees the per-validator crash guard
-# can't itself fail. (Stripped under `python -O`; the runtime checks below
-# in the dispatcher still tag findings with the right id.)
-assert set(SEMANTIC_VALIDATORS.keys()) <= VALIDATOR_IDS, (
-    f"SEMANTIC_VALIDATORS contains ids not registered in VALIDATOR_IDS: "
-    f"{sorted(set(SEMANTIC_VALIDATORS.keys()) - VALIDATOR_IDS)}"
-)
+# Module-load invariant: every dispatched validator id MUST be registered in
+# VALIDATOR_IDS, otherwise the crash-handler in `run_semantic_validators`
+# would call `finding(vid, ...)` whose `assert vid in VALIDATOR_IDS` could
+# itself raise — uncaught — past the per-validator guard. Using an explicit
+# `raise` rather than `assert` so the check survives `python -O` (which
+# strips assertions). `_safe_check_type_map_rules` passes a literal
+# `"type-map-rule"` id and is already safe by construction; this invariant
+# protects the dispatcher's `vid`-tagged crash finding only.
+_unregistered = set(SEMANTIC_VALIDATORS.keys()) - VALIDATOR_IDS
+if _unregistered:
+    raise RuntimeError(
+        f"SEMANTIC_VALIDATORS contains ids not registered in VALIDATOR_IDS: "
+        f"{sorted(_unregistered)}"
+    )
+del _unregistered
 
 
 def is_connector_doc(doc: Any) -> bool:
@@ -1987,20 +2059,33 @@ def is_connector_doc(doc: Any) -> bool:
 
 
 def is_endpoint_doc(doc: Any) -> bool:
-    """Detect an endpoint document (api or database).
+    """Detect an api-endpoint document for dispatch purposes.
 
-    True when `doc` is a dict carrying `endpoint_id` or `operations`,
-    and crucially does NOT carry `kind` (which would route it to the
-    connector dispatch). Used so that when an author validates an
-    endpoint file directly under `--semantic-only`, the asymmetric-pair
-    walker still runs and surfaces malformed `native_type`/`arrow_type`
-    annotations that Layer 1 would have caught.
+    True when `doc` is a dict carrying `operations` (the api-endpoint
+    discriminator under the shared endpoint contract) and crucially
+    does NOT carry `kind` (which would route it to the connector
+    dispatch).
+
+    Used so that when the orchestrator validates an api-endpoint file
+    directly under `--semantic-only`, the asymmetric-pair walker still
+    runs and surfaces malformed `native_type`/`arrow_type` annotations
+    that Layer 1 would have caught.
+
+    Database endpoints are deliberately NOT routed here: they have
+    `endpoint_id` but no `operations`, and they carry annotations on
+    `columns[]` instead of inside `operations.*`. The walker
+    (`_collect_asymmetric_pairs`) only knows the api-endpoint shape, so
+    routing database endpoints would produce zero findings — a silent
+    pass that would advertise coverage the validator chain doesn't
+    deliver. Database-endpoint shape validation is out of scope for
+    this plugin (DB endpoints are produced at runtime by the
+    connector's resource_discovery).
     """
     if not isinstance(doc, dict):
         return False
     if "kind" in doc:
         return False
-    return "endpoint_id" in doc or "operations" in doc
+    return "operations" in doc
 
 
 def is_type_map_doc(doc: Any) -> bool:
