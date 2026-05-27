@@ -790,8 +790,9 @@ def test_storage_kind_malformed_sibling_type_map_surfaced(tmp_path):
 
 def test_storage_kind_legacy_wrapped_sibling_type_map_surfaced(tmp_path):
     """Storage-kind branch must reject non-list sibling type-map shape with
-    the same 'must be a non-empty array' error as api/db (was silently
-    swallowed before this round)."""
+    the same 'must be a non-empty array' error as api/db. Mirrors the api/db
+    branch's list-shape guard — without it the storage branch would silently
+    no-op on a legacy-wrapped (`{native_to_arrow: {rules: [...]}}`) sibling."""
     base = json.loads(VALID_API_CONNECTOR.read_text())
     base["kind"] = "stdout"
     doc_path = tmp_path / "connector.json"

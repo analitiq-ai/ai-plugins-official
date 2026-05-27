@@ -90,6 +90,7 @@ VALIDATOR_IDS = {
     "tls-consistency",
     "type-map-coverage",
     "type-map-rule",
+    "endpoint-annotations",
 }
 
 
@@ -367,12 +368,42 @@ def check_dsn_bindings(doc: dict) -> list[dict]:
                 )
             )
             continue
-        dsn = tspec.get("dsn")
-        if not isinstance(dsn, dict) or dsn.get("kind") != "url_template":
+        if "dsn" not in tspec:
+            continue  # dsn is optional for some transport types (e.g. http)
+        dsn = tspec["dsn"]
+        if not isinstance(dsn, dict):
+            findings.append(
+                finding(
+                    "dsn-binding",
+                    "error",
+                    f"/transports/{tname}/dsn",
+                    f"dsn must be an object; got {type(dsn).__name__}.",
+                    rule_doc="connectors/connector-schema-parameterization.md#transport-contracts",
+                )
+            )
             continue
+        dsn_kind = dsn.get("kind")
+        if dsn_kind != "url_template":
+            if dsn_kind is not None:
+                # Unknown / typo'd dsn.kind (Layer 1 catches via enum; surface
+                # under `--semantic-only` so an author with a typo doesn't get
+                # a silent green).
+                findings.append(
+                    finding(
+                        "dsn-binding",
+                        "error",
+                        f"/transports/{tname}/dsn/kind",
+                        f"dsn.kind must be 'url_template' (the only kind defined today); got {dsn_kind!r}.",
+                        rule_doc="connectors/connector-schema-parameterization.md#transport-contracts",
+                    )
+                )
+            continue  # Layer 1 catches missing required `kind`
         path_prefix = f"/transports/{tname}/dsn"
         template = dsn.get("template", "")
         if not isinstance(template, str):
+            # A non-string template would crash `re.findall` below; surface
+            # explicitly instead of letting the top-level per-validator
+            # guard report it as a generic "validator crashed" finding.
             findings.append(
                 finding(
                     "dsn-binding",
@@ -384,8 +415,22 @@ def check_dsn_bindings(doc: dict) -> list[dict]:
             )
             continue
         bindings = dsn.get("bindings", {})
+        if not isinstance(bindings, dict):
+            # A non-dict bindings would silently produce misdirected
+            # "placeholder has no matching binding" errors; surface the
+            # root cause instead. Layer 1 catches via type.
+            findings.append(
+                finding(
+                    "dsn-binding",
+                    "error",
+                    f"{path_prefix}/bindings",
+                    f"bindings must be an object; got {type(bindings).__name__}.",
+                    rule_doc="connectors/connector-schema-parameterization.md#transport-contracts",
+                )
+            )
+            continue
         placeholders = set(placeholder_re.findall(template))
-        binding_keys = set(bindings.keys()) if isinstance(bindings, dict) else set()
+        binding_keys = set(bindings.keys())
         for ph in placeholders - binding_keys:
             findings.append(
                 finding(
@@ -406,30 +451,30 @@ def check_dsn_bindings(doc: dict) -> list[dict]:
                     rule_doc="connectors/connector-schema-parameterization.md#transport-contracts",
                 )
             )
-        if isinstance(bindings, dict):
-            for bk, bspec in bindings.items():
-                if not isinstance(bspec, dict):
-                    findings.append(
-                        finding(
-                            "dsn-binding",
-                            "error",
-                            f"{path_prefix}/bindings/{bk}",
-                            f"binding must be an object with 'value' and 'encoding'; got {type(bspec).__name__}.",
-                            rule_doc="connectors/connector-schema-parameterization.md#transport-contracts",
-                        )
+        # bindings is guaranteed dict here — the earlier non-dict guard returns.
+        for bk, bspec in bindings.items():
+            if not isinstance(bspec, dict):
+                findings.append(
+                    finding(
+                        "dsn-binding",
+                        "error",
+                        f"{path_prefix}/bindings/{bk}",
+                        f"binding must be an object with 'value' and 'encoding'; got {type(bspec).__name__}.",
+                        rule_doc="connectors/connector-schema-parameterization.md#transport-contracts",
                     )
-                    continue
-                enc = bspec.get("encoding")
-                if enc is not None and enc not in KNOWN_ENCODINGS:
-                    findings.append(
-                        finding(
-                            "dsn-binding",
-                            "error",
-                            f"{path_prefix}/bindings/{bk}/encoding",
-                            f"encoding '{enc}' is not in the closed enum {sorted(KNOWN_ENCODINGS)}.",
-                            rule_doc="connectors/connector-schema-parameterization.md#transport-contracts",
-                        )
+                )
+                continue
+            enc = bspec.get("encoding")
+            if enc is not None and enc not in KNOWN_ENCODINGS:
+                findings.append(
+                    finding(
+                        "dsn-binding",
+                        "error",
+                        f"{path_prefix}/bindings/{bk}/encoding",
+                        f"encoding '{enc}' is not in the closed enum {sorted(KNOWN_ENCODINGS)}.",
+                        rule_doc="connectors/connector-schema-parameterization.md#transport-contracts",
                     )
+                )
     return findings
 
 
@@ -609,6 +654,15 @@ def _index_post_auth_outputs(doc: dict) -> tuple[dict[str, dict], list[dict]]:
     valid_storage = {"connection.discovered", "connection.selections", "secrets"}
     for name, spec in post_auth.items():
         if not isinstance(spec, dict):
+            findings.append(
+                finding(
+                    "phase-resolvability",
+                    "warning",
+                    f"/connection_contract/post_auth_outputs/{name}",
+                    f"post_auth_outputs.{name} must be an object; got {type(spec).__name__}.",
+                    rule_doc="shared/lifecycle-phases.md",
+                )
+            )
             continue
         storage = spec.get("storage")
         value_path = spec.get("value_path")
@@ -860,6 +914,47 @@ def check_phase_resolvability(doc: dict) -> list[dict]:
     auth_raw = doc.get("auth")
     auth = auth_raw if isinstance(auth_raw, dict) else {}
     auth_type = auth.get("type")
+    # Shape checks for the structures the index helpers silently coerce to
+    # {} on non-dict. Without these, downstream "ref X is not declared"
+    # errors would misattribute the root cause when `inputs` is actually a
+    # list/string. Layer 1 catches each via type; surface explicitly under
+    # `--semantic-only`.
+    cc_for_shape = doc.get("connection_contract")
+    if isinstance(cc_for_shape, dict):
+        inputs_shape = cc_for_shape.get("inputs")
+        if inputs_shape is not None and not isinstance(inputs_shape, dict):
+            findings.append(
+                finding(
+                    "phase-resolvability",
+                    "error",
+                    "/connection_contract/inputs",
+                    f"inputs must be an object; got {type(inputs_shape).__name__}.",
+                    rule_doc="shared/lifecycle-phases.md",
+                )
+            )
+        post_auth_shape = cc_for_shape.get("post_auth_outputs")
+        if post_auth_shape is not None and not isinstance(post_auth_shape, dict):
+            findings.append(
+                finding(
+                    "phase-resolvability",
+                    "error",
+                    "/connection_contract/post_auth_outputs",
+                    f"post_auth_outputs must be an object; got {type(post_auth_shape).__name__}.",
+                    rule_doc="shared/lifecycle-phases.md",
+                )
+            )
+    transports_shape = doc.get("transports")
+    if transports_shape is not None and not isinstance(transports_shape, dict):
+        findings.append(
+            finding(
+                "phase-resolvability",
+                "error",
+                "/transports",
+                f"transports must be an object; got {type(transports_shape).__name__}.",
+                rule_doc="shared/lifecycle-phases.md",
+            )
+        )
+
     input_idx = _index_inputs(doc)
     output_idx, malformed = _index_post_auth_outputs(doc)
     findings.extend(malformed)
@@ -952,9 +1047,10 @@ def _to_python_regex(pattern: str) -> str:
     Python's `re` module only accepts the `(?P<…>)` spelling, so the
     validator translates the well-defined named-group form before
     compiling. Anonymous groups (`(...)`) and non-capturing (`(?:…)`)
-    are passed through unchanged. Python-style names (`(?P<…>)`) are a
-    contract violation flagged separately by `check_type_map_rules`;
-    this helper is for compilation, not enforcement.
+    are passed through unchanged. Python-only `(?P<…>)` declarations,
+    `(?P=…)` backreferences, and `(?P>…)` recursive calls are contract
+    violations flagged separately by `check_type_map_rules`; this
+    helper is for compilation, not enforcement.
     """
     return _ECMA_NAMED_GROUP.sub(r"(?P<\1>", pattern)
 
@@ -988,17 +1084,15 @@ def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dic
         return findings
     # Distinguish a real connector document from one that just has a stray
     # `kind` field (e.g. an api-endpoint with `kind` accidentally added).
-    # Endpoints don't carry transports / connection_contract / default_transport
-    # — without at least one of those, demanding a sibling type-map.json
-    # would surface a misleading "type-map.json missing" error on a doc
-    # that's structurally an endpoint, not a connector. Layer 1 catches the
-    # spurious `kind` under default validation; under `--semantic-only` the
-    # other connector-only validators (transport-ref, dsn-binding, auth-shape)
-    # surface the real problem (missing connector fields).
-    looks_like_connector = any(
-        k in doc for k in ("transports", "connection_contract", "default_transport", "auth")
-    )
-    if not looks_like_connector:
+    # An author who fills in `kind` only — no transports / connection_contract
+    # / default_transport / auth — is in an ambiguous state: it could be a
+    # malformed connector OR a stray-kind endpoint. `check_transport_refs`
+    # will surface its own "transports is required" error which is the
+    # canonical signal that something connector-shaped is missing fields.
+    # Demanding a sibling type-map.json here would be misleading on a doc
+    # that turns out to be an endpoint, so we skip when none of the four
+    # sentinel keys is present.
+    if not any(k in doc for k in ("transports", "connection_contract", "default_transport", "auth")):
         return findings
     if doc_path is None:
         findings.append(
@@ -1049,7 +1143,7 @@ def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dic
         if tm_path.is_file():
             try:
                 tm_doc = json.loads(tm_path.read_text())
-            except (OSError, json.JSONDecodeError) as exc:
+            except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
                 findings.append(
                     finding(
                         "type-map-coverage",
@@ -1089,7 +1183,7 @@ def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dic
 
     try:
         tm_doc = json.loads(tm_path.read_text())
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
         findings.append(
             finding(
                 "type-map-coverage",
@@ -1151,7 +1245,7 @@ def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dic
     for ep_path in endpoint_files:
         try:
             ep_doc = json.loads(ep_path.read_text())
-        except (OSError, json.JSONDecodeError) as exc:
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
             findings.append(
                 finding(
                     "type-map-coverage",
@@ -1545,7 +1639,7 @@ def _render_canonical(native: str, rules: list[Any]) -> str | None:
 
 
 def _collect_endpoint_native_arrow_pairs(endpoint_doc: dict) -> list[tuple[str, str, str]]:
-    """Walk an api-endpoint document, yielding (native_type, arrow_type, json_pointer).
+    """Walk an api-endpoint document and return a list of (native_type, arrow_type, json_pointer) tuples.
 
     Both `native_type` and `arrow_type` are required-paired annotations on
     typed field schemas per the published api-endpoint contract; the
@@ -1794,6 +1888,55 @@ def _walk_jsonschema_pairs(node: Any, pointer: str, out: list[tuple[str, str, st
                 _walk_jsonschema_pairs(branch, f"{pointer}/{combiner}/{i}", out)
 
 
+def check_endpoint_annotations(doc: Any) -> list[dict]:
+    """Run the asymmetric / non-string / non-dict-subtree pair walker on
+    an endpoint document validated directly.
+
+    The same walker runs from `check_type_map_coverage` when a connector
+    is validated (it walks sibling endpoints). When the orchestrator
+    validates an endpoint file by itself with `--schema-url=api-endpoint/latest.json`,
+    Layer 1 catches malformed annotation pairs via `dependentRequired`;
+    under `--semantic-only` Layer 1 is bypassed, so this validator
+    surfaces the same findings the coverage walker would have emitted
+    when invoked from a parent connector.
+    """
+    findings: list[dict] = []
+    if not isinstance(doc, dict):
+        return findings
+    for problem_pointer, problem_kind in _collect_asymmetric_pairs(doc):
+        if problem_kind == "asymmetric":
+            findings.append(
+                finding(
+                    "type-map-coverage",
+                    "error",
+                    "/",
+                    f"endpoint field at {problem_pointer} declares exactly one of native_type / arrow_type; both are required per the api-endpoint schema.",
+                    rule_doc="shared/type-maps.md",
+                )
+            )
+        elif problem_kind == "both_non_string":
+            findings.append(
+                finding(
+                    "type-map-coverage",
+                    "error",
+                    "/",
+                    f"endpoint field at {problem_pointer} declares native_type / arrow_type with non-string value(s); both must be strings per the api-endpoint schema.",
+                    rule_doc="shared/type-maps.md",
+                )
+            )
+        elif problem_kind == "non_dict_subtree":
+            findings.append(
+                finding(
+                    "type-map-coverage",
+                    "warning",
+                    "/",
+                    f"endpoint sub-tree at {problem_pointer} is not a JSON object; the asymmetric-pair walker could not recurse here, so any annotations beneath it are not checked. Edit the endpoint to make that sub-tree a JSON object, or rerun without `--semantic-only` to see the Layer 1 schema error.",
+                    rule_doc="shared/type-maps.md",
+                )
+            )
+    return findings
+
+
 SEMANTIC_VALIDATORS: dict[str, Callable[..., list[dict]]] = {
     "reserved-field": check_reserved_fields,
     "expression-resolver": check_expressions,
@@ -1804,27 +1947,60 @@ SEMANTIC_VALIDATORS: dict[str, Callable[..., list[dict]]] = {
     "phase-resolvability": check_phase_resolvability,
     "type-map-coverage": check_type_map_coverage,
     "type-map-rule": check_type_map_rules,
+    "endpoint-annotations": check_endpoint_annotations,
 }
 
 # Validators that accept an optional `doc_path` second positional argument.
 _PATH_AWARE_VALIDATORS = {"type-map-coverage"}
 _CONNECTOR_ONLY = {"transport-ref", "dsn-binding", "auth-shape", "tls-consistency", "type-map-coverage"}
 _TYPE_MAP_ONLY = {"type-map-rule"}
+_ENDPOINT_ONLY = {"endpoint-annotations"}
+
+# Module-load invariant: every validator id we dispatch MUST be registered in
+# VALIDATOR_IDS, otherwise the crash-handler in `run_semantic_validators` and
+# `_safe_check_type_map_rules` would raise an AssertionError inside `finding()`
+# that propagates uncaught. This guarantees the per-validator crash guard
+# can't itself fail. (Stripped under `python -O`; the runtime checks below
+# in the dispatcher still tag findings with the right id.)
+assert set(SEMANTIC_VALIDATORS.keys()) <= VALIDATOR_IDS, (
+    f"SEMANTIC_VALIDATORS contains ids not registered in VALIDATOR_IDS: "
+    f"{sorted(set(SEMANTIC_VALIDATORS.keys()) - VALIDATOR_IDS)}"
+)
 
 
 def is_connector_doc(doc: Any) -> bool:
     """Detect a connector-shaped document for dispatch purposes.
 
-    Permissive: any dict with `kind` qualifies. The connector-only
-    validators (`transport-ref`, `dsn-binding`, `auth-shape`,
-    `tls-consistency`, `type-map-coverage`) each emit their own
-    structural error when their required substructures (`transports`,
-    `auth`, `connection_contract`, etc.) are missing or malformed.
-    Gating those validators off on substructure shape would silently
-    suppress the very errors they're supposed to surface under
-    `--semantic-only`.
+    Permissive: any dict with `kind` qualifies. Layer 1 owns the
+    required-key errors for substructures; the connector-only
+    validators each emit their own error when a substructure is
+    *present but malformed*. `transport-ref` additionally surfaces the
+    *absent-transports* case so the rest of the dispatch isn't quietly
+    skipped under `--semantic-only`. The other connector-only
+    validators (`dsn-binding`, `auth-shape`, `tls-consistency`,
+    `type-map-coverage`) rely on Layer 1 for required-key surfacing
+    and would no-op on absence under `--semantic-only` — that's
+    intentional, with `transport-ref`'s absent-transports finding
+    serving as the canonical "this isn't a complete connector" signal.
     """
     return isinstance(doc, dict) and "kind" in doc
+
+
+def is_endpoint_doc(doc: Any) -> bool:
+    """Detect an endpoint document (api or database).
+
+    True when `doc` is a dict carrying `endpoint_id` or `operations`,
+    and crucially does NOT carry `kind` (which would route it to the
+    connector dispatch). Used so that when an author validates an
+    endpoint file directly under `--semantic-only`, the asymmetric-pair
+    walker still runs and surfaces malformed `native_type`/`arrow_type`
+    annotations that Layer 1 would have caught.
+    """
+    if not isinstance(doc, dict):
+        return False
+    if "kind" in doc:
+        return False
+    return "endpoint_id" in doc or "operations" in doc
 
 
 def is_type_map_doc(doc: Any) -> bool:
@@ -1900,6 +2076,7 @@ def _looks_like_legacy_type_map(doc: Any) -> bool:
 
 def run_semantic_validators(doc: Any, doc_path: Path | None = None) -> list[dict]:
     findings: list[dict] = []
+    is_ep = is_endpoint_doc(doc)
     # Top-level shape guard. A scalar (str/number/bool/null) or a list whose
     # elements aren't dicts cannot be any known published artifact — running
     # the dispatch table on it would silently produce zero findings under
@@ -1967,6 +2144,8 @@ def run_semantic_validators(doc: Any, doc_path: Path | None = None) -> list[dict
             continue
         if vid in _TYPE_MAP_ONLY and not is_tm:
             continue
+        if vid in _ENDPOINT_ONLY and not is_ep:
+            continue
         # Per-validator try/except so a crash in one doesn't discard the
         # findings other validators have already produced. The synthetic
         # crash finding tags the offending validator id so the orchestrator
@@ -2011,7 +2190,7 @@ def main() -> int:
     document_path = Path(args.document)
     try:
         document = json.loads(document_path.read_text())
-    except (FileNotFoundError, json.JSONDecodeError) as exc:
+    except (FileNotFoundError, json.JSONDecodeError, UnicodeDecodeError) as exc:
         print(
             json.dumps(
                 {
@@ -2029,7 +2208,7 @@ def main() -> int:
     if not args.semantic_only:
         try:
             schema = fetch_schema(args.schema_url, cache=not args.no_cache)
-        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError, OSError, RuntimeError) as exc:
+        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError, OSError, RuntimeError, UnicodeDecodeError) as exc:
             print(
                 json.dumps(
                     {
