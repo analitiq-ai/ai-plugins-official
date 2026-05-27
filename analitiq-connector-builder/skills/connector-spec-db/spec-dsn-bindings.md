@@ -8,7 +8,7 @@ fields are:
 | `transport_type` | Identity field | Extras |
 |---|---|---|
 | `sqlalchemy` | `driver` (e.g. `"postgresql+asyncpg"`) | optional `tls` block (canonical `ssl_mode` + `ssl_ca_certificate` refs) |
-| `adbc` | `driver` — closed enum: `postgresql`, `snowflake`, `bigquery` | optional `db_kwargs` (object; values may be value expressions). TLS lives inside `db_kwargs` (e.g. `adbc.postgresql.sslmode`); no `tls` block. At least one of `dsn` / `db_kwargs` is required. |
+| `adbc` | `driver` — closed enum: `postgresql`, `snowflake`, `bigquery` | `db_kwargs` (object; values may be value expressions). **AdbcTransport requires at least one of `dsn` / `db_kwargs`.** TLS lives inside `db_kwargs` (e.g. `adbc.postgresql.sslmode`); no `tls` block. |
 
 For databases in the ADBC driver enum, prefer `adbc` — it exchanges
 Arrow columns natively and avoids the SQLAlchemy row-to-Arrow conversion.

@@ -1,0 +1,4 @@
+[
+  { "method": "exact", "native": "BIGINT",  "canonical": "Int64" },
+  { "method": "exact", "native": "INTEGER", "canonical": "Int32" }
+]

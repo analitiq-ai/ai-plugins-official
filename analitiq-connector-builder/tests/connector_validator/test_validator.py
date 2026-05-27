@@ -741,8 +741,70 @@ def test_type_map_legacy_wrapped_shape_warned():
         schema_url=TYPE_MAP_SCHEMA_URL,
     )
     warns = warnings_of(result, "type-map-rule")
-    assert any("legacy embedded type-map shape" in w["message"] for w in warns), \
+    assert any("pre-migration type-map shape" in w["message"] for w in warns), \
         f"expected legacy-shape warning; got {warns}"
+
+
+def test_type_map_legacy_method_list_caught():
+    """Top-level list with legacy `method` key (most common transcription of
+    the old shape) must surface the rename pointer, not just opaque per-rule
+    errors."""
+    result = run_validator(
+        FIXTURES / "invalid_type_map_legacy_method_list.json",
+        "--semantic-only",
+        schema_url=TYPE_MAP_SCHEMA_URL,
+    )
+    warns = warnings_of(result, "type-map-rule")
+    assert any("pre-migration type-map shape" in w["message"]
+               and "method" in w["message"]
+               for w in warns), \
+        f"expected legacy-method-list warning; got {warns}"
+
+
+def test_type_map_legacy_rules_keyed_caught():
+    """`{rules: [...]}` object wrapper (variant 2 of the legacy shape) also
+    surfaces the migration hint."""
+    result = run_validator(
+        FIXTURES / "invalid_type_map_legacy_rules_keyed.json",
+        "--semantic-only",
+        schema_url=TYPE_MAP_SCHEMA_URL,
+    )
+    warns = warnings_of(result, "type-map-rule")
+    assert any("pre-migration type-map shape" in w["message"] for w in warns), \
+        f"expected legacy-rules-keyed warning; got {warns}"
+
+
+def test_storage_kind_malformed_sibling_type_map_surfaced(tmp_path):
+    """Storage-kind branch must NOT silently swallow OSError/JSONDecodeError.
+    Mirror the api/db branch's error surfacing."""
+    base = json.loads(VALID_API_CONNECTOR.read_text())
+    base["kind"] = "file"
+    doc_path = tmp_path / "connector.json"
+    doc_path.write_text(json.dumps(base))
+    (tmp_path / "type-map.json").write_text("{")  # malformed JSON
+    result = run_validator(doc_path, "--semantic-only")
+    errs = errors_of(result, "type-map-coverage")
+    assert any("could not be read or parsed" in e["message"] for e in errs), \
+        f"storage-kind malformed sibling JSON must be surfaced; got {errs}"
+
+
+def test_storage_kind_legacy_wrapped_sibling_type_map_surfaced(tmp_path):
+    """Storage-kind branch must reject non-list sibling type-map shape with
+    the same 'must be a non-empty array' error as api/db (was silently
+    swallowed before this round)."""
+    base = json.loads(VALID_API_CONNECTOR.read_text())
+    base["kind"] = "stdout"
+    doc_path = tmp_path / "connector.json"
+    doc_path.write_text(json.dumps(base))
+    (tmp_path / "type-map.json").write_text(json.dumps({
+        "native_to_arrow": {"rules": [
+            {"method": "exact", "native": "X", "canonical": "Utf8"}
+        ]}
+    }))
+    result = run_validator(doc_path, "--semantic-only")
+    errs = errors_of(result, "type-map-coverage")
+    assert any("non-empty array" in e["message"] for e in errs), \
+        f"storage-kind non-list sibling must be flagged; got {errs}"
 
 
 def test_type_map_non_dict_entry_warned(tmp_path):

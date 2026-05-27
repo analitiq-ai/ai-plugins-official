@@ -941,15 +941,36 @@ def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dic
         return findings
     if kind not in ("api", "database"):
         # storage kinds (file/s3/stdout) are accepted by the schema but not
-        # yet executed by the engine, so no per-kind coverage contract applies.
-        # If a sibling `type-map.json` exists, still validate its rule shapes
-        # so authors who ship a type-map ahead of engine support don't get a
-        # silent pass on a broken file.
+        # yet executed by the engine, so no per-kind coverage contract
+        # applies. If a sibling `type-map.json` exists, surface read / parse /
+        # shape / rule errors anyway so authors who ship a type-map ahead of
+        # engine support don't get a silent pass on a broken file. Absence
+        # of the sibling is allowed for storage kinds (unlike api/db).
         tm_path = doc_path.parent / "type-map.json"
         if tm_path.is_file():
             try:
                 tm_doc = json.loads(tm_path.read_text())
-            except (OSError, json.JSONDecodeError):
+            except (OSError, json.JSONDecodeError) as exc:
+                findings.append(
+                    finding(
+                        "type-map-coverage",
+                        "error",
+                        "/",
+                        f"sibling type-map.json could not be read or parsed ({exc}).",
+                        rule_doc="shared/type-maps.md",
+                    )
+                )
+                return findings
+            if not isinstance(tm_doc, list) or not tm_doc:
+                findings.append(
+                    finding(
+                        "type-map-coverage",
+                        "error",
+                        "/",
+                        "sibling type-map.json must be a non-empty array of rules.",
+                        rule_doc="shared/type-maps.md",
+                    )
+                )
                 return findings
             findings.extend(check_type_map_rules(tm_doc))
         return findings
@@ -1535,20 +1556,42 @@ def is_type_map_doc(doc: Any) -> bool:
 
 
 def _looks_like_legacy_type_map(doc: Any) -> bool:
-    """Heuristic: detect the pre-PR-#41 wrapped `type-map` shape so authors
-    who haven't migrated get an explicit warning instead of a silent pass."""
-    if not isinstance(doc, dict):
+    """Heuristic: detect the pre-PR-#41 type-map shapes so authors who
+    haven't migrated get an explicit warning instead of a silent pass.
+
+    Three legacy shapes are recognized:
+
+    1. Wrapped object: `{"native_to_arrow": {"rules": [...]}}`.
+    2. Rules-keyed object: `{"rules": [...]}` (a different drift —
+       authors who mistook the file format).
+    3. Top-level list of rules using the renamed `method` key
+       (e.g. `[{"method": "exact", ...}]`). This is the most common
+       transcription of the old shape because the on-disk container
+       was already a list; only the rule key name changed in the
+       migration. Catching this case inside `is_type_map_doc` /
+       `check_type_map_rules` would surface as "match must be exact
+       or regex" per-rule errors — actionable but doesn't tell the
+       author "rename `method` to `match`". The heuristic gives them
+       that explicit pointer.
+    """
+    # Variant 1 + 2: object shapes.
+    if isinstance(doc, dict):
+        if isinstance(doc.get("native_to_arrow"), dict):
+            return True
+        rules = doc.get("rules")
+        if isinstance(rules, list) and rules and any(
+            isinstance(r, dict) and ("native" in r or "method" in r) for r in rules
+        ):
+            return True
         return False
-    # Legacy outer wrapper.
-    if isinstance(doc.get("native_to_arrow"), dict):
-        return True
-    # Some legacy variants used a top-level "rules" array directly.
-    rules = doc.get("rules")
-    if isinstance(rules, list) and rules and any(
-        isinstance(r, dict) and ("native" in r or "match" in r or "method" in r)
-        for r in rules
-    ):
-        return True
+    # Variant 3: top-level list whose rule entries use `method` (legacy key)
+    # without `match` (current key). A list with both is treated as a transient
+    # author error and routed through `check_type_map_rules` (which will warn).
+    if isinstance(doc, list) and doc:
+        any_legacy_only = any(
+            isinstance(r, dict) and "method" in r and "match" not in r for r in doc
+        )
+        return any_legacy_only
     return False
 
 
@@ -1556,16 +1599,19 @@ def run_semantic_validators(doc: Any, doc_path: Path | None = None) -> list[dict
     findings: list[dict] = []
     is_conn = is_connector_doc(doc)
     is_tm = is_type_map_doc(doc)
-    # If the document is neither a connector nor a recognized type-map but DOES
-    # look like the legacy embedded type-map shape, surface a one-line hint so
-    # `--semantic-only` runs don't silently pass on un-migrated files.
-    if not is_conn and not is_tm and _looks_like_legacy_type_map(doc):
+    # If the document looks like a pre-migration type-map shape, surface a
+    # one-line hint so `--semantic-only` runs don't silently pass (object
+    # wrappers) or only produce opaque per-rule errors (lists of legacy
+    # `{method, ...}` rules) on un-migrated files. Fires even when `is_tm` is
+    # true so an author with a list of `method`-keyed rules sees the rename
+    # pointer alongside the per-rule errors.
+    if not is_conn and _looks_like_legacy_type_map(doc):
         findings.append(
             finding(
                 "type-map-rule",
                 "warning",
                 "/",
-                "document looks like the legacy embedded type-map shape (`native_to_arrow.rules` or top-level `rules`). The current contract is a top-level array of `{match, native, canonical}` rules; see `shared/type-maps.md`.",
+                "document looks like a pre-migration type-map shape (object wrapper such as `native_to_arrow.rules` or `{rules: [...]}`, OR a top-level list using the legacy `method` rule key). The current contract is a top-level JSON array of `{match, native, canonical}` rules — rename `method` → `match` and unwrap any object container. See `shared/type-maps.md`.",
                 rule_doc="shared/type-maps.md",
             )
         )
