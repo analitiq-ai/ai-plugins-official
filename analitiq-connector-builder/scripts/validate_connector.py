@@ -413,8 +413,19 @@ def check_dsn_bindings(doc: dict) -> list[dict]:
 
 def check_auth_shape(doc: dict) -> list[dict]:
     findings: list[dict] = []
-    auth = doc.get("auth")
+    if "auth" not in doc:
+        return findings  # absence is owned by Layer 1 (required key)
+    auth = doc["auth"]
     if not isinstance(auth, dict):
+        findings.append(
+            finding(
+                "auth-shape",
+                "error",
+                "/auth",
+                f"auth must be an object with a `type` key; got {type(auth).__name__}.",
+                rule_doc="connectors/connector-schema-parameterization.md#authentication",
+            )
+        )
         return findings
     atype = auth.get("type")
     if atype == "oauth2_authorization_code":
@@ -467,7 +478,10 @@ def check_auth_shape(doc: dict) -> list[dict]:
 
 def check_tls_consistency(doc: dict) -> list[dict]:
     findings: list[dict] = []
-    inputs = doc.get("connection_contract", {}).get("inputs", {})
+    cc = doc.get("connection_contract")
+    if not isinstance(cc, dict):
+        return findings
+    inputs = cc.get("inputs", {})
     if not isinstance(inputs, dict):
         return findings
     ssl_mode = inputs.get("ssl_mode", {})
@@ -522,7 +536,10 @@ def _index_inputs(doc: dict) -> dict[str, dict]:
     Values carry the `phase` so the resolvability check can assert it.
     """
     out: dict[str, dict] = {}
-    inputs = doc.get("connection_contract", {}).get("inputs") or {}
+    cc = doc.get("connection_contract")
+    if not isinstance(cc, dict):
+        return out
+    inputs = cc.get("inputs") or {}
     if not isinstance(inputs, dict):
         return out
     for name, spec in inputs.items():
@@ -544,7 +561,10 @@ def _index_post_auth_outputs(doc: dict) -> tuple[dict[str, dict], list[dict]]:
     """
     findings: list[dict] = []
     out: dict[str, dict] = {}
-    post_auth = doc.get("connection_contract", {}).get("post_auth_outputs") or {}
+    cc = doc.get("connection_contract")
+    if not isinstance(cc, dict):
+        return out, findings
+    post_auth = cc.get("post_auth_outputs") or {}
     if not isinstance(post_auth, dict):
         return out, findings
     valid_storage = {"connection.discovered", "connection.selections", "secrets"}
@@ -792,8 +812,14 @@ def check_phase_resolvability(doc: dict) -> list[dict]:
     findings: list[dict] = []
     if not isinstance(doc, dict):
         return findings
-    auth = doc.get("auth") or {}
-    auth_type = auth.get("type") if isinstance(auth, dict) else None
+    # `auth` is required by Layer 1; under `--semantic-only` a non-dict here
+    # would silently collapse to {} and skip all auth-op resolvability checks
+    # without telling the author why. `check_auth_shape` emits its own error
+    # for the same case, so the `auth-shape` validator surfaces the structural
+    # problem and this validator simply skips its auth-op walk safely.
+    auth_raw = doc.get("auth")
+    auth = auth_raw if isinstance(auth_raw, dict) else {}
+    auth_type = auth.get("type")
     input_idx = _index_inputs(doc)
     output_idx, malformed = _index_post_auth_outputs(doc)
     findings.extend(malformed)
@@ -828,7 +854,9 @@ def check_phase_resolvability(doc: dict) -> list[dict]:
                 )
 
     # Post-auth output ops
-    post_auth = doc.get("connection_contract", {}).get("post_auth_outputs") or {}
+    cc = doc.get("connection_contract")
+    post_auth = cc.get("post_auth_outputs") if isinstance(cc, dict) else None
+    post_auth = post_auth or {}
     if isinstance(post_auth, dict):
         for name, spec in post_auth.items():
             if not isinstance(spec, dict):
@@ -1165,6 +1193,23 @@ def check_type_map_rules(doc: Any) -> list[dict]:
         match = rule.get("match")
         native = rule.get("native")
         canonical = rule.get("canonical")
+        # All three keys are required by Layer 1. Under `--semantic-only`,
+        # a rule that omits them would otherwise produce zero findings and
+        # silently shadow valid rules in `_render_canonical`. Note: explicit
+        # `null` values are NOT "missing" here — they're handled downstream
+        # by the per-key type checks (Layer 1 owns the type errors).
+        missing = [k for k in ("match", "native", "canonical") if k not in rule]
+        if missing:
+            findings.append(
+                finding(
+                    "type-map-rule",
+                    "warning",
+                    f"/{i}",
+                    f"rule is missing required key(s) {missing}; Layer 1 enforces this — rerun without `--semantic-only` to see the schema error. The rule will not match any native at runtime.",
+                    rule_doc="shared/type-maps.md",
+                )
+            )
+            continue
         # `match` is a closed enum. Without this gate, an unknown value would
         # be silently shadowed by `_render_canonical` (which only checks
         # `== "exact"` / `== "regex"`) — the rule would never resolve any
@@ -1368,14 +1413,17 @@ def _collect_asymmetric_pairs(endpoint_doc: dict) -> list[tuple[str, str]]:
     `kind` is one of:
     - `"asymmetric"` — exactly one of `native_type` / `arrow_type` is declared.
     - `"both_non_string"` — both annotations present but at least one is not a string.
-    - `"non_dict_subtree"` — a JSON-Schema-shaped sub-tree (properties / items /
-      params value) is not a dict and the walker could not recurse into it. Layer 1
-      would have rejected this; under `--semantic-only` the walker still surfaces
-      it so coverage gaps are visible.
+    - `"non_dict_subtree"` — a sub-tree at any structural level (operations,
+      read, write, body, schema, params, properties, items, combiners) is not a
+      dict and the walker could not recurse into it. The walker emits this on
+      every run; under default validation it complements Layer 1's error,
+      under `--semantic-only` it's the only signal.
 
     The api-endpoint schema's `JsonSchemaPropertyNode` uses
-    `dependentRequired` to enforce the pair at Layer 1. This Layer 2
-    walker provides defense-in-depth for the `--semantic-only` path.
+    `dependentRequired` to enforce the pair at Layer 1. This walker
+    provides defense-in-depth that also visits a superset of nodes —
+    the well-formed coverage walker (`_walk_endpoint_op`) simply returns
+    on non-dicts; this one records them so the gap is visible.
     """
     out: list[tuple[str, str]] = []
     operations = endpoint_doc.get("operations")
@@ -1412,6 +1460,14 @@ def _collect_asymmetric_pairs(endpoint_doc: dict) -> list[tuple[str, str]]:
 def _walk_endpoint_op_for_asymmetric(
     op: dict, base_pointer: str, *, schema_field: str, out: list[tuple[str, str]]
 ) -> None:
+    """Collect annotation-pair problems from one endpoint operation.
+
+    Uses the `if "key" in op` / `else: append non_dict_subtree` pattern
+    throughout to distinguish "key absent" (valid; nothing to walk) from
+    "key present but wrong type" (warn). Collapsing this to `.get()` +
+    `isinstance(..., dict)` would silently regress the non_dict_subtree
+    warnings — the round-4 fix specifically replaced that pattern.
+    """
     if schema_field in op:
         body = op[schema_field]
         if isinstance(body, dict):
@@ -1437,6 +1493,15 @@ def _walk_endpoint_op_for_asymmetric(
 
 
 def _walk_jsonschema_asymmetric(node: Any, pointer: str, out: list[tuple[str, str]]) -> None:
+    """Recurse through a JSON Schema, surfacing annotation-pair problems and
+    non-dict sub-trees.
+
+    Uses the membership-check pattern (`if "key" in node` then explicit
+    isinstance dispatch with non_dict_subtree on the else branch) for the
+    same reason as `_walk_endpoint_op_for_asymmetric` — distinguishing
+    "key absent" from "key present but wrong type" is what makes the
+    walker reliable under `--semantic-only`.
+    """
     if not isinstance(node, dict):
         out.append((pointer, "non_dict_subtree"))
         return
@@ -1616,8 +1681,18 @@ def _looks_like_legacy_type_map(doc: Any) -> bool:
        author "rename `method` to `match`". The heuristic gives them
        that explicit pointer.
     """
-    # Variant 1 + 2: object shapes.
+    # Variant 1 + 2: object shapes. Skip if the dict looks like a connector
+    # (has `kind` + `transports`) or an endpoint (has `endpoint_id` or
+    # `operations`) — those are caught separately by the connector-doc
+    # embedded-`type_maps` hint and Layer 1's `additionalProperties` rule.
     if isinstance(doc, dict):
+        looks_like_other_artifact = (
+            ("kind" in doc and "transports" in doc)
+            or "endpoint_id" in doc
+            or "operations" in doc
+        )
+        if looks_like_other_artifact:
+            return False
         if isinstance(doc.get("native_to_arrow"), dict):
             return True
         rules = doc.get("rules")
@@ -1639,28 +1714,56 @@ def _looks_like_legacy_type_map(doc: Any) -> bool:
 
 def run_semantic_validators(doc: Any, doc_path: Path | None = None) -> list[dict]:
     findings: list[dict] = []
+    # Top-level shape guard. A scalar (str/number/bool/null) or a list whose
+    # elements aren't dicts cannot be any known published artifact — running
+    # the dispatch table on it would silently produce zero findings under
+    # `--semantic-only` (Layer 1 would catch it, but Layer 1 may be bypassed).
+    # Surface this explicitly so a green pass on garbage is impossible.
+    if not isinstance(doc, (dict, list)):
+        findings.append(
+            finding(
+                "json-schema",
+                "error",
+                "/",
+                f"document root must be a JSON object or array; got {type(doc).__name__}.",
+            )
+        )
+        return findings
+    if isinstance(doc, list) and doc and not any(isinstance(r, dict) for r in doc):
+        findings.append(
+            finding(
+                "json-schema",
+                "error",
+                "/",
+                f"document root is a list of non-object entries ({[type(r).__name__ for r in doc[:3]]}…); no published artifact has this shape.",
+            )
+        )
+        return findings
     is_conn = is_connector_doc(doc)
     is_tm = is_type_map_doc(doc)
-    # Empty type-map list under `--semantic-only` would otherwise produce zero
-    # findings (Layer 1 catches the minItems violation but is bypassed). Surface
-    # the gap explicitly.
+    # Empty top-level array. Today only type-map.json has a list root, so
+    # this nearly always means an empty type-map; phrase the warning to be
+    # informative without presuming intent. The warning fires from any
+    # Layer 2 run (not only `--semantic-only`); under default validation
+    # it complements Layer 1's `minItems` error rather than replacing it.
     if isinstance(doc, list) and not doc:
         findings.append(
             finding(
                 "type-map-rule",
                 "warning",
                 "/",
-                "document is an empty array; a valid type-map.json must contain at least one rule. Layer 1 enforces this — rerun without `--semantic-only` to see the schema error.",
+                "document root is an empty array. If this is meant to be a type-map.json, it must contain at least one rule (Layer 1's `minItems` rule); no other published artifact has a list root.",
                 rule_doc="shared/type-maps.md",
             )
         )
-    # Migration hint for pre-PR-#41 type-map shapes. Fires for:
+    # Migration hint for pre-PR-#41 type-map shapes. Fires from any Layer 2
+    # run; under default validation it complements the Layer 1 error
+    # (`additionalProperties` for embedded `type_maps`, schema rejection for
+    # legacy wrappers); under `--semantic-only` it's the only signal. Two
+    # paths trigger it:
     # - Standalone documents that look like the old shape (object wrappers,
     #   or top-level lists keyed by the legacy `method`).
-    # - Connector documents that still carry an embedded `type_maps` block
-    #   (the Layer-1 schema rejects this via `additionalProperties: false`,
-    #   but `--semantic-only` skips Layer 1, so without this hint the author
-    #   sees nothing).
+    # - Connector documents that still carry an embedded `type_maps` block.
     if _looks_like_legacy_type_map(doc) or (
         is_conn and isinstance(doc, dict) and "type_maps" in doc
     ):
@@ -1738,7 +1841,23 @@ def main() -> int:
         findings.extend(layer1_jsonschema(document, schema))
 
     if not args.json_only:
-        findings.extend(run_semantic_validators(document, doc_path=document_path.resolve()))
+        # Wrap in a top-level try/except so an unforeseen exception inside a
+        # semantic validator (e.g. a `.get()` chain hitting an unexpected
+        # non-dict that we didn't guard) becomes a structured finding rather
+        # than an opaque Python traceback on stderr — orchestrators parse
+        # stdout as JSON and a bare traceback breaks that contract.
+        try:
+            findings.extend(run_semantic_validators(document, doc_path=document_path.resolve()))
+        except Exception as exc:  # noqa: BLE001 — last-resort guard
+            findings.append(
+                finding(
+                    "json-schema",
+                    "error",
+                    "",
+                    f"semantic validator crashed unexpectedly ({type(exc).__name__}: {exc}); "
+                    "this is a validator bug — please report. The document may also be malformed in a way Layer 1 would have caught (rerun without --json-only or --semantic-only).",
+                )
+            )
 
     passed = all(f["severity"] != "error" for f in findings)
     print(json.dumps({"passed": passed, "findings": findings}, indent=2))
