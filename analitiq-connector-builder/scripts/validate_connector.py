@@ -1088,7 +1088,7 @@ def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dic
                         "type-map-coverage",
                         "warning",
                         "/",
-                        f"endpoint '{ep_path.name}' sub-tree at {problem_pointer} is not a JSON object; the asymmetric-pair walker could not recurse here. Layer 1 should have flagged this.",
+                        f"endpoint '{ep_path.name}' sub-tree at {problem_pointer} is not a JSON object; the asymmetric-pair walker could not recurse here, so any annotations beneath it are not checked. Edit the endpoint to make that sub-tree a JSON object, or rerun without `--semantic-only` to see the Layer 1 schema error.",
                         rule_doc="shared/type-maps.md",
                     )
                 )
@@ -1165,10 +1165,12 @@ def check_type_map_rules(doc: Any) -> list[dict]:
         match = rule.get("match")
         native = rule.get("native")
         canonical = rule.get("canonical")
-        # `match` is a closed enum. A typo / drift value (e.g. "prefix") is silently
-        # skipped by both `check_type_map_rules` and `_render_canonical` if not
-        # flagged here — a future-schema rule the validator pre-dates would be
-        # invisible to the author. None is owned by Layer 1 (required key).
+        # `match` is a closed enum. Without this gate, an unknown value would
+        # be silently shadowed by `_render_canonical` (which only checks
+        # `== "exact"` / `== "regex"`) — the rule would never resolve any
+        # native, making a future-schema rule the validator pre-dates
+        # invisible to the author. None is owned by Layer 1 (required key);
+        # we only flag actual unknown values here.
         if match is not None and match not in ("exact", "regex"):
             findings.append(
                 finding(
@@ -1182,36 +1184,33 @@ def check_type_map_rules(doc: Any) -> list[dict]:
             continue
         # Dedupe set. Layer 1 should already reject non-string match/native, but
         # `--semantic-only` bypasses Layer 1, so the dedupe set must tolerate
-        # unhashable rule values. When the key can't be hashed, emit a warning
-        # so the un-checkable rule isn't a silent skip.
+        # unhashable rule values. Tuple construction is always safe; only
+        # `hash()` (called by `in` / `add`) can raise TypeError. When it does,
+        # emit a warning so the un-checkable rule isn't a silent skip.
+        key: tuple[Any, Any] = (match, native)
         try:
-            key: tuple[Any, Any] = (match, native)
-        except TypeError:
-            key = None  # type: ignore[assignment]
-        if key is not None:
-            try:
-                if key in seen:
-                    findings.append(
-                        finding(
-                            "type-map-rule",
-                            "warning",
-                            f"/{i}",
-                            f"duplicate rule for (match={match!r}, native={native!r}); first-match-wins makes later duplicates unreachable.",
-                            rule_doc="shared/type-maps.md",
-                        )
-                    )
-                else:
-                    seen.add(key)
-            except TypeError:
+            if key in seen:
                 findings.append(
                     finding(
                         "type-map-rule",
                         "warning",
                         f"/{i}",
-                        "rule's (match, native) key is not hashable; dedupe analysis skipped for this entry. Layer 1 should have rejected non-primitive values.",
+                        f"duplicate rule for (match={match!r}, native={native!r}); first-match-wins makes later duplicates unreachable.",
                         rule_doc="shared/type-maps.md",
                     )
                 )
+            else:
+                seen.add(key)
+        except TypeError:
+            findings.append(
+                finding(
+                    "type-map-rule",
+                    "warning",
+                    f"/{i}",
+                    "rule's (match, native) key is not hashable; dedupe analysis skipped for this entry. Layer 1 should have rejected non-primitive values.",
+                    rule_doc="shared/type-maps.md",
+                )
+            )
 
         # Regex compile + Python-syntax checks run BEFORE the canonical-string
         # gate so that a broken regex with a non-string canonical (e.g.
@@ -1379,42 +1378,62 @@ def _collect_asymmetric_pairs(endpoint_doc: dict) -> list[tuple[str, str]]:
     walker provides defense-in-depth for the `--semantic-only` path.
     """
     out: list[tuple[str, str]] = []
-    operations = endpoint_doc.get("operations") or {}
-    if not isinstance(operations, dict):
+    operations = endpoint_doc.get("operations")
+    if operations is None:
+        # No operations at all — Layer 1 catches the missing required key,
+        # nothing to walk.
         return out
-    read = operations.get("read")
-    if isinstance(read, dict):
-        _walk_endpoint_op_for_asymmetric(read, "/operations/read", schema_field="response", out=out)
-    write = operations.get("write")
-    if isinstance(write, dict):
-        # Iterate defensively — Layer 1 fixes write modes to {insert, upsert}, but
-        # the walker stays correct if the schema later widens the enum.
-        for mode, mode_op in write.items():
-            if not isinstance(mode_op, dict):
-                out.append((f"/operations/write/{mode}", "non_dict_subtree"))
-                continue
-            _walk_endpoint_op_for_asymmetric(
-                mode_op, f"/operations/write/{mode}", schema_field="input", out=out
-            )
+    if not isinstance(operations, dict):
+        out.append(("/operations", "non_dict_subtree"))
+        return out
+    if "read" in operations:
+        read = operations["read"]
+        if isinstance(read, dict):
+            _walk_endpoint_op_for_asymmetric(read, "/operations/read", schema_field="response", out=out)
+        else:
+            out.append(("/operations/read", "non_dict_subtree"))
+    if "write" in operations:
+        write = operations["write"]
+        if isinstance(write, dict):
+            # Iterate defensively — Layer 1 fixes write modes to {insert, upsert},
+            # but the walker stays correct if the schema later widens the enum.
+            for mode, mode_op in write.items():
+                if not isinstance(mode_op, dict):
+                    out.append((f"/operations/write/{mode}", "non_dict_subtree"))
+                    continue
+                _walk_endpoint_op_for_asymmetric(
+                    mode_op, f"/operations/write/{mode}", schema_field="input", out=out
+                )
+        else:
+            out.append(("/operations/write", "non_dict_subtree"))
     return out
 
 
 def _walk_endpoint_op_for_asymmetric(
     op: dict, base_pointer: str, *, schema_field: str, out: list[tuple[str, str]]
 ) -> None:
-    body = op.get(schema_field)
-    if isinstance(body, dict):
-        schema = body.get("schema")
-        if isinstance(schema, dict):
-            _walk_jsonschema_asymmetric(schema, f"{base_pointer}/{schema_field}/schema", out)
-    params = op.get("params")
-    if isinstance(params, dict):
-        for pname, pspec in params.items():
-            pointer = f"{base_pointer}/params/{pname}"
-            if not isinstance(pspec, dict):
-                out.append((pointer, "non_dict_subtree"))
-                continue
-            _check_annotation_pair(pspec, pointer, out)
+    if schema_field in op:
+        body = op[schema_field]
+        if isinstance(body, dict):
+            if "schema" in body:
+                schema = body["schema"]
+                if isinstance(schema, dict):
+                    _walk_jsonschema_asymmetric(schema, f"{base_pointer}/{schema_field}/schema", out)
+                else:
+                    out.append((f"{base_pointer}/{schema_field}/schema", "non_dict_subtree"))
+        else:
+            out.append((f"{base_pointer}/{schema_field}", "non_dict_subtree"))
+    if "params" in op:
+        params = op["params"]
+        if isinstance(params, dict):
+            for pname, pspec in params.items():
+                pointer = f"{base_pointer}/params/{pname}"
+                if not isinstance(pspec, dict):
+                    out.append((pointer, "non_dict_subtree"))
+                    continue
+                _check_annotation_pair(pspec, pointer, out)
+        else:
+            out.append((f"{base_pointer}/params", "non_dict_subtree"))
 
 
 def _walk_jsonschema_asymmetric(node: Any, pointer: str, out: list[tuple[str, str]]) -> None:
@@ -1422,25 +1441,40 @@ def _walk_jsonschema_asymmetric(node: Any, pointer: str, out: list[tuple[str, st
         out.append((pointer, "non_dict_subtree"))
         return
     _check_annotation_pair(node, pointer, out)
-    props = node.get("properties")
-    if isinstance(props, dict):
-        for k, v in props.items():
-            _walk_jsonschema_asymmetric(v, f"{pointer}/properties/{k}", out)
-    items = node.get("items")
-    if isinstance(items, dict):
-        _walk_jsonschema_asymmetric(items, f"{pointer}/items", out)
-    elif isinstance(items, list):
-        for i, v in enumerate(items):
-            _walk_jsonschema_asymmetric(v, f"{pointer}/items/{i}", out)
+    if "properties" in node:
+        props = node["properties"]
+        if isinstance(props, dict):
+            for k, v in props.items():
+                _walk_jsonschema_asymmetric(v, f"{pointer}/properties/{k}", out)
+        else:
+            out.append((f"{pointer}/properties", "non_dict_subtree"))
+    if "items" in node:
+        items = node["items"]
+        if isinstance(items, dict):
+            _walk_jsonschema_asymmetric(items, f"{pointer}/items", out)
+        elif isinstance(items, list):
+            for i, v in enumerate(items):
+                _walk_jsonschema_asymmetric(v, f"{pointer}/items/{i}", out)
+        else:
+            out.append((f"{pointer}/items", "non_dict_subtree"))
     for combiner in ("oneOf", "anyOf", "allOf"):
-        branches = node.get(combiner)
-        if isinstance(branches, list):
-            for i, branch in enumerate(branches):
-                _walk_jsonschema_asymmetric(branch, f"{pointer}/{combiner}/{i}", out)
+        if combiner in node:
+            branches = node[combiner]
+            if isinstance(branches, list):
+                for i, branch in enumerate(branches):
+                    _walk_jsonschema_asymmetric(branch, f"{pointer}/{combiner}/{i}", out)
+            else:
+                out.append((f"{pointer}/{combiner}", "non_dict_subtree"))
 
 
 def _check_annotation_pair(node: dict, pointer: str, out: list[tuple[str, str]]) -> None:
-    """Emit asymmetric / non-string-both findings for one node's pair."""
+    """Emit asymmetric / non-string-both findings for one node's pair.
+
+    Returns early (no finding) when NEITHER `native_type` nor `arrow_type`
+    is present — an unannotated node is valid JSON Schema and the
+    coverage walker simply doesn't collect it. Only nodes that attempted
+    to declare the pair (one or both keys present) are checked here.
+    """
     has_native_key = "native_type" in node
     has_arrow_key = "arrow_type" in node
     if not has_native_key and not has_arrow_key:
@@ -1464,8 +1498,16 @@ def _walk_endpoint_op(
     schema) and `"input"` for each write-mode op. Pairs from
     `<schema_field>.schema` are walked recursively as JSON Schema; pairs
     from `params` are flat (one annotation pair per param entry).
-    Half-typed fields (only one of `native_type` / `arrow_type`) are
-    not collected here; `_walk_endpoint_op_for_asymmetric` surfaces those.
+    Half-typed fields (only one of `native_type` / `arrow_type`) and
+    non-string-both pairs are NOT collected here; they're surfaced
+    instead by `_walk_endpoint_op_for_asymmetric` /
+    `_check_annotation_pair`. The two walkers are intentionally
+    separate: this one collects WELL-FORMED pairs for coverage
+    analysis; the asymmetric walker collects MALFORMED annotation
+    sites for direct error reporting. Both walkers visit the same
+    sub-trees but emit different finding categories, so silently
+    dropping a malformed pair here is correct — the asymmetric
+    walker has already flagged it.
     """
     body = op.get(schema_field)
     if isinstance(body, dict):
@@ -1599,19 +1641,35 @@ def run_semantic_validators(doc: Any, doc_path: Path | None = None) -> list[dict
     findings: list[dict] = []
     is_conn = is_connector_doc(doc)
     is_tm = is_type_map_doc(doc)
-    # If the document looks like a pre-migration type-map shape, surface a
-    # one-line hint so `--semantic-only` runs don't silently pass (object
-    # wrappers) or only produce opaque per-rule errors (lists of legacy
-    # `{method, ...}` rules) on un-migrated files. Fires even when `is_tm` is
-    # true so an author with a list of `method`-keyed rules sees the rename
-    # pointer alongside the per-rule errors.
-    if not is_conn and _looks_like_legacy_type_map(doc):
+    # Empty type-map list under `--semantic-only` would otherwise produce zero
+    # findings (Layer 1 catches the minItems violation but is bypassed). Surface
+    # the gap explicitly.
+    if isinstance(doc, list) and not doc:
         findings.append(
             finding(
                 "type-map-rule",
                 "warning",
                 "/",
-                "document looks like a pre-migration type-map shape (object wrapper such as `native_to_arrow.rules` or `{rules: [...]}`, OR a top-level list using the legacy `method` rule key). The current contract is a top-level JSON array of `{match, native, canonical}` rules — rename `method` → `match` and unwrap any object container. See `shared/type-maps.md`.",
+                "document is an empty array; a valid type-map.json must contain at least one rule. Layer 1 enforces this — rerun without `--semantic-only` to see the schema error.",
+                rule_doc="shared/type-maps.md",
+            )
+        )
+    # Migration hint for pre-PR-#41 type-map shapes. Fires for:
+    # - Standalone documents that look like the old shape (object wrappers,
+    #   or top-level lists keyed by the legacy `method`).
+    # - Connector documents that still carry an embedded `type_maps` block
+    #   (the Layer-1 schema rejects this via `additionalProperties: false`,
+    #   but `--semantic-only` skips Layer 1, so without this hint the author
+    #   sees nothing).
+    if _looks_like_legacy_type_map(doc) or (
+        is_conn and isinstance(doc, dict) and "type_maps" in doc
+    ):
+        findings.append(
+            finding(
+                "type-map-rule",
+                "warning",
+                "/",
+                "document looks like a pre-migration type-map shape (embedded `type_maps` inside connector.json, object wrapper such as `native_to_arrow.rules` or `{rules: [...]}`, OR a top-level list using the legacy `method` rule key). The current contract is a standalone `{connector_id}/definition/type-map.json` file holding a top-level JSON array of `{match, native, canonical}` rules — extract any embedded block to that sibling, rename `method` → `match`, and unwrap any object container. See `shared/type-maps.md`.",
                 rule_doc="shared/type-maps.md",
             )
         )

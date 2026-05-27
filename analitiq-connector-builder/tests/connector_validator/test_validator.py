@@ -863,13 +863,16 @@ def test_regex_rule_with_nonstring_canonical_still_compile_validated():
         f"expected broken-regex finding on rule 1 (canonical=list); got {errs}"
 
 
-def test_is_type_map_doc_rejects_empty_list_in_semantic_only(tmp_path):
-    """An empty type-map.json should not dispatch type-map-rule (Layer 1 owns minItems)."""
+def test_empty_type_map_warns_under_semantic_only(tmp_path):
+    """An empty type-map.json must surface a warning under `--semantic-only`
+    (Layer 1 owns the minItems error, but bypassing it would otherwise be a
+    silent pass)."""
     tm = tmp_path / "type-map.json"
     tm.write_text("[]")
     result = run_validator(tm, "--semantic-only", schema_url=TYPE_MAP_SCHEMA_URL)
-    rule_findings = [f for f in result["findings"] if f["validator"] == "type-map-rule"]
-    assert not rule_findings, f"empty type-map should not generate type-map-rule findings; got {rule_findings}"
+    warns = warnings_of(result, "type-map-rule")
+    assert any("empty array" in w["message"] for w in warns), \
+        f"expected empty-array warning; got {warns}"
 
 
 def test_connector_validation_surfaces_sibling_rule_errors():
