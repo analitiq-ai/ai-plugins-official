@@ -1,0 +1,3 @@
+[
+  { "match": "exact", "native": "NUMERIC", "canonical": "Decimal128(${precision}, ${scale})" }
+]

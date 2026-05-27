@@ -14,8 +14,9 @@ The actual API key value is declared in `connection_contract.inputs` with
 `secret: true`. Auth header construction happens in the transport's
 `headers` block, e.g. `"Authorization": { "template": "Bearer ${secrets.api_key}" }`.
 
-Example: `examples/api-key.example.json`. Variant with templated host:
-`examples/api-key-dynamic-host.example.json`.
+Example: `examples/api-key/api-key.example.json` (with sibling
+`examples/api-key/type-map.json`). Variant with templated host:
+`examples/api-key-dynamic-host/api-key-dynamic-host.example.json`.
 
 ## `basic_auth`
 
@@ -36,7 +37,8 @@ should use the `basic_auth` function expression — never pre-compute base64.
 }
 ```
 
-Example: `examples/basic-auth.example.json`.
+Example: `examples/basic-auth/basic-auth.example.json` (with sibling
+`examples/basic-auth/type-map.json`).
 
 ## `oauth2_authorization_code`
 
@@ -53,8 +55,9 @@ request that swaps the auth code for tokens. Both are
 `source: "platform"`; `client_secret` lives in `secrets` with
 `source: "platform"` and `secret: true`.
 
-Example: `examples/oauth2-authorization-code.example.json` (multi-origin
-provider with post-auth discovery).
+Example: `examples/oauth2-authorization-code/oauth2-authorization-code.example.json`
+(multi-origin provider with post-auth discovery; sibling
+`examples/oauth2-authorization-code/type-map.json`).
 
 ## `oauth2_client_credentials`
 
@@ -65,7 +68,8 @@ provider with post-auth discovery).
 Used for machine-to-machine auth. The `token_exchange` request POSTs
 client credentials and gets an access token.
 
-Example: `examples/oauth2-client-credentials.example.json`.
+Example: `examples/oauth2-client-credentials/oauth2-client-credentials.example.json`
+(with sibling `examples/oauth2-client-credentials/type-map.json`).
 
 ## `jwt`
 
@@ -85,7 +89,8 @@ The signing key, algorithm, and claim inputs are declared in
 …where `auth.access_token` is produced by an inline `jwt_sign` call in
 auth setup. (The exact wiring depends on the provider.)
 
-Example: `examples/jwt.example.json`.
+Example: `examples/jwt/jwt.example.json` (with sibling
+`examples/jwt/type-map.json`).
 
 ## `credentials`
 

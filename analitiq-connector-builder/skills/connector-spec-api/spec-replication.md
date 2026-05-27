@@ -59,5 +59,6 @@ Omit `replication` entirely when:
   (no filter param), there's no incremental sync to declare.
 - The cursor value expression must resolve per-record, not once per
   page — use `ref: "record.X"`, not `ref: "response.body.records[-1].X"`.
-- Don't add a `type-map` field to `cursor_mappings`; canonical types are
-  resolved through the connector's or connection's `type_maps`.
+- Don't add a `type-map` field to `cursor_mappings`; canonical types
+  are resolved through the standalone `type-map.json` file shipped
+  alongside the connector.

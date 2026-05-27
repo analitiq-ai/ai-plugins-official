@@ -3,6 +3,100 @@
 ## [unreleased]
 
 ### Changed
+- **Validator surface hardening.** Several `--semantic-only` silent-pass
+  cases now emit structured findings:
+  - New `endpoint-annotations` validator id surfaces malformed
+    `(native_type, arrow_type)` pairs when an api-endpoint file is
+    validated directly (was only checked via the connector path).
+  - `expression-resolver` now rejects nodes with non-string `ref` /
+    `template` / `function` values and multi-keyed value-expression
+    nodes (e.g. both `ref` and `function` present).
+  - `phase-resolvability` emits warnings when a `connection_contract.
+    inputs[*]` declaration has unknown `storage` or unknown `phase`,
+    or when `inputs` / `post_auth_outputs` / `transports` is
+    present-but-non-object.
+  - `dsn-binding` flags missing `dsn.kind`, unknown `dsn.kind`,
+    non-dict `bindings`, non-string `template`, and non-string
+    `transport_ref`.
+  - `tls-consistency` flags non-dict `ssl_mode` and non-list
+    `ssl_mode.enum`.
+  - `type-map-rule` flags non-string `canonical`, non-string `native`,
+    unknown rule keys, and rules missing required keys.
+  - New top-level warnings for unrecognized document shapes (e.g.
+    a DB endpoint validated against `--semantic-only`, scalar /
+    list-of-non-dict roots, empty arrays, legacy type-map shapes).
+  - Annotation walkers now recurse through every
+    `JsonSchemaPropertyNode` keyword (`prefixItems`,
+    `additionalProperties`, `patternProperties`, `$defs`,
+    `definitions`, `dependentSchemas`, `not`, `if`/`then`/`else`,
+    `contains`, `propertyNames`, `unevaluatedItems`,
+    `unevaluatedProperties`) instead of only `properties` / `items` /
+    `oneOf|anyOf|allOf` — tuple-typed responses and reusable sub-schemas
+    are now visible to coverage and asymmetric-pair analysis.
+  - `finding()` now uses `raise ValueError` (not `assert`) so validator
+    id and severity invariants survive `python -O`. Per-validator
+    crash handler in `run_semantic_validators` tags crashes with the
+    failing `vid` so orchestrators route correctly.
+  - The `Diagnostics.validator` enum (`io-contracts.md`) gained
+    `endpoint-annotations`.
+
+- **Type maps now standalone files.** Aligned the plugin with the
+  published `https://schemas.analitiq.ai/type-map/latest.json` contract:
+  - Connector JSON no longer carries an embedded `type_maps` block; the
+    connector schema rejects unknown fields at the top level.
+  - Authors emit a sibling `{connector_id}/definition/type-map.json` — a
+    top-level array of `{match, native, canonical}` rules (renamed
+    from `method` → `match`; dropped the `native_to_arrow.rules`
+    wrapper). Required and non-empty for both API and DB.
+  - Regex rules may template the canonical with `${name}` substitutions
+    backed by ECMA-262 `(?<name>…)` named capture groups in `native`
+    (e.g. `Decimal128(${precision}, ${scale})`). The validator
+    translates to Python's `(?P<…>)` form internally.
+  - Schemaless natives (`jsonb`, `VARIANT`, `OBJECT`, `ARRAY`, MySQL
+    `json`, MongoDB documents) map to `"Json"`. `Object` / `List` are
+    endpoint-only markers (carry sibling `properties` / `items`) and
+    are accepted as narrowings of a `Json`-resolved rule in API
+    coverage.
+  - `scripts/validate_connector.py` rewritten: drops the
+    connector-body `type_maps` path; loads sibling `type-map.json`;
+    walks API endpoints for `(native_type, arrow_type)` pairs and
+    asserts each `native_type` resolves to the field's declared
+    `arrow_type` (rendering templated canonicals before comparison);
+    new `type-map-rule` validator enforces `exact`-no-template,
+    `regex`-named-capture, and duplicate-rule rules. New schema URL
+    `https://schemas.analitiq.ai/type-map/latest.json` added to the
+    validator agent and orchestrator phase 5.
+  - All 7 endpoint fixtures (including the new `api_endpoints_arrow_mismatch`)
+    and the 11 spec examples (5 DB — postgresql, postgresql-adbc,
+    mysql, snowflake, mongodb — plus 6 API) migrated into per-example
+    subdirectories, each with a sibling `type-map.json`. The API
+    examples gained a minimal `endpoints/` directory so the strict
+    per-kind contract holds.
+- **ADBC transport added.** `TransportTypeMapper` now recognizes `adbc`
+  as the preferred `transport_type` for databases in the engine's ADBC
+  driver enum (closed: `postgresql`, `snowflake`, `bigquery`). ADBC
+  transports carry required `driver` (the enum identifier) plus the
+  shared `dsn` url-template shape and/or `db_kwargs` (at least one
+  required). `db_kwargs` values may be value expressions; TLS for ADBC
+  is expressed via `db_kwargs` entries (e.g. `adbc.postgresql.sslmode`)
+  — the generic `tls` block is SQLAlchemy-only. `db-connector-creator`
+  step 2, `connector-spec-db` SKILL, and `spec-dsn-bindings.md`
+  updated. New `examples/postgresql-adbc/` reference example shipped
+  alongside the existing `examples/postgresql/` (sqlalchemy) variant.
+- **Plugin now authors `connector_id`.** Per the published connector
+  contract, `connector_id` is an optional author-supplied identifier
+  (UUID, slug, or any non-empty string); when omitted, the registry
+  assigns one. This plugin always emits it so the directory name and
+  the identifier are the same value, and there's no rewrite layer
+  between the local `{connector_id}/` output and the contract path
+  `connectors/{connector_id}/definition/`. The `alias` field is gone
+  entirely — the slug now lives only in `connector_id`. Reserved-field
+  rules narrowed to `created_at` / `updated_at` only. Drift table adds
+  four new categories: `type-map-rule-added` (minor),
+  `type-map-rule-reordered` (patch — only when the reorder doesn't
+  change first-match resolution), `type-map-rule-removed` (major), and
+  `type-map-canonical-changed` (major — an existing `native` now
+  resolves to a different canonical).
 - API endpoint authoring realigned with the published
   `api-endpoint/latest.json` schema (engine PR #51):
   - Endpoint documents now carry `endpoint_id` (pattern
@@ -121,7 +215,7 @@
   examples (PostgreSQL, MySQL, Snowflake, MongoDB) — all validate clean
   against the published schema.
 - Pre-flight collision check in the orchestrator (phase 0): if a
-  directory matching `{alias}/` already exists, the build halts and
+  directory matching `{connector_id}/` already exists, the build halts and
   asks the user to remove it manually. Acts as a stopgap against
   overwriting legacy-shape connectors until a real migration tool is
   built.
@@ -151,7 +245,7 @@
   portability.
 - Endpoint output path documented as `endpoints/{endpoint-alias}.json`
   consistently across SKILL.md, README.md, and CLAUDE.md.
-- Standardized on `{alias}/` as the connector output directory name
+- Standardized on `{connector_id}/` as the connector output directory name
   (was inconsistently `{slug}/` in `references/pipeline.md`).
 - Narrowed the `auth-shape` validator coverage claim to OAuth2 +
   `none`; other auth types are validated by JSON Schema only.
@@ -209,7 +303,7 @@
 
 ### Type-map coverage — API connector endpoint enforcement
 - For API connectors with sibling endpoint files at
-  `{alias}/definition/endpoints/`, the `type-map-coverage` validator
+  `{connector_id}/definition/endpoints/`, the `type-map-coverage` validator
   now walks every endpoint document, collects `(type, format)` pairs
   from `response.schema` (recursively) and from `params[*]`, and
   emits an **error** for every uncovered native.

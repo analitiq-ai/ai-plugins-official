@@ -16,6 +16,7 @@ files.
   - `https://schemas.analitiq.ai/connector/latest.json`
   - `https://schemas.analitiq.ai/api-endpoint/latest.json`
   - `https://schemas.analitiq.ai/database-endpoint/latest.json`
+  - `https://schemas.analitiq.ai/type-map/latest.json`
   - `https://schemas.analitiq.ai/connection/latest.json` (other plugin uses this)
 - `document_path` — absolute path to the draft JSON document.
 
@@ -43,14 +44,16 @@ the document type:
 
 | Validator id | Rule |
 |---|---|
-| `reserved-field` | No `connector_id` / `created_at` / `updated_at` in the authored doc. |
-| `expression-resolver` | Every `ref` / `template` / `function` parses; refs target known scopes; functions are in the registered catalog. |
+| `reserved-field` | No `created_at` / `updated_at` in the authored doc. |
+| `expression-resolver` | Every `ref` / `template` / `function` parses; refs target known scopes; functions are in the registered catalog. Nodes shaped like `{ref\|template\|function: <non-string>}` are flagged (the kind key must point at a string — `literal` is exempt, its payload is opaque to the validator). Multi-keyed nodes (more than one of `ref`/`template`/`literal`/`function` present together) are rejected as ambiguous. |
 | `phase-resolvability` | Refs to `connection.discovered.*` are produced by a declared post-auth output. |
 | `transport-ref` | Every `transport_ref` resolves to a key in `transports`; `default_transport` exists in `transports`. |
 | `dsn-binding` | Every `{placeholder}` has a binding; every binding is referenced; `encoding` is in the closed enum. |
 | `auth-shape` | OAuth2 variants (`oauth2_authorization_code` requires `authorize`+`token_exchange`; `oauth2_client_credentials` requires `token_exchange` and forbids `authorize`) and `none` (forbids all auth ops). Other auth types are validated by JSON Schema only. |
 | `tls-consistency` | If `ssl_mode` enum allows `verify-ca` / `verify-full`, then `ssl_ca_certificate` is declared in `connection_contract.inputs`. |
-| `type-map-coverage` | Database connectors should declare a `type_maps` block. |
+| `type-map-coverage` | Connector docs require a sibling `type-map.json` (non-empty array). For API connectors, every endpoint `(native_type, arrow_type)` pair must resolve through that file with rendered canonical equal to the endpoint's `arrow_type` (`Object` / `List` are accepted narrowings of `Json`). |
+| `type-map-rule` | For `type-map.json` documents: `exact` rules must not use `${…}` substitution; `regex` rules' `native` must always compile (even when `canonical` is not templated); `regex` rules must use ECMA-262 named-group syntax `(?<name>…)` — non-ECMA `(?P[<=>]…)` extensions (Python stdlib `(?P<…>)` / `(?P=…)`, PyPI `regex`-library's `(?P>…)`) are rejected; `regex` rules referencing `${name}` must define a matching `(?<name>…)` capture in `native`; duplicate `(match, native)` pairs warn. Also runs against the sibling `type-map.json` when validating a connector. |
+| `endpoint-annotations` | For api-endpoint documents validated directly (under `api-endpoint/latest.json`): every typed field's `(native_type, arrow_type)` pair must be both-present and both-string; sub-trees that aren't JSON objects emit a `non_dict_subtree` warning. (When walking endpoints from a connector, the same checks fire via `type-map-coverage`.) |
 
 ## Output
 

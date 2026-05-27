@@ -9,7 +9,7 @@ and `connectors/connector-schema-parameterization.md`.
 |---|---|---|
 | `$schema` | Yes (for standalone files) | Fixed const: `https://schemas.analitiq.ai/connector/latest.json`. The validator fetches from the same host. |
 | `kind` | Yes | One of `api`, `database`, `file`, `s3`, `stdout`. |
-| `alias` | Yes | Stable connector slug. Lowercase, `[a-z0-9_-]`. Immutable in the registry. |
+| `connector_id` | Yes (plugin-authored) | Stable connector slug, lowercase `[a-z0-9_-]+`. Same value as the on-disk `{connector_id}/` directory name. Per the contract `connector_id` is *optional* on submission — the registry assigns one when omitted — but this plugin always emits it so the directory name and identifier stay in sync. |
 | `display_name` | No | User-facing label. |
 | `description` | No | Human-readable summary. |
 | `tags` | No | Search/grouping labels. |
@@ -21,15 +21,29 @@ and `connectors/connector-schema-parameterization.md`.
 | `auth` | Yes | Auth workflow definition. |
 | `connection_contract` | Yes | Connection-contract shape. |
 | `resource_discovery` | No | Resource discovery declarations. |
-| `type_maps` | No (db: should declare) | Connector-packaged type maps. |
-| `x-*` | No | Extension metadata. |
 
-## Server-managed fields (NEVER author)
+Note: the connector's type map is **not** a top-level field. It ships
+as a separate sibling artifact at
+`{connector_id}/definition/type-map.json` and validates against
+`https://schemas.analitiq.ai/type-map/latest.json`. See
+`connector-spec-db/spec-type-maps.md` for authoring.
 
-These fields are stamped by the registry on insert/update and must
-not appear in authored documents:
+## Authoring `connector_id`
 
-- `connector_id`
+The plugin authors `connector_id` on every connector document. The same
+value names the on-disk directory (`{connector_id}/`), so the contract
+path `connectors/{connector_id}/definition/connector.json` and the
+plugin's output path align without a rewrite layer.
+
+The schema permits `connector_id` to be any non-empty string (UUID or
+slug); this plugin uses the slug convention `[a-z0-9_-]+` to keep
+directory names portable.
+
+## Registry-stamped fields
+
+The following fields are stamped by the registry on insert/update and
+must not appear in authored documents:
+
 - `created_at`
 - `updated_at`
 
@@ -44,9 +58,9 @@ the connector release table:
 
 | Bump | Meaning | Examples |
 |---|---|---|
-| Patch | No connection drift. | Bug fixes, doc fixes, transport implementation tuning. |
-| Minor | Additive, non-drifting. | Optional input added, optional discovery output added, optional endpoint added, type-map entries added. |
-| Major | Possible connection drift. | Input removed, renamed, type-changed, enum narrowed, storage moved, non-optional input added, auth-shape change, discovery-shape change. |
+| Patch | No connection drift. | Bug fixes, doc fixes, transport implementation tuning, type-map rule reordered (when the reorder does not change first-match resolution for any existing native). |
+| Minor | Additive, non-drifting. | Optional input added, optional discovery output added, optional endpoint added, type-map rule added. |
+| Major | Possible connection drift. | Input removed, renamed, type-changed, enum narrowed, storage moved, non-optional input added, auth-shape change, discovery-shape change, type-map rule removed, `canonical` changed for an existing `native`. |
 
 The drift-classifier sub-agent computes this bump from a diff between
 the previous release and the new draft.

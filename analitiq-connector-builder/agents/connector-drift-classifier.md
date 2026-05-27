@@ -11,12 +11,16 @@ object.
 
 ## Inputs
 
-- `previous_release_path` — absolute path to the prior released connector JSON.
-- `current_path` — absolute path to the assembled draft.
+- `previous_release_path` — absolute path to the prior released
+  connector directory or `connector.json`. The classifier also reads
+  the sibling `type-map.json` when present.
+- `current_path` — absolute path to the assembled draft (connector JSON
+  or its directory). The classifier also reads the sibling draft
+  `type-map.json` when present.
 
 ## Process
 
-1. Read both documents.
+1. Read both documents AND their sibling `type-map.json` files.
 2. Compute the structural diff. Use `diff` or `jq` via Bash, or compare in
    your reasoning against the rules below.
 3. For each change, classify it under the categories in the `DriftVerdict`
@@ -33,10 +37,13 @@ object.
 
 - **major**: input-removed, input-renamed, input-type-changed,
   input-enum-narrowed, storage-changed, non-optional-input-added,
-  auth-shape-changed, discovery-shape-changed.
+  auth-shape-changed, discovery-shape-changed, type-map-rule-removed,
+  type-map-canonical-changed (an existing `native` now resolves to a
+  different canonical — invalidates downstream consumers).
 - **minor**: optional-input-added, optional-output-added,
-  optional-endpoint-added, type-map-added.
-- **patch**: bug-fix, doc-fix, tuning.
+  optional-endpoint-added, type-map-rule-added.
+- **patch**: bug-fix, doc-fix, tuning, type-map-rule-reordered (when the
+  reorder doesn't change first-match resolution for any existing native).
 
 ## Hard rules
 

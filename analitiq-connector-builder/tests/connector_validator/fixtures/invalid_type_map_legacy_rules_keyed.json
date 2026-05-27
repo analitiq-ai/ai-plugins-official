@@ -1,0 +1,5 @@
+{
+  "rules": [
+    { "match": "exact", "native": "BIGINT", "canonical": "Int64" }
+  ]
+}

@@ -145,7 +145,9 @@ Pin every I/O between phases and sub-agents as a JSON Schema fragment.
               "dsn-binding",
               "auth-shape",
               "tls-consistency",
-              "type-map-coverage"
+              "type-map-coverage",
+              "type-map-rule",
+              "endpoint-annotations"
             ]
           },
           "severity": { "type": "string", "enum": ["error", "warning"] },
@@ -185,7 +187,9 @@ Pin every I/O between phases and sub-agents as a JSON Schema fragment.
               "non-optional-input-added", "auth-shape-changed",
               "discovery-shape-changed", "optional-input-added",
               "optional-output-added", "optional-endpoint-added",
-              "type-map-added", "bug-fix", "doc-fix", "tuning"
+              "type-map-rule-added", "type-map-rule-removed",
+              "type-map-rule-reordered", "type-map-canonical-changed",
+              "bug-fix", "doc-fix", "tuning"
             ]
           },
           "note": { "type": "string" }
@@ -204,12 +208,32 @@ Returned by `api-connector-creator` and `db-connector-creator`.
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["connector"],
+  "required": ["connector", "type_map"],
   "properties": {
     "connector": {
       "anyOf": [
         { "type": "object", "description": "Assembled connector body, ready for validation against https://schemas.analitiq.ai/connector/latest.json." },
         { "type": "null", "description": "Returned by stub agents (e.g. storage-connector-creator) that decline to author." }
+      ]
+    },
+    "type_map": {
+      "anyOf": [
+        {
+          "type": "array",
+          "minItems": 1,
+          "description": "On-disk shape of the standalone type-map.json: a top-level, non-empty array of {match, native, canonical} rule objects. Written by the orchestrator to {connector_id}/definition/type-map.json and validated against https://schemas.analitiq.ai/type-map/latest.json.",
+          "items": {
+            "type": "object",
+            "required": ["match", "native", "canonical"],
+            "additionalProperties": false,
+            "properties": {
+              "match":     { "enum": ["exact", "regex"] },
+              "native":    { "type": "string", "minLength": 1 },
+              "canonical": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        { "type": "null", "description": "Returned by stub agents that decline to author." }
       ]
     },
     "notes": {

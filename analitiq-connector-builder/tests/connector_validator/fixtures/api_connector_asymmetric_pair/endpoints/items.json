@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schemas.analitiq.ai/api-endpoint/latest.json",
+  "endpoint_id": "items",
+  "operations": {
+    "read": {
+      "request": { "method": "GET", "path": "/items" },
+      "params": {
+        "q": { "in": "query", "type": "string", "native_type": "string" }
+      },
+      "response": {
+        "records": { "ref": "response.body" },
+        "schema": {
+          "type": "object",
+          "properties": {
+            "id":     { "type": "string", "native_type": "string" },
+            "name":   { "type": "string", "arrow_type": "Utf8" },
+            "raw":    { "type": "object", "native_type": 42, "arrow_type": ["Object"] }
+          }
+        }
+      }
+    },
+    "write": {
+      "insert": {
+        "request": { "method": "POST", "path": "/items" },
+        "input": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string", "arrow_type": "Utf8" }
+            }
+          }
+        },
+        "params": {
+          "tenant": { "in": "query", "type": "string", "arrow_type": "Utf8" }
+        }
+      }
+    }
+  }
+}

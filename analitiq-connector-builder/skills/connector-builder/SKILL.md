@@ -39,7 +39,7 @@ sub-agents own those skills.
 ## Pipeline (full contract: `references/pipeline.md`)
 
 0. **Pre-flight: collision check** — before any research or authoring,
-   check whether a directory named `{alias}/` already exists in the
+   check whether a directory named `{connector_id}/` already exists in the
    current working directory. If it does, **halt** and ask the user to
    remove or rename it before re-running. Do not read the existing
    directory's contents and do not attempt to migrate or merge — this
@@ -72,6 +72,7 @@ sub-agents own those skills.
    parallel — dispatch them in a single message.
 5. **Validate** — invoke `connector-schema-validator`:
    - Connector → `https://schemas.analitiq.ai/connector/latest.json`.
+   - Type map → `https://schemas.analitiq.ai/type-map/latest.json`.
    - API endpoint → `https://schemas.analitiq.ai/api-endpoint/latest.json`.
    - Database endpoint → `https://schemas.analitiq.ai/database-endpoint/latest.json`.
 
@@ -90,9 +91,10 @@ sub-agents own those skills.
 7. **Write** — write files to disk:
 
    ```
-   {alias}/
+   {connector_id}/
    ├── definition/
    │   ├── connector.json
+   │   ├── type-map.json               # required for both api and db; standalone file
    │   └── endpoints/
    │       └── {endpoint_id}.json      # api connectors only — one file per endpoint; filename = document.endpoint_id
    └── README.md
@@ -109,8 +111,12 @@ Report to the user:
 
 ## Hard rules
 
-- Never set server-managed fields: `connector_id`, `created_at`,
-  `updated_at`. These are stamped by the registry.
+- The plugin authors `connector_id` (the stable connector slug,
+  matching `[a-z0-9_-]+`, same value as the on-disk `{connector_id}/`
+  directory name). The registry-stamped fields `created_at` and
+  `updated_at` are written by the registry on insert/update and must
+  not appear in authored documents — `connector_id` is NOT in that
+  set.
 - Do not author the connector body yourself. Always dispatch to the
   matching creator sub-agent.
 - Do not load kind-specific spec skills (`connector-spec-api` /
@@ -124,6 +130,6 @@ Report to the user:
   same host.
 - Storage kinds (`file`, `s3`, `stdout`) currently produce a structured
   refusal. If the user asks for one, surface the refusal note and stop.
-- Never overwrite an existing `{alias}/` directory. The pre-flight
+- Never overwrite an existing `{connector_id}/` directory. The pre-flight
   check (phase 0) halts the run and asks the user to remove the
   directory manually. Never delete files on the user's behalf.

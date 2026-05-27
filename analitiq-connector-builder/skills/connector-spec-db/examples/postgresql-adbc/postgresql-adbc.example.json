@@ -1,0 +1,143 @@
+{
+  "$schema": "https://schemas.analitiq.ai/connector/latest.json",
+  "kind": "database",
+  "connector_id": "postgresql-adbc-example",
+  "display_name": "PostgreSQL (ADBC) Example",
+  "description": "Reference connector for PostgreSQL using the ADBC driver with TLS support.",
+  "tags": [
+    "example",
+    "database",
+    "postgresql",
+    "adbc"
+  ],
+  "version": "1.0.0",
+  "default_transport": "database",
+  "transports": {
+    "database": {
+      "transport_type": "adbc",
+      "driver": "postgresql",
+      "dsn": {
+        "kind": "url_template",
+        "template": "postgresql://{username}:{password}@{host}:{port}/{database}",
+        "bindings": {
+          "username": {
+            "value": {
+              "ref": "connection.parameters.username"
+            },
+            "encoding": "url_userinfo"
+          },
+          "password": {
+            "value": {
+              "ref": "secrets.password"
+            },
+            "encoding": "url_userinfo"
+          },
+          "host": {
+            "value": {
+              "ref": "connection.parameters.host"
+            },
+            "encoding": "host"
+          },
+          "port": {
+            "value": {
+              "ref": "connection.parameters.port"
+            },
+            "encoding": "raw"
+          },
+          "database": {
+            "value": {
+              "ref": "connection.parameters.database"
+            },
+            "encoding": "url_path_segment"
+          }
+        }
+      },
+      "db_kwargs": {
+        "adbc.postgresql.client_encoding": "UTF8",
+        "adbc.postgresql.sslmode": { "ref": "connection.parameters.ssl_mode" },
+        "adbc.postgresql.sslrootcert": { "ref": "secrets.ssl_ca_certificate" }
+      }
+    }
+  },
+  "auth": {
+    "type": "db"
+  },
+  "connection_contract": {
+    "inputs": {
+      "host": {
+        "source": "user",
+        "phase": "pre_auth",
+        "storage": "connection.parameters",
+        "type": "string",
+        "required": true
+      },
+      "port": {
+        "source": "user",
+        "phase": "pre_auth",
+        "storage": "connection.parameters",
+        "type": "integer",
+        "required": true,
+        "default": 5432
+      },
+      "database": {
+        "source": "user",
+        "phase": "pre_auth",
+        "storage": "connection.parameters",
+        "type": "string",
+        "required": true
+      },
+      "username": {
+        "source": "user",
+        "phase": "auth",
+        "storage": "connection.parameters",
+        "type": "string",
+        "required": true
+      },
+      "password": {
+        "source": "user",
+        "phase": "auth",
+        "storage": "secrets",
+        "type": "string",
+        "required": true,
+        "secret": true
+      },
+      "ssl_mode": {
+        "source": "user",
+        "phase": "pre_auth",
+        "storage": "connection.parameters",
+        "type": "string",
+        "required": true,
+        "enum": [
+          "none",
+          "require",
+          "verify-ca",
+          "verify-full"
+        ],
+        "default": "require"
+      },
+      "ssl_ca_certificate": {
+        "source": "user",
+        "phase": "pre_auth",
+        "storage": "secrets",
+        "type": "string",
+        "required": false,
+        "secret": true
+      }
+    }
+  },
+  "resource_discovery": {
+    "strategy": "information_schema",
+    "transport_ref": "database",
+    "implementation": {
+      "type": "builtin"
+    },
+    "produces": [
+      "connection.endpoints",
+      "connection.type_map"
+    ],
+    "triggers": {
+      "list_resources": "on_activation",
+      "describe_resource": "on_resource_selected"
+    }
+  }
+}

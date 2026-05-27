@@ -1,0 +1,17 @@
+[
+  {
+    "match": "exact",
+    "native": "string",
+    "canonical": "Utf8"
+  },
+  {
+    "match": "exact",
+    "native": "integer",
+    "canonical": "Int64"
+  },
+  {
+    "match": "exact",
+    "native": "boolean",
+    "canonical": "Boolean"
+  }
+]

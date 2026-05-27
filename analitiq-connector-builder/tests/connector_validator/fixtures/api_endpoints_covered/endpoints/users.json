@@ -14,10 +14,10 @@
               "items": {
                 "type": "object",
                 "properties": {
-                  "id":         { "type": "string", "format": "uuid" },
-                  "name":       { "type": "string" },
-                  "is_active":  { "type": "boolean" },
-                  "created_at": { "type": "string", "format": "date-time" }
+                  "id":         { "type": "string", "native_type": "uuid",      "arrow_type": "Utf8" },
+                  "name":       { "type": "string", "native_type": "string",    "arrow_type": "Utf8" },
+                  "is_active":  { "type": "boolean","native_type": "boolean",   "arrow_type": "Boolean" },
+                  "created_at": { "type": "string", "native_type": "date-time", "arrow_type": "Timestamp(MICROSECOND, UTC)" }
                 }
               }
             }

@@ -9,15 +9,18 @@
           "schema": {
             "type": "object",
             "properties": {
-              "id":         { "type": "string", "format": "uuid" },
-              "name":       { "type": "string" },
-              "created_at": { "type": "string", "format": "date-time" }
+              "id":         { "type": "string", "native_type": "uuid",      "arrow_type": "Utf8" },
+              "name":       { "type": "string", "native_type": "string",    "arrow_type": "Utf8" },
+              "created_at": { "type": "string", "native_type": "date-time", "arrow_type": "Timestamp(MICROSECOND, UTC)" }
             }
           }
         },
         "batching": { "max_records": 100 },
         "params": {
-          "tenant_id": { "in": "query", "type": "string", "format": "uuid", "required": true }
+          "tenant_id": {
+            "in": "query", "type": "string", "format": "uuid", "required": true,
+            "native_type": "uuid", "arrow_type": "Utf8"
+          }
         }
       }
     }

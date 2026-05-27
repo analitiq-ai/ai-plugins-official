@@ -1,7 +1,7 @@
 {
   "$schema": "https://schemas.analitiq.ai/connector/latest.json",
   "kind": "database",
-  "alias": "fixture-dsn-bad",
+  "connector_id": "fixture-dsn-bad",
   "version": "1.0.0",
   "default_transport": "database",
   "transports": {
@@ -12,17 +12,41 @@
         "kind": "url_template",
         "template": "postgresql+asyncpg://{username}:{password}@{host}:{port}/{database}",
         "bindings": {
-          "username": { "value": { "ref": "connection.parameters.username" }, "encoding": "url_userinfo" },
-          "host": { "value": { "ref": "connection.parameters.host" }, "encoding": "host" }
+          "username": {
+            "value": {
+              "ref": "connection.parameters.username"
+            },
+            "encoding": "url_userinfo"
+          },
+          "host": {
+            "value": {
+              "ref": "connection.parameters.host"
+            },
+            "encoding": "host"
+          }
         }
       }
     }
   },
-  "auth": { "type": "db" },
+  "auth": {
+    "type": "db"
+  },
   "connection_contract": {
     "inputs": {
-      "username": { "source": "user", "phase": "pre_auth", "storage": "connection.parameters", "type": "string", "required": true },
-      "host": { "source": "user", "phase": "pre_auth", "storage": "connection.parameters", "type": "string", "required": true }
+      "username": {
+        "source": "user",
+        "phase": "pre_auth",
+        "storage": "connection.parameters",
+        "type": "string",
+        "required": true
+      },
+      "host": {
+        "source": "user",
+        "phase": "pre_auth",
+        "storage": "connection.parameters",
+        "type": "string",
+        "required": true
+      }
     }
   }
 }

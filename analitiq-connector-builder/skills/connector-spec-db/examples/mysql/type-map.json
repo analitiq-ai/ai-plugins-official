@@ -1,0 +1,22 @@
+[
+  { "match": "exact", "native": "tinyint",     "canonical": "Int8" },
+  { "match": "exact", "native": "tinyint(1)",  "canonical": "Boolean" },
+  { "match": "exact", "native": "smallint",    "canonical": "Int16" },
+  { "match": "exact", "native": "mediumint",   "canonical": "Int32" },
+  { "match": "exact", "native": "int",         "canonical": "Int32" },
+  { "match": "exact", "native": "bigint",      "canonical": "Int64" },
+  { "match": "exact", "native": "float",       "canonical": "Float32" },
+  { "match": "exact", "native": "double",      "canonical": "Float64" },
+  { "match": "exact", "native": "boolean",     "canonical": "Boolean" },
+  { "match": "regex", "native": "^varchar\\([0-9]+\\)$", "canonical": "Utf8" },
+  { "match": "regex", "native": "^char\\([0-9]+\\)$",    "canonical": "Utf8" },
+  { "match": "exact", "native": "text",        "canonical": "Utf8" },
+  { "match": "exact", "native": "json",        "canonical": "Json" },
+  { "match": "exact", "native": "date",        "canonical": "Date32" },
+  { "match": "regex", "native": "^time(\\([0-9]+\\))?$",      "canonical": "Time64(MICROSECOND)" },
+  { "match": "regex", "native": "^datetime(\\([0-9]+\\))?$",  "canonical": "Timestamp(MICROSECOND)" },
+  { "match": "regex", "native": "^timestamp(\\([0-9]+\\))?$", "canonical": "Timestamp(MICROSECOND, UTC)" },
+  { "match": "regex", "native": "^decimal\\((?<precision>[0-9]+),\\s*(?<scale>[0-9]+)\\)$", "canonical": "Decimal128(${precision}, ${scale})" },
+  { "match": "exact", "native": "binary",      "canonical": "Binary" },
+  { "match": "exact", "native": "blob",        "canonical": "Binary" }
+]

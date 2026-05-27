@@ -1,7 +1,19 @@
 # DSN URL templates + bindings
 
 The full authoring contract for `transports.<name>.dsn` when
-`dsn.kind == "url_template"`.
+`dsn.kind == "url_template"`. Applies identically to `sqlalchemy` and
+`adbc` transport types — the DSN shape is shared. The transport-specific
+fields are:
+
+| `transport_type` | Identity field | Extras |
+|---|---|---|
+| `sqlalchemy` | `driver` (e.g. `"postgresql+asyncpg"`) | optional `tls` block (canonical `ssl_mode` + `ssl_ca_certificate` refs) |
+| `adbc` | `driver` — closed enum: `postgresql`, `snowflake`, `bigquery` | `db_kwargs` (object; values may be value expressions). **AdbcTransport requires at least one of `dsn` / `db_kwargs`.** TLS lives inside `db_kwargs` (e.g. `adbc.postgresql.sslmode`); no `tls` block. |
+
+For databases in the ADBC driver enum, prefer `adbc` — it exchanges
+Arrow columns natively and avoids the SQLAlchemy row-to-Arrow conversion.
+ADBC drivers that accept all connection state via `db_kwargs` (e.g.
+Snowflake) may omit `dsn` entirely.
 
 ## Shape
 
