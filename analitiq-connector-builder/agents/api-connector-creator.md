@@ -31,8 +31,10 @@ The `connector-spec-api` skill is preloaded. Beyond that, read:
 ## Authoring order
 
 1. **Top-level metadata** — `$schema` (`https://schemas.analitiq.ai/connector/latest.json`),
-   `kind: "api"`, `alias`, `connector_id` (set equal to `alias`),
-   `display_name`, `description`, `tags`, `version` (start at `1.0.0`).
+   `kind: "api"`, `connector_id` (the stable connector slug, matching
+   `[a-z0-9_-]+`; this also names the on-disk `{connector_id}/`
+   directory), `display_name`, `description`, `tags`, `version` (start
+   at `1.0.0`).
 2. **Transports** — populate `transports` map, `default_transport`, and
    `transport_defaults`. Use `transport_type: "http"`. For multi-origin
    providers (e.g. separate `auth` / `discovery` / `api` origins), define
@@ -57,7 +59,7 @@ The `connector-spec-api` skill is preloaded. Beyond that, read:
    `native_type` resolves through this array with a rendered canonical
    equal to the endpoint's declared `arrow_type` (`Object` / `List` are
    accepted narrowings of `Json`). The orchestrator writes this array
-   to `{alias}/definition/type-map.json` and validates it against
+   to `{connector_id}/definition/type-map.json` and validates it against
    `https://schemas.analitiq.ai/type-map/latest.json`.
 
 ## Output
@@ -69,7 +71,7 @@ to disk.
 ## Hard rules
 
 - Never author `created_at` / `updated_at` — those are registry-stamped.
-  `connector_id` is author-supplied (set equal to `alias`).
+  `connector_id` is author-supplied and matches the on-disk directory name.
 - Never use `${...}` interpolation outside a `template` value expression.
 - Never pre-compute base64 / SHA / signature values — use `function`
   expressions.

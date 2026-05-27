@@ -220,7 +220,7 @@ Returned by `api-connector-creator` and `db-connector-creator`.
         {
           "type": "array",
           "minItems": 1,
-          "description": "On-disk shape of the standalone type-map.json: a top-level, non-empty array of {match, native, canonical} rule objects. Written by the orchestrator to {alias}/definition/type-map.json and validated against https://schemas.analitiq.ai/type-map/latest.json.",
+          "description": "On-disk shape of the standalone type-map.json: a top-level, non-empty array of {match, native, canonical} rule objects. Written by the orchestrator to {connector_id}/definition/type-map.json and validated against https://schemas.analitiq.ai/type-map/latest.json.",
           "items": {
             "type": "object",
             "required": ["match", "native", "canonical"],

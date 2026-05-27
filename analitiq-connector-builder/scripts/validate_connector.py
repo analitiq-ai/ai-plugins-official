@@ -872,7 +872,9 @@ def check_phase_resolvability(doc: dict) -> list[dict]:
 _PLACEHOLDER_RE = re.compile(r"\$\{([^}]+)\}")
 _NARROWING_ARROW_TYPES = {"Object", "List"}
 _ECMA_NAMED_GROUP = re.compile(r"\(\?<([A-Za-z_][A-Za-z0-9_]*)>")
-_PYTHON_NAMED_GROUP = re.compile(r"\(\?P<[A-Za-z_][A-Za-z0-9_]*>")
+# Catches all Python-only group syntax: declaration (?P<name>...), backreference
+# (?P=name), and recursive call (?P>name). ECMA-262 uses none of these.
+_PYTHON_REGEX_FEATURE = re.compile(r"\(\?P[<=>]")
 
 
 def _to_python_regex(pattern: str) -> str:
@@ -912,10 +914,34 @@ def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dic
     invoked without a filesystem-anchored connector).
     """
     findings: list[dict] = []
-    if not isinstance(doc, dict) or doc_path is None:
+    if not isinstance(doc, dict):
+        return findings
+    if doc_path is None:
+        findings.append(
+            finding(
+                "type-map-coverage",
+                "warning",
+                "/",
+                "type-map coverage skipped: validator was invoked without a filesystem-anchored document path; sibling type-map.json cannot be located.",
+                rule_doc="shared/type-maps.md",
+            )
+        )
         return findings
     kind = doc.get("kind")
+    if kind is None:
+        findings.append(
+            finding(
+                "type-map-coverage",
+                "warning",
+                "/kind",
+                "type-map coverage skipped: connector has no 'kind' discriminator (Layer 1 should have caught this).",
+                rule_doc="shared/type-maps.md",
+            )
+        )
+        return findings
     if kind not in ("api", "database"):
+        # storage kinds (file/s3/stdout) are accepted by the schema but not
+        # yet executed by the engine; no type-map contract is defined for them.
         return findings
 
     tm_path = doc_path.parent / "type-map.json"
@@ -967,9 +993,27 @@ def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dic
 
     endpoint_dir = doc_path.parent / "endpoints"
     if not endpoint_dir.is_dir():
+        findings.append(
+            finding(
+                "type-map-coverage",
+                "error",
+                "/",
+                f"api connector requires a sibling 'endpoints/' directory at {endpoint_dir.name}/; directory is missing.",
+                rule_doc="shared/type-maps.md",
+            )
+        )
         return findings
     endpoint_files = sorted(endpoint_dir.glob("*.json"))
     if not endpoint_files:
+        findings.append(
+            finding(
+                "type-map-coverage",
+                "error",
+                "/",
+                "api connector's 'endpoints/' directory contains no *.json files; at least one endpoint is required.",
+                rule_doc="shared/type-maps.md",
+            )
+        )
         return findings
 
     for ep_path in endpoint_files:
@@ -979,13 +1023,23 @@ def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dic
             findings.append(
                 finding(
                     "type-map-coverage",
-                    "warning",
+                    "error",
                     "/",
-                    f"endpoint file '{ep_path.name}' could not be read or parsed ({exc}); skipped.",
+                    f"endpoint file '{ep_path.name}' could not be read or parsed ({exc}); coverage analysis cannot proceed.",
                     rule_doc="shared/type-maps.md",
                 )
             )
             continue
+        for asymmetric_pointer in _collect_asymmetric_pairs(ep_doc):
+            findings.append(
+                finding(
+                    "type-map-coverage",
+                    "error",
+                    "/",
+                    f"endpoint '{ep_path.name}' field at {asymmetric_pointer} declares exactly one of native_type / arrow_type; both are required per the api-endpoint schema.",
+                    rule_doc="shared/type-maps.md",
+                )
+            )
         for native, arrow, pointer in _collect_endpoint_native_arrow_pairs(ep_doc):
             rendered = _render_canonical(native, tm_doc)
             site = f"{ep_path.name}{pointer}"
@@ -1050,19 +1104,25 @@ def check_type_map_rules(doc: Any) -> list[dict]:
         match = rule.get("match")
         native = rule.get("native")
         canonical = rule.get("canonical")
-        key = (match, native)
-        if key in seen:
-            findings.append(
-                finding(
-                    "type-map-rule",
-                    "warning",
-                    f"/{i}",
-                    f"duplicate rule for (match={match!r}, native={native!r}); first-match-wins makes later duplicates unreachable.",
-                    rule_doc="shared/type-maps.md",
+        # Layer 1 should already reject non-string match/native, but
+        # `--semantic-only` bypasses Layer 1, so the dedupe set must
+        # tolerate unhashable rule values without crashing the run.
+        try:
+            key: tuple[Any, Any] = (match, native)
+            if key in seen:
+                findings.append(
+                    finding(
+                        "type-map-rule",
+                        "warning",
+                        f"/{i}",
+                        f"duplicate rule for (match={match!r}, native={native!r}); first-match-wins makes later duplicates unreachable.",
+                        rule_doc="shared/type-maps.md",
+                    )
                 )
-            )
-        else:
-            seen.add(key)
+            else:
+                seen.add(key)
+        except TypeError:
+            pass
         if not isinstance(canonical, str):
             continue
         placeholders = _PLACEHOLDER_RE.findall(canonical)
@@ -1079,14 +1139,16 @@ def check_type_map_rules(doc: Any) -> list[dict]:
             continue
         if match != "regex" or not isinstance(native, str):
             continue
-        # Contract: ECMA-262 syntax only. Python-style (?P<name>...) is a violation.
-        if _PYTHON_NAMED_GROUP.search(native):
+        # Contract: ECMA-262 syntax only. Python-only `(?P<name>…)` declarations,
+        # `(?P=name)` backreferences, and `(?P>name)` recursive calls are all
+        # contract violations — none have ECMA-262 equivalents.
+        if _PYTHON_REGEX_FEATURE.search(native):
             findings.append(
                 finding(
                     "type-map-rule",
                     "error",
                     f"/{i}/native",
-                    "native uses Python-style '(?P<name>…)' named groups; the contract requires ECMA-262 '(?<name>…)'.",
+                    "native uses Python-only '(?P…)' regex syntax; the contract requires ECMA-262 (use '(?<name>…)' for named groups and '\\\\k<name>' style is unsupported).",
                     rule_doc="shared/type-maps.md",
                 )
             )
@@ -1125,8 +1187,13 @@ def _render_canonical(native: str, rules: list[Any]) -> str | None:
     """Apply first-match-wins; return the rendered canonical or None.
 
     For regex rules with named capture groups, substitutes `${name}`
-    placeholders in `canonical` with the captured value before
-    returning. Returns None when no rule matches.
+    placeholders in `canonical` with the captured value. Returns None
+    when no rule matches.
+
+    Broken regex rules (re.error from `_to_python_regex` output) are
+    skipped silently here — `check_type_map_rules` runs first via the
+    cross-validator wiring in `check_type_map_coverage` and surfaces
+    those as `type-map-rule` errors, so they don't slip through unseen.
     """
     for rule in rules:
         if not isinstance(rule, dict):
@@ -1147,10 +1214,21 @@ def _render_canonical(native: str, rules: list[Any]) -> str | None:
             if not m:
                 continue
             groups = m.groupdict()
-            return _PLACEHOLDER_RE.sub(
-                lambda g: groups.get(g.group(1), g.group(0)) or g.group(0),
-                canonical,
-            )
+
+            def _sub(placeholder: re.Match) -> str:
+                name = placeholder.group(1)
+                if name not in groups:
+                    # Placeholder name absent from native captures —
+                    # leave the literal `${name}` so the downstream
+                    # mismatch surfaces visibly.
+                    return placeholder.group(0)
+                value = groups[name]
+                # An unmatched alternation captures None; render as empty
+                # string rather than the literal placeholder so an empty
+                # match in canonical position is unambiguous.
+                return value if value is not None else ""
+
+            return _PLACEHOLDER_RE.sub(_sub, canonical)
     return None
 
 
@@ -1160,7 +1238,9 @@ def _collect_endpoint_native_arrow_pairs(endpoint_doc: dict) -> list[tuple[str, 
     Both `native_type` and `arrow_type` are required-paired annotations on
     typed field schemas per the published api-endpoint contract; the
     walker recurses into JSON-Schema-shaped sub-trees (properties / items
-    / *Of) and into operation params.
+    / *Of) and into operation params. Fields with only one of the pair
+    are NOT collected here — `_collect_asymmetric_pairs` surfaces those
+    as separate findings.
     """
     out: list[tuple[str, str, str]] = []
     operations = endpoint_doc.get("operations") or {}
@@ -1173,6 +1253,9 @@ def _collect_endpoint_native_arrow_pairs(endpoint_doc: dict) -> list[tuple[str, 
 
     write = operations.get("write")
     if isinstance(write, dict):
+        # Layer 1 (api-endpoint/latest.json) rejects modes outside
+        # {"insert", "upsert"}, but iterate defensively so this walker
+        # stays correct if the schema later widens the enum.
         for mode, mode_op in write.items():
             if not isinstance(mode_op, dict):
                 continue
@@ -1182,9 +1265,89 @@ def _collect_endpoint_native_arrow_pairs(endpoint_doc: dict) -> list[tuple[str, 
     return out
 
 
+def _collect_asymmetric_pairs(endpoint_doc: dict) -> list[str]:
+    """Yield json-pointers for typed fields that declare exactly one of
+    `native_type` / `arrow_type`.
+
+    The api-endpoint schema's `JsonSchemaPropertyNode` uses
+    `dependentRequired` to enforce the pair at Layer 1. This Layer 2
+    walker provides defense-in-depth for the `--semantic-only` path,
+    which bypasses Layer 1, and produces actionable findings pointing
+    at the half-typed field.
+    """
+    out: list[str] = []
+    operations = endpoint_doc.get("operations") or {}
+    if not isinstance(operations, dict):
+        return out
+    read = operations.get("read")
+    if isinstance(read, dict):
+        _walk_endpoint_op_for_asymmetric(read, "/operations/read", schema_field="response", out=out)
+    write = operations.get("write")
+    if isinstance(write, dict):
+        for mode, mode_op in write.items():
+            if not isinstance(mode_op, dict):
+                continue
+            _walk_endpoint_op_for_asymmetric(
+                mode_op, f"/operations/write/{mode}", schema_field="input", out=out
+            )
+    return out
+
+
+def _walk_endpoint_op_for_asymmetric(
+    op: dict, base_pointer: str, *, schema_field: str, out: list[str]
+) -> None:
+    body = op.get(schema_field)
+    if isinstance(body, dict):
+        schema = body.get("schema")
+        if isinstance(schema, dict):
+            _walk_jsonschema_asymmetric(schema, f"{base_pointer}/{schema_field}/schema", out)
+    params = op.get("params")
+    if isinstance(params, dict):
+        for pname, pspec in params.items():
+            if not isinstance(pspec, dict):
+                continue
+            has_native = isinstance(pspec.get("native_type"), str)
+            has_arrow = isinstance(pspec.get("arrow_type"), str)
+            if has_native ^ has_arrow:
+                out.append(f"{base_pointer}/params/{pname}")
+
+
+def _walk_jsonschema_asymmetric(node: Any, pointer: str, out: list[str]) -> None:
+    if not isinstance(node, dict):
+        return
+    has_native = isinstance(node.get("native_type"), str)
+    has_arrow = isinstance(node.get("arrow_type"), str)
+    if has_native ^ has_arrow:
+        out.append(pointer)
+    props = node.get("properties")
+    if isinstance(props, dict):
+        for k, v in props.items():
+            _walk_jsonschema_asymmetric(v, f"{pointer}/properties/{k}", out)
+    items = node.get("items")
+    if isinstance(items, dict):
+        _walk_jsonschema_asymmetric(items, f"{pointer}/items", out)
+    elif isinstance(items, list):
+        for i, v in enumerate(items):
+            _walk_jsonschema_asymmetric(v, f"{pointer}/items/{i}", out)
+    for combiner in ("oneOf", "anyOf", "allOf"):
+        branches = node.get(combiner)
+        if isinstance(branches, list):
+            for i, branch in enumerate(branches):
+                _walk_jsonschema_asymmetric(branch, f"{pointer}/{combiner}/{i}", out)
+
+
 def _walk_endpoint_op(
     op: dict, base_pointer: str, *, schema_field: str, out: list[tuple[str, str, str]]
 ) -> None:
+    """Collect typed-field pairs from one endpoint operation.
+
+    `schema_field` is `"response"` for read ops (records + response
+    schema) and `"input"` for each write-mode op. Pairs from
+    `<schema_field>.schema` are walked recursively as JSON Schema; pairs
+    from `params` are flat (one annotation pair per param entry).
+    Half-typed fields (only one of `native_type` / `arrow_type`) are
+    not collected here; `_walk_endpoint_op_for_asymmetric` surfaces those.
+    """
     body = op.get(schema_field)
     if isinstance(body, dict):
         schema = body.get("schema")
@@ -1202,6 +1365,14 @@ def _walk_endpoint_op(
 
 
 def _walk_jsonschema_pairs(node: Any, pointer: str, out: list[tuple[str, str, str]]) -> None:
+    """Recurse through a JSON Schema, collecting (native_type, arrow_type, pointer).
+
+    Recurses into the standard JSON-Schema-shaped sub-trees the
+    api-endpoint contract recognizes: `properties` (object members),
+    single or tuple-style `items` (array elements), and the
+    `oneOf` / `anyOf` / `allOf` combiners. A pair is collected at every
+    node carrying both annotations as strings.
+    """
     if not isinstance(node, dict):
         return
     native = node.get("native_type")
@@ -1248,10 +1419,21 @@ def is_connector_doc(doc: Any) -> bool:
 
 
 def is_type_map_doc(doc: Any) -> bool:
-    """Detect a `type-map.json` document (top-level array of rule objects)."""
-    return isinstance(doc, list) and all(
-        isinstance(r, dict) and "match" in r for r in doc
-    )
+    """Detect a `type-map.json` document.
+
+    True when `doc` is a list AND at least one element looks like a rule
+    (a dict). This dispatches `check_type_map_rules` on any plausible
+    type-map shape — including arrays with malformed rules — so the
+    validator surfaces shape errors instead of silently skipping the
+    document. Layer 1 catches `minItems: 1`; the per-rule structural
+    constraints are enforced by `check_type_map_rules` itself.
+
+    Returns False for `[]` (no rules to validate; Layer 1 owns the
+    minItems error) and for non-list documents.
+    """
+    if not isinstance(doc, list) or not doc:
+        return False
+    return any(isinstance(r, dict) for r in doc)
 
 
 def run_semantic_validators(doc: Any, doc_path: Path | None = None) -> list[dict]:

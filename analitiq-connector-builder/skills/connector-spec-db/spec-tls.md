@@ -1,7 +1,13 @@
 # TLS declarations
 
-How database connectors declare TLS intent without embedding driver-
-specific objects.
+How `sqlalchemy` database transports declare TLS intent without
+embedding driver-specific objects. The generic `tls` block is
+**SQLAlchemy-only**; for `adbc` transports, TLS lives inside
+`db_kwargs` (e.g. `adbc.postgresql.sslmode`, `adbc.postgresql.sslrootcert`)
+— see `spec-dsn-bindings.md` and `db-connector-creator.md` step 2.
+`tls-consistency` (the `ssl_mode` enum ↔ `ssl_ca_certificate` input
+check) applies regardless of transport type because both shapes
+resolve through the same `connection_contract.inputs` definitions.
 
 ## Shape
 

@@ -7,7 +7,7 @@
   published `https://schemas.analitiq.ai/type-map/latest.json` contract:
   - Connector JSON no longer carries an embedded `type_maps` block; the
     connector schema rejects unknown fields at the top level.
-  - Authors emit a sibling `{alias}/definition/type-map.json` — a
+  - Authors emit a sibling `{connector_id}/definition/type-map.json` — a
     top-level array of `{match, native, canonical}` rules (renamed
     from `method` → `match`; dropped the `native_to_arrow.rules`
     wrapper). Required and non-empty for both API and DB.
@@ -29,9 +29,11 @@
     `regex`-named-capture, and duplicate-rule rules. New schema URL
     `https://schemas.analitiq.ai/type-map/latest.json` added to the
     validator agent and orchestrator phase 5.
-  - All 6 endpoint fixtures, 4 DB examples, 6 API examples migrated to
-    the new layout (each example moved into its own subdirectory with
-    a sibling `type-map.json`).
+  - All endpoint fixtures (7 after the type-map migration plus the
+    arrow-mismatch addition) and the 10 spec examples (4 DB + 6 API)
+    migrated into per-example subdirectories, each with a sibling
+    `type-map.json`. The API examples gained a minimal `endpoints/`
+    directory so the strict per-kind contract holds.
 - **ADBC transport added.** `TransportTypeMapper` now recognizes `adbc`
   as the preferred `transport_type` for databases in the engine's ADBC
   driver enum (closed: `postgresql`, `snowflake`, `bigquery`). ADBC
@@ -43,12 +45,18 @@
   step 2, `connector-spec-db` SKILL, and `spec-dsn-bindings.md`
   updated. New `examples/postgresql-adbc/` reference example shipped
   alongside the existing `examples/postgresql/` (sqlalchemy) variant.
-- **Plugin now authors `connector_id` (set equal to `alias`).** Per the
-  published connector contract, `connector_id` is an optional
-  author-supplied identifier. Reserved-field rules narrowed to
-  `created_at` / `updated_at` only. Drift table adds
-  `type-map-canonical-changed` (major) and `type-map-rule-added`
-  (minor).
+- **Plugin now authors `connector_id`.** Per the published connector
+  contract, `connector_id` is an optional author-supplied identifier
+  (UUID, slug, or any non-empty string); when omitted, the registry
+  assigns one. This plugin always emits it so the directory name and
+  the identifier are the same value, and there's no rewrite layer
+  between the local `{connector_id}/` output and the contract path
+  `connectors/{connector_id}/definition/`. The `alias` field is gone
+  entirely — the slug now lives only in `connector_id`. Reserved-field
+  rules narrowed to `created_at` / `updated_at` only. Drift table adds
+  `type-map-rule-added` (minor), `type-map-rule-removed`,
+  `type-map-rule-reordered` (patch), and `type-map-canonical-changed`
+  (major).
 - API endpoint authoring realigned with the published
   `api-endpoint/latest.json` schema (engine PR #51):
   - Endpoint documents now carry `endpoint_id` (pattern
@@ -167,7 +175,7 @@
   examples (PostgreSQL, MySQL, Snowflake, MongoDB) — all validate clean
   against the published schema.
 - Pre-flight collision check in the orchestrator (phase 0): if a
-  directory matching `{alias}/` already exists, the build halts and
+  directory matching `{connector_id}/` already exists, the build halts and
   asks the user to remove it manually. Acts as a stopgap against
   overwriting legacy-shape connectors until a real migration tool is
   built.
@@ -197,7 +205,7 @@
   portability.
 - Endpoint output path documented as `endpoints/{endpoint-alias}.json`
   consistently across SKILL.md, README.md, and CLAUDE.md.
-- Standardized on `{alias}/` as the connector output directory name
+- Standardized on `{connector_id}/` as the connector output directory name
   (was inconsistently `{slug}/` in `references/pipeline.md`).
 - Narrowed the `auth-shape` validator coverage claim to OAuth2 +
   `none`; other auth types are validated by JSON Schema only.
@@ -255,7 +263,7 @@
 
 ### Type-map coverage — API connector endpoint enforcement
 - For API connectors with sibling endpoint files at
-  `{alias}/definition/endpoints/`, the `type-map-coverage` validator
+  `{connector_id}/definition/endpoints/`, the `type-map-coverage` validator
   now walks every endpoint document, collects `(type, format)` pairs
   from `response.schema` (recursively) and from `params[*]`, and
   emits an **error** for every uncovered native.

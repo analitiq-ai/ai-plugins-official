@@ -38,7 +38,10 @@ populate `transports`, `auth`, `connection_contract`, and
   `postgresql | snowflake | bigquery`; optional `db_kwargs`; TLS lives
   inside `db_kwargs`) and `sqlalchemy` (carries `driver`, e.g.
   `postgresql+asyncpg`, `mysql+asyncmy`; supports the generic `tls`
-  block). Both use the same `dsn.kind: "url_template"` shape.
+  block). When present, `dsn` carries the same `dsn.kind: "url_template"`
+  shape in both transport types; ADBC drivers that accept all connection
+  state via `db_kwargs` (e.g. Snowflake) may omit `dsn` entirely (the
+  AdbcTransport contract requires at least one of `dsn` / `db_kwargs`).
 - `auth.type: "db"` — credentials live in `connection_contract.inputs`;
   `auth.test` is the connection test operation.
 

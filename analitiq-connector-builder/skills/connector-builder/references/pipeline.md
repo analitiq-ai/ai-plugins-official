@@ -7,7 +7,7 @@ on demand by the orchestrator skill.
 
 ### 0. Pre-flight: collision check
 
-Before any other work, check whether a directory named `{alias}/`
+Before any other work, check whether a directory named `{connector_id}/`
 already exists in the current working directory.
 
 - If it does NOT exist → proceed to phase 1.
@@ -118,7 +118,7 @@ Write the connector document and any endpoint files to disk at
 predictable paths:
 
 ```
-{alias}/
+{connector_id}/
 ├── definition/
 │   ├── connector.json
 │   ├── type-map.json               # required for both api and db; standalone file

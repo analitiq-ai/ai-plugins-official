@@ -52,7 +52,7 @@ the document type:
 | `auth-shape` | OAuth2 variants (`oauth2_authorization_code` requires `authorize`+`token_exchange`; `oauth2_client_credentials` requires `token_exchange` and forbids `authorize`) and `none` (forbids all auth ops). Other auth types are validated by JSON Schema only. |
 | `tls-consistency` | If `ssl_mode` enum allows `verify-ca` / `verify-full`, then `ssl_ca_certificate` is declared in `connection_contract.inputs`. |
 | `type-map-coverage` | Connector docs require a sibling `type-map.json` (non-empty array). For API connectors, every endpoint `(native_type, arrow_type)` pair must resolve through that file with rendered canonical equal to the endpoint's `arrow_type` (`Object` / `List` are accepted narrowings of `Json`). |
-| `type-map-rule` | For `type-map.json` documents: `exact` rules must not use `${…}` substitution; `regex` rules referencing `${name}` must define a matching `(?<name>…)` named capture group in `native`; duplicate `(match, native)` pairs warn. |
+| `type-map-rule` | For `type-map.json` documents: `exact` rules must not use `${…}` substitution; `regex` rules' `native` must always compile (even when `canonical` is not templated); `regex` rules must use ECMA-262 named-group syntax `(?<name>…)` — any Python-only `(?P…)` form is rejected; `regex` rules referencing `${name}` must define a matching `(?<name>…)` capture in `native`; duplicate `(match, native)` pairs warn. Also runs against the sibling `type-map.json` when validating a connector. |
 
 ## Output
 

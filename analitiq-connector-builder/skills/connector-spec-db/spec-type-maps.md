@@ -12,7 +12,7 @@ endpoint-field natives).
 `type-map.json` is a **standalone file** at:
 
 ```
-{alias}/definition/type-map.json
+{connector_id}/definition/type-map.json
 ```
 
 It validates against `https://schemas.analitiq.ai/type-map/latest.json`.
@@ -30,7 +30,7 @@ three required keys and no others:
 | Key | Type | Description |
 |---|---|---|
 | `match` | `"exact"` or `"regex"` | How `native` is compared against the runtime native-type label. |
-| `native` | string | The literal label (for `exact`) or an ECMA-262 regular expression (for `regex`). JSON Schema `pattern` is unanchored; anchor with `^…$` when you want a full-string match. |
+| `native` | string | The literal label (for `exact`) or an ECMA-262 regular expression (for `regex`). The validator and runtime both match with full-string semantics (Python `re.fullmatch`), so leading `^` and trailing `$` are harmless but redundant — keep them for readability when the pattern would otherwise look ambiguous. |
 | `canonical` | string | The target Arrow canonical type. For `exact` rules, a literal canonical (e.g. `Int64`, `Decimal128(38, 0)`). For `regex` rules, either a literal canonical OR a templated canonical with `${name}` placeholders in parameter positions (e.g. `Decimal128(${precision}, ${scale})`). |
 
 ## `${name}` substitution in regex rules
@@ -72,7 +72,7 @@ the validator does not treat that as a mismatch.
 ## API coverage
 
 For API connectors, the validator walks every endpoint file under
-`{alias}/definition/endpoints/`, collects every `(native_type,
+`{connector_id}/definition/endpoints/`, collects every `(native_type,
 arrow_type)` pair from typed fields, and asserts each one resolves
 through `type-map.json`. Resolution renders the matched rule's
 `canonical` (substituting any `${name}` captures from the regex match)
@@ -109,7 +109,8 @@ For database connectors, ship the documented provider native vocabulary.
   the researched, documented list — provider docs are authoritative.
 - Do NOT ship a wildcard fallback rule. If a native type isn't covered,
   let the runtime hard-error so the gap is visible.
-- Keep regex rules anchored (`^…$`) so they don't accidentally match.
+- Anchors (`^…$`) are redundant since the matcher uses full-string
+  semantics, but they're often kept for readability.
 - Use `Utf8` (not `String`) for Arrow's UTF-8 string type — `String` is
   not a member of the published Arrow vocabulary.
 

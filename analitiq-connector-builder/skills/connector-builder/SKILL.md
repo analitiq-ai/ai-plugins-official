@@ -39,7 +39,7 @@ sub-agents own those skills.
 ## Pipeline (full contract: `references/pipeline.md`)
 
 0. **Pre-flight: collision check** — before any research or authoring,
-   check whether a directory named `{alias}/` already exists in the
+   check whether a directory named `{connector_id}/` already exists in the
    current working directory. If it does, **halt** and ask the user to
    remove or rename it before re-running. Do not read the existing
    directory's contents and do not attempt to migrate or merge — this
@@ -91,7 +91,7 @@ sub-agents own those skills.
 7. **Write** — write files to disk:
 
    ```
-   {alias}/
+   {connector_id}/
    ├── definition/
    │   ├── connector.json
    │   ├── type-map.json               # required for both api and db; standalone file
@@ -111,9 +111,11 @@ Report to the user:
 
 ## Hard rules
 
-- The plugin authors `connector_id = alias`. Other server-managed
-  fields (`created_at`, `updated_at`) are stamped by the registry and
-  must not appear in authored documents.
+- The plugin authors `connector_id` (the stable connector slug,
+  matching `[a-z0-9_-]+`, same value as the on-disk `{connector_id}/`
+  directory name). Other server-managed fields (`created_at`,
+  `updated_at`) are stamped by the registry and must not appear in
+  authored documents.
 - Do not author the connector body yourself. Always dispatch to the
   matching creator sub-agent.
 - Do not load kind-specific spec skills (`connector-spec-api` /
@@ -127,6 +129,6 @@ Report to the user:
   same host.
 - Storage kinds (`file`, `s3`, `stdout`) currently produce a structured
   refusal. If the user asks for one, surface the refusal note and stop.
-- Never overwrite an existing `{alias}/` directory. The pre-flight
+- Never overwrite an existing `{connector_id}/` directory. The pre-flight
   check (phase 0) halts the run and asks the user to remove the
   directory manually. Never delete files on the user's behalf.

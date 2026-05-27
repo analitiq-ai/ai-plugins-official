@@ -29,18 +29,22 @@ The `connector-spec-db` skill is preloaded. Beyond that, read:
 
 ## Authoring order
 
-1. **Top-level metadata** — `$schema`, `kind: "database"`, `alias`,
-   `connector_id` (set equal to `alias`), `display_name`, `description`,
-   `tags`, `version` (start at `1.0.0`).
+1. **Top-level metadata** — `$schema`, `kind: "database"`, `connector_id`
+   (the stable connector slug, matching `[a-z0-9_-]+`; this also names
+   the on-disk `{connector_id}/` directory), `display_name`,
+   `description`, `tags`, `version` (start at `1.0.0`).
 2. **Transports** — populate `transports` with one entry per logical
    transport. Set `default_transport`. Pick `transport_type` per
    `TransportTypeMapper`:
    - **`adbc` (preferred)** for databases with a shipped engine ADBC
      driver — closed enum: `postgresql`, `snowflake`, `bigquery`.
-     Required field `driver` carries that identifier. Add `dsn` (the
-     `url_template` shape) for drivers that take a URI (postgresql);
-     drivers that accept all connection state via kwargs (snowflake)
-     may omit `dsn`. Add `db_kwargs` (key/value object) for
+     Required field `driver` carries that identifier. Provide `dsn`
+     (the `url_template` shape) when the driver accepts a URI
+     (postgresql); otherwise carry connection state in `db_kwargs`
+     (snowflake authenticates entirely via kwargs; bigquery typically
+     takes a project/dataset via kwargs as well, with no DSN). The
+     AdbcTransport contract requires **at least one of `dsn` /
+     `db_kwargs`**. Add `db_kwargs` (key/value object) for
      driver-specific options; values may be literals or value
      expressions (`{"ref": "..."}`, `{"template": "..."}`, `{"function":
      "..."}`) — the runtime resolves them before invoking the driver.
@@ -78,7 +82,7 @@ The `connector-spec-db` skill is preloaded. Beyond that, read:
    `VARIANT`, `OBJECT`) map to `"Json"`. Parameterized natives use
    regex rules with named capture groups; see the spec for substitution
    rules. The orchestrator writes this array to
-   `{alias}/definition/type-map.json` and validates it against
+   `{connector_id}/definition/type-map.json` and validates it against
    `https://schemas.analitiq.ai/type-map/latest.json`.
 
 ## Output
@@ -90,7 +94,7 @@ to disk.
 ## Hard rules
 
 - Never author `created_at` / `updated_at` — those are registry-stamped.
-  `connector_id` is author-supplied (set equal to `alias`).
+  `connector_id` is author-supplied and matches the on-disk directory name.
 - Never pre-encode binding values (no pre-percent-encoded usernames,
   database names, passwords). The runtime owns encoding mechanics.
 - Never embed driver-specific TLS objects, paths, or executable code in
