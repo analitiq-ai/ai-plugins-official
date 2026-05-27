@@ -45,7 +45,7 @@ the document type:
 | Validator id | Rule |
 |---|---|
 | `reserved-field` | No `created_at` / `updated_at` in the authored doc. |
-| `expression-resolver` | Every `ref` / `template` / `function` parses; refs target known scopes; functions are in the registered catalog. Nodes shaped like `{ref|template|function: <non-string>}` are flagged (the kind key must point at a string), and multi-keyed nodes (more than one of `ref`/`template`/`literal`/`function`) are rejected. |
+| `expression-resolver` | Every `ref` / `template` / `function` parses; refs target known scopes; functions are in the registered catalog. Nodes shaped like `{ref\|template\|function: <non-string>}` are flagged (the kind key must point at a string — `literal` is exempt, its payload is opaque to the validator). Multi-keyed nodes (more than one of `ref`/`template`/`literal`/`function` present together) are rejected as ambiguous. |
 | `phase-resolvability` | Refs to `connection.discovered.*` are produced by a declared post-auth output. |
 | `transport-ref` | Every `transport_ref` resolves to a key in `transports`; `default_transport` exists in `transports`. |
 | `dsn-binding` | Every `{placeholder}` has a binding; every binding is referenced; `encoding` is in the closed enum. |

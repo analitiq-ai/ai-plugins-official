@@ -770,22 +770,33 @@ def _index_inputs(doc: dict) -> tuple[dict[str, dict], list[dict]]:
 def _index_post_auth_outputs(doc: dict) -> tuple[dict[str, dict], list[dict]]:
     """Map produced reference paths to their post-auth output, plus warnings.
 
-    Returns (index, warnings). The index keys are the produced paths (e.g.
-    `connection.discovered.api_domain`); values describe the producing
-    output. Warnings catch malformed entries.
+    Returns `(index, warnings)`. The index keys are the produced paths
+    (e.g. `connection.discovered.api_domain`); values describe the
+    producing output. Warnings flag malformed entries that the index
+    silently drops for shape reasons:
+
+    - non-dict spec entry (`{"foo": "bar-string"}`-style mistakes),
+    - `storage` outside the allowed enum (`connection.discovered` /
+      `connection.selections` / `secrets`),
+    - missing / non-string `value_path`, or a `value_path` that doesn't
+      prefix-match the declared `storage` scope.
+
+    Without surfacing these, downstream refs would emit misdirected
+    "not declared" errors when the real fault is in the output
+    declaration itself.
     """
-    findings: list[dict] = []
+    warnings: list[dict] = []
     out: dict[str, dict] = {}
     cc = doc.get("connection_contract")
     if not isinstance(cc, dict):
-        return out, findings
+        return out, warnings
     post_auth = cc.get("post_auth_outputs") or {}
     if not isinstance(post_auth, dict):
-        return out, findings
+        return out, warnings
     valid_storage = {"connection.discovered", "connection.selections", "secrets"}
     for name, spec in post_auth.items():
         if not isinstance(spec, dict):
-            findings.append(
+            warnings.append(
                 finding(
                     "phase-resolvability",
                     "warning",
@@ -798,7 +809,7 @@ def _index_post_auth_outputs(doc: dict) -> tuple[dict[str, dict], list[dict]]:
         storage = spec.get("storage")
         value_path = spec.get("value_path")
         if storage not in valid_storage:
-            findings.append(
+            warnings.append(
                 finding(
                     "phase-resolvability",
                     "warning",
@@ -809,7 +820,7 @@ def _index_post_auth_outputs(doc: dict) -> tuple[dict[str, dict], list[dict]]:
             )
             continue
         if not isinstance(value_path, str) or not value_path.startswith(f"{storage}."):
-            findings.append(
+            warnings.append(
                 finding(
                     "phase-resolvability",
                     "warning",
@@ -823,7 +834,7 @@ def _index_post_auth_outputs(doc: dict) -> tuple[dict[str, dict], list[dict]]:
             )
             continue
         out[value_path] = {"storage": storage, "output_name": name}
-    return out, findings
+    return out, warnings
 
 
 def _ref_phase_problem(
@@ -1899,27 +1910,53 @@ def _walk_endpoint_op_for_asymmetric(
             out.append((f"{base_pointer}/params", "non_dict_subtree"))
 
 
+_JSONSCHEMA_MAP_KEYWORDS = ("properties", "patternProperties", "$defs", "definitions", "dependentSchemas")
+_JSONSCHEMA_LIST_KEYWORDS = ("prefixItems", "allOf", "anyOf", "oneOf")
+_JSONSCHEMA_SINGLE_KEYWORDS = (
+    "contains", "additionalProperties", "propertyNames",
+    "unevaluatedItems", "unevaluatedProperties",
+    "not", "if", "then", "else",
+)
+
+
 def _walk_jsonschema_asymmetric(node: Any, pointer: str, out: list[tuple[str, str]]) -> None:
     """Recurse through a JSON Schema, surfacing annotation-pair problems and
     non-dict sub-trees.
 
+    Mirrors `_walk_jsonschema_pairs`'s keyword coverage so the asymmetric
+    walker visits a superset of nodes: every recursive `JsonSchemaPropertyNode`
+    keyword is checked here, and any present-but-wrong-type sub-tree gets a
+    `non_dict_subtree` emission (the well-formed walker silently skips
+    those — this one records them).
+
     Uses the membership-check pattern (`if "key" in node` then explicit
-    isinstance dispatch with non_dict_subtree on the else branch) for the
-    same reason as `_walk_endpoint_op_for_asymmetric` — distinguishing
-    "key absent" from "key present but wrong type" is what makes the
-    walker reliable under `--semantic-only`.
+    isinstance dispatch with non_dict_subtree on the else branch) so that
+    "key absent" (valid) is distinguished from "key present but wrong
+    type" (warn).
     """
     if not isinstance(node, dict):
         out.append((pointer, "non_dict_subtree"))
         return
     _check_annotation_pair(node, pointer, out)
-    if "properties" in node:
-        props = node["properties"]
-        if isinstance(props, dict):
-            for k, v in props.items():
-                _walk_jsonschema_asymmetric(v, f"{pointer}/properties/{k}", out)
-        else:
-            out.append((f"{pointer}/properties", "non_dict_subtree"))
+    # Map-keyed (sub-schema per key) — non-dict container is a structural error.
+    for keyword in _JSONSCHEMA_MAP_KEYWORDS:
+        if keyword in node:
+            sub = node[keyword]
+            if isinstance(sub, dict):
+                for k, v in sub.items():
+                    _walk_jsonschema_asymmetric(v, f"{pointer}/{keyword}/{k}", out)
+            else:
+                out.append((f"{pointer}/{keyword}", "non_dict_subtree"))
+    # List-keyed (sub-schema per index) — non-list container is structural.
+    for keyword in _JSONSCHEMA_LIST_KEYWORDS:
+        if keyword in node:
+            sub = node[keyword]
+            if isinstance(sub, list):
+                for i, v in enumerate(sub):
+                    _walk_jsonschema_asymmetric(v, f"{pointer}/{keyword}/{i}", out)
+            else:
+                out.append((f"{pointer}/{keyword}", "non_dict_subtree"))
+    # `items` special: single schema OR tuple-list of schemas.
     if "items" in node:
         items = node["items"]
         if isinstance(items, dict):
@@ -1929,14 +1966,14 @@ def _walk_jsonschema_asymmetric(node: Any, pointer: str, out: list[tuple[str, st
                 _walk_jsonschema_asymmetric(v, f"{pointer}/items/{i}", out)
         else:
             out.append((f"{pointer}/items", "non_dict_subtree"))
-    for combiner in ("oneOf", "anyOf", "allOf"):
-        if combiner in node:
-            branches = node[combiner]
-            if isinstance(branches, list):
-                for i, branch in enumerate(branches):
-                    _walk_jsonschema_asymmetric(branch, f"{pointer}/{combiner}/{i}", out)
+    # Single-schema keywords.
+    for keyword in _JSONSCHEMA_SINGLE_KEYWORDS:
+        if keyword in node:
+            sub = node[keyword]
+            if isinstance(sub, dict):
+                _walk_jsonschema_asymmetric(sub, f"{pointer}/{keyword}", out)
             else:
-                out.append((f"{pointer}/{combiner}", "non_dict_subtree"))
+                out.append((f"{pointer}/{keyword}", "non_dict_subtree"))
 
 
 def _check_annotation_pair(node: dict, pointer: str, out: list[tuple[str, str]]) -> None:
@@ -2000,11 +2037,16 @@ def _walk_endpoint_op(
 def _walk_jsonschema_pairs(node: Any, pointer: str, out: list[tuple[str, str, str]]) -> None:
     """Recurse through a JSON Schema, collecting (native_type, arrow_type, pointer).
 
-    Recurses into the standard JSON-Schema-shaped sub-trees the
-    api-endpoint contract recognizes: `properties` (object members),
-    single or tuple-style `items` (array elements), and the
-    `oneOf` / `anyOf` / `allOf` combiners. A pair is collected at every
-    node carrying both annotations as strings.
+    Recurses through every recursive keyword in the published
+    `JsonSchemaPropertyNode` shape: `properties`, `patternProperties`,
+    `$defs`, `definitions`, `dependentSchemas` (maps); `prefixItems`,
+    `allOf`, `anyOf`, `oneOf` (lists); `items`, `contains`,
+    `additionalProperties`, `propertyNames`, `unevaluatedItems`,
+    `unevaluatedProperties`, `not`, `if`, `then`, `else` (single).
+    A pair is collected at every node carrying both annotations as
+    strings. Does NOT resolve `$ref` — referenced sub-schemas annotated
+    only at the ref-target are walked at the target's site (under
+    `$defs` / `definitions`), not at the referring site.
     """
     if not isinstance(node, dict):
         return
@@ -2012,21 +2054,46 @@ def _walk_jsonschema_pairs(node: Any, pointer: str, out: list[tuple[str, str, st
     arrow = node.get("arrow_type")
     if isinstance(native, str) and isinstance(arrow, str):
         out.append((native, arrow, pointer))
-    props = node.get("properties")
-    if isinstance(props, dict):
-        for k, v in props.items():
-            _walk_jsonschema_pairs(v, f"{pointer}/properties/{k}", out)
+    _recurse_jsonschema(node, pointer, lambda child, child_ptr: _walk_jsonschema_pairs(child, child_ptr, out))
+
+
+def _recurse_jsonschema(
+    node: dict, pointer: str, visit: Callable[[Any, str], None]
+) -> None:
+    """Shared recursion across all `JsonSchemaPropertyNode` recursive keywords.
+
+    Keyword sets (`_JSONSCHEMA_MAP_KEYWORDS`, `_JSONSCHEMA_LIST_KEYWORDS`,
+    `_JSONSCHEMA_SINGLE_KEYWORDS`) are defined near the asymmetric walker
+    and shared so the two walkers stay in lockstep — adding a new
+    recursive keyword in one place updates both.
+
+    `visit(child, child_pointer)` is called for each recursive child the
+    api-endpoint contract recognizes. This is the well-formed walker's
+    entry; the asymmetric walker uses the keyword sets directly so it
+    can emit `non_dict_subtree` on present-but-wrong-type containers.
+    """
+    for keyword in _JSONSCHEMA_MAP_KEYWORDS:
+        sub = node.get(keyword)
+        if isinstance(sub, dict):
+            for k, v in sub.items():
+                visit(v, f"{pointer}/{keyword}/{k}")
+    for keyword in _JSONSCHEMA_LIST_KEYWORDS:
+        sub = node.get(keyword)
+        if isinstance(sub, list):
+            for i, v in enumerate(sub):
+                visit(v, f"{pointer}/{keyword}/{i}")
+    # `items` is special: single schema (Draft 2020-12) or tuple-list
+    # (Draft 4 / 7). Both forms are accepted by the api-endpoint contract.
     items = node.get("items")
     if isinstance(items, dict):
-        _walk_jsonschema_pairs(items, f"{pointer}/items", out)
+        visit(items, f"{pointer}/items")
     elif isinstance(items, list):
         for i, v in enumerate(items):
-            _walk_jsonschema_pairs(v, f"{pointer}/items/{i}", out)
-    for combiner in ("oneOf", "anyOf", "allOf"):
-        branches = node.get(combiner)
-        if isinstance(branches, list):
-            for i, branch in enumerate(branches):
-                _walk_jsonschema_pairs(branch, f"{pointer}/{combiner}/{i}", out)
+            visit(v, f"{pointer}/items/{i}")
+    for keyword in _JSONSCHEMA_SINGLE_KEYWORDS:
+        sub = node.get(keyword)
+        if isinstance(sub, dict):
+            visit(sub, f"{pointer}/{keyword}")
 
 
 def check_endpoint_annotations(doc: Any) -> list[dict]:
@@ -2098,13 +2165,15 @@ _TYPE_MAP_ONLY = {"type-map-rule"}
 _ENDPOINT_ONLY = {"endpoint-annotations"}
 
 # Module-load invariant: every dispatched validator id MUST be registered in
-# VALIDATOR_IDS, otherwise the crash-handler in `run_semantic_validators`
-# would call `finding(vid, ...)` whose `assert vid in VALIDATOR_IDS` could
-# itself raise — uncaught — past the per-validator guard. Using an explicit
-# `raise` rather than `assert` so the check survives `python -O` (which
-# strips assertions). `_safe_check_type_map_rules` passes a literal
-# `"type-map-rule"` id and is already safe by construction; this invariant
-# protects the dispatcher's `vid`-tagged crash finding only.
+# VALIDATOR_IDS. The crash-handler in `run_semantic_validators` calls
+# `finding(vid, ...)`, which validates `vid` via `raise ValueError` (see
+# `finding()`). Without this invariant, a dispatched-but-unregistered `vid`
+# would propagate that `ValueError` uncaught past the per-validator guard.
+# Using `raise RuntimeError` rather than `assert` so the check fails fast
+# at module load even under `python -O` (which strips assertions).
+# `_safe_check_type_map_rules` passes a literal `"type-map-rule"` id and is
+# already safe by construction; this invariant protects the dispatcher's
+# `vid`-tagged crash finding only.
 _unregistered = set(SEMANTIC_VALIDATORS.keys()) - VALIDATOR_IDS
 if _unregistered:
     raise RuntimeError(
@@ -2287,7 +2356,13 @@ def run_semantic_validators(doc: Any, doc_path: Path | None = None) -> list[dict
             )
         )
     elif isinstance(doc, dict) and "endpoint_id" in doc and not is_ep:
-        # endpoint_id without `operations` ≡ DB endpoint, out of plugin scope.
+        # `is_endpoint_doc` excludes any dict with `kind`, so this branch also
+        # catches the pathological "connector with stray `endpoint_id`" case.
+        # That's a tolerable cost — Layer 1 catches the structural issue and
+        # under `--semantic-only` `check_transport_refs` will fire its own
+        # absent-/malformed-transports error alongside. The common case here
+        # is a real DB endpoint document (`endpoint_id` + `columns[]`, no
+        # `kind`, no `operations`), which is out of plugin scope.
         findings.append(
             finding(
                 "json-schema",

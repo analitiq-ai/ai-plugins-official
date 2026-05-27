@@ -3,6 +3,43 @@
 ## [unreleased]
 
 ### Changed
+- **Validator surface hardening.** Several `--semantic-only` silent-pass
+  cases now emit structured findings:
+  - New `endpoint-annotations` validator id surfaces malformed
+    `(native_type, arrow_type)` pairs when an api-endpoint file is
+    validated directly (was only checked via the connector path).
+  - `expression-resolver` now rejects nodes with non-string `ref` /
+    `template` / `function` values and multi-keyed value-expression
+    nodes (e.g. both `ref` and `function` present).
+  - `phase-resolvability` emits warnings when a `connection_contract.
+    inputs[*]` declaration has unknown `storage` or unknown `phase`,
+    or when `inputs` / `post_auth_outputs` / `transports` is
+    present-but-non-object.
+  - `dsn-binding` flags missing `dsn.kind`, unknown `dsn.kind`,
+    non-dict `bindings`, non-string `template`, and non-string
+    `transport_ref`.
+  - `tls-consistency` flags non-dict `ssl_mode` and non-list
+    `ssl_mode.enum`.
+  - `type-map-rule` flags non-string `canonical`, non-string `native`,
+    unknown rule keys, and rules missing required keys.
+  - New top-level warnings for unrecognized document shapes (e.g.
+    a DB endpoint validated against `--semantic-only`, scalar /
+    list-of-non-dict roots, empty arrays, legacy type-map shapes).
+  - Annotation walkers now recurse through every
+    `JsonSchemaPropertyNode` keyword (`prefixItems`,
+    `additionalProperties`, `patternProperties`, `$defs`,
+    `definitions`, `dependentSchemas`, `not`, `if`/`then`/`else`,
+    `contains`, `propertyNames`, `unevaluatedItems`,
+    `unevaluatedProperties`) instead of only `properties` / `items` /
+    `oneOf|anyOf|allOf` — tuple-typed responses and reusable sub-schemas
+    are now visible to coverage and asymmetric-pair analysis.
+  - `finding()` now uses `raise ValueError` (not `assert`) so validator
+    id and severity invariants survive `python -O`. Per-validator
+    crash handler in `run_semantic_validators` tags crashes with the
+    failing `vid` so orchestrators route correctly.
+  - The `Diagnostics.validator` enum (`io-contracts.md`) gained
+    `endpoint-annotations`.
+
 - **Type maps now standalone files.** Aligned the plugin with the
   published `https://schemas.analitiq.ai/type-map/latest.json` contract:
   - Connector JSON no longer carries an embedded `type_maps` block; the
