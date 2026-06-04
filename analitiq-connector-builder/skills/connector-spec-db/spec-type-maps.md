@@ -1,83 +1,132 @@
 # Type maps
 
-How to author the standalone `type-map.json` that ships alongside every
-connector. The type map maps provider-native type labels to Apache Arrow
-canonical types. The same file shape serves both database connectors
-(mapping native database types like `bigint`, `numeric(10,2)`) and API
-connectors (mapping the JSON Schema `format`/`type` strings used as
-endpoint-field natives).
+How to author the standalone type-map files that ship alongside every
+connector. Type maps connect provider-native type labels and Apache
+Arrow canonical types, in two directions:
+
+- **Read map** (`type-map-read.json`) — native → Arrow. Required for
+  every connector (API and DB). For databases it maps native column
+  types (`BIGINT`, `NUMERIC(10,2)`); for API connectors it maps the
+  JSON Schema `format`/`type` strings used as endpoint-field natives.
+- **Write map** (`type-map-write.json`) — Arrow → native. **Required
+  for `kind: database`, forbidden for `kind: api`.** It is the
+  connector's declarative DDL vocabulary: every transport (SQLAlchemy
+  DDL, ADBC DDL, control-plane create_table) renders column types
+  through `dialect.render_column_type`, whose default implementation is
+  this map. Connectors must NOT ship Python type-rendering tables.
 
 ## On-disk location
 
-`type-map.json` is a **standalone file** at:
+Both files are **standalone** siblings of `connector.json`:
 
 ```
-{connector_id}/definition/type-map.json
+{connector_id}/definition/type-map-read.json
+{connector_id}/definition/type-map-write.json   # database only
 ```
 
-It validates against `https://schemas.analitiq.ai/type-map/latest.json`.
-It is never embedded inside `connector.json` or any endpoint document.
+The read map validates against
+`https://schemas.analitiq.ai/type-map/latest.json`. The write map
+shares the same three-key rule shape, but the published schema is
+read-direction-only today — its `canonical` constraint requires a
+literal/template Arrow type and rejects the write map's regex matchers
+(a known contract gap) — so write maps are validated semantically only
+(`--semantic-only`); the validator derives the direction from the
+filename. Neither map is ever embedded inside `connector.json` or any
+endpoint document. Each present file must be **non-empty** — an empty
+array is rejected.
 
-A `type-map.json` is **required** for every connector (API and DB) and
-must be **non-empty**. An empty array is rejected by the schema.
+The pre-split filename `type-map.json` is dead: the engine never reads
+it and the validator rejects it with a migration finding.
 
 ## File shape
 
-The file is a top-level JSON array of rule objects. Order is significant:
-**first match wins** during resolution. Each rule object has exactly
-three required keys and no others:
+Each file is a top-level JSON array of rule objects. Order is
+significant: **first match wins** during resolution. Each rule object
+has exactly three required keys and no others — but which key is the
+*matcher* and which is *rendered* depends on the direction:
 
-| Key | Type | Description |
+| Key | Read map (`type-map-read.json`) | Write map (`type-map-write.json`) |
 |---|---|---|
-| `match` | `"exact"` or `"regex"` | How `native` is compared against the runtime native-type label. |
-| `native` | string | The literal label (for `exact`) or an ECMA-262 regular expression (for `regex`). The validator and runtime both match with full-string semantics (Python `re.fullmatch`), so leading `^` and trailing `$` are harmless but redundant — keep them for readability when the pattern would otherwise look ambiguous. |
-| `canonical` | string | The target Arrow canonical type. For `exact` rules, a literal canonical (e.g. `Int64`, `Decimal128(38, 0)`). For `regex` rules, either a literal canonical OR a templated canonical with `${name}` placeholders in parameter positions (e.g. `Decimal128(${precision}, ${scale})`). |
+| `match` | `"exact"` or `"regex"` — how the matcher is compared. | Same. |
+| `native` | **Matcher.** Literal label (`exact`) or ECMA-262 regex (`regex`). | **Rendered.** The native DDL emitted for a matching canonical; may carry `${name}` substitutions on `regex` rules. |
+| `canonical` | **Rendered.** Literal Arrow type, or (on `regex` rules) a template with `${name}` placeholders. | **Matcher.** Literal Arrow type (`exact`) or ECMA-262 regex over the canonical string (`regex`). |
+
+Matching uses full-string semantics (Python `re.fullmatch`), so leading
+`^` and trailing `$` are harmless but redundant — keep them for
+readability when the pattern would otherwise look ambiguous.
+
+## Uppercase rule (read maps)
+
+Read-map rules are matched against **UPPERCASED, whitespace-collapsed**
+native strings — the engine normalizes the native label before
+matching. Consequences:
+
+- **Author `regex` patterns uppercase** (`^VARCHAR\(\d+\)$`, not
+  `^varchar\(\d+\)$`). A lowercase literal in the pattern can never
+  match; the validator warns on it.
+- `exact` natives are normalized automatically — authored case doesn't
+  matter, but uppercase is the convention.
+- **Named capture group names stay lowercase** (`(?<precision>…)`) —
+  only the matched text is normalized, not the group names.
+
+Write-map matchers run against PascalCase canonical strings verbatim —
+no normalization, case is significant.
 
 ## `${name}` substitution in regex rules
 
-When a `regex` rule's `canonical` carries `${name}` placeholders, every
-placeholder must be backed by a matching **named capture group** in
-`native`. The validator uses ECMA-262 syntax for capture groups —
-`(?<name>…)` — which is translated to Python's `(?P<name>…)` under the
+When a `regex` rule's rendered side carries `${name}` placeholders,
+every placeholder must be backed by a matching **named capture group**
+in the matcher side. The contract uses ECMA-262 syntax for capture
+groups — `(?<name>…)` — translated to Python's `(?P<name>…)` under the
 hood at validation time. Authors write the ECMA-262 form.
 
+- Read map: placeholders in `canonical`, captures in `native` —
+  `native: "^NUMERIC\\((?<precision>[0-9]+),\\s*(?<scale>[0-9]+)\\)$"`,
+  `canonical: "Decimal128(${precision}, ${scale})"`.
+- Write map: placeholders in `native`, captures in `canonical` —
+  `canonical: "^Decimal(128|256)\\((?<p>\\d+),\\s*(?<s>\\d+)\\)$"`,
+  `native: "NUMERIC(${p}, ${s})"`.
+
 Placeholders are only legal in **parameter positions** of parameterized
-canonical types:
+types (`Decimal128(${precision}, ${scale})`, `Timestamp(${unit},
+${tz})`, `FixedSizeBinary(${n})` on the read side; `NUMERIC(${p},
+${s})`, `VARCHAR(${len})` and similar on the write side). Templated
+renders are only legal on `regex` rules; `exact` rules must emit a
+fully-resolved literal on the rendered side.
 
-- `Decimal128(${precision}, ${scale})`
-- `Timestamp(${unit}, ${tz})`
-- `FixedSizeBinary(${n})`
+## Schemaless / JSON-shaped natives
 
-A free-form string with a placeholder outside a parameter position
-(`not an arrow type ${x}`) is rejected. Templated canonicals are only
-legal on `regex` rules; `exact` rules must emit a fully-resolved literal.
+Follow the reference connector packages — the right canonical for a
+JSON-shaped native depends on how the system's read path materializes
+it:
 
-## Schemaless / JSON-shaped natives → `Json`
+| Provider | Native (read) | Canonical | Why |
+|---|---|---|---|
+| Postgres | `JSON`, `JSONB`, `XML` | `Utf8` | The driver read path returns JSON columns as text. |
+| MySQL / MariaDB | `JSON` | `Utf8` | Same — text on the wire. |
+| Snowflake | `VARIANT`, `OBJECT`, `ARRAY`, `MAP` | `Json` | Arrow-native semi-structured ingestion. |
+| MongoDB | `array`, `object` | `Json` | Documents are inherently JSON-shaped. |
 
-Schemaless container natives map to the `Json` canonical:
-
-| Provider | Native | Canonical |
-|---|---|---|
-| Postgres | `jsonb`, `json` | `Json` |
-| MySQL | `json` | `Json` |
-| Snowflake | `VARIANT`, `OBJECT`, `ARRAY` | `Json` |
-| MongoDB | `array`, `object` | `Json` |
+On the write side the `Json` canonical renders the system's JSON column
+type (`Json` → `JSONB` for postgres, `JSON` for MySQL, `VARIANT` for
+Snowflake).
 
 The endpoint-only shape markers `Object` and `List` (which require
 sibling `properties` / `items` to declare the inner shape) **never**
 appear as a type-map `canonical`. The endpoint walker accepts a field
-typed `Object` or `List` as a valid narrowing of a `Json` type-map rule;
-the validator does not treat that as a mismatch.
+typed `Object` or `List` as a valid narrowing of a `Json` read-map
+rule; the validator does not treat that as a mismatch.
 
-## API coverage
+## API coverage (read map)
 
 For API connectors, the validator walks every endpoint file under
 `{connector_id}/definition/endpoints/`, collects every `(native_type,
 arrow_type)` pair from typed fields, and asserts each one resolves
-through `type-map.json`. Resolution renders the matched rule's
-`canonical` (substituting any `${name}` captures from the regex match)
-and compares the result to the endpoint field's `arrow_type`. A pair
-that does not resolve is a validation error.
+through `type-map-read.json` (after normalizing the native). Resolution
+renders the matched rule's `canonical` (substituting any `${name}`
+captures from the regex match) and compares the result to the endpoint
+field's `arrow_type`. A pair that does not resolve is a validation
+error.
 
 `Object` / `List` endpoint markers are accepted narrowings of `Json` —
 an endpoint field with `arrow_type: "Object"` paired with a native that
@@ -99,9 +148,12 @@ Common API natives:
 | `object` (schemaless) | `{"type":"object"}` with no `properties` | `Json` |
 | `array` (schemaless) | `{"type":"array"}` with no `items` | `Json` |
 
+API connectors ship **no write map** — the write direction is a
+database-package concept (DDL rendering).
+
 ## Database coverage
 
-For database connectors, ship the documented provider native vocabulary.
+**Read map:** ship the documented provider native vocabulary.
 
 - For OLTP databases (PostgreSQL, MySQL), include the full documented
   native vocabulary.
@@ -109,10 +161,22 @@ For database connectors, ship the documented provider native vocabulary.
   the researched, documented list — provider docs are authoritative.
 - Do NOT ship a wildcard fallback rule. If a native type isn't covered,
   let the runtime hard-error so the gap is visible.
-- Anchors (`^…$`) are redundant since the matcher uses full-string
-  semantics, but they're often kept for readability.
 - Use `Utf8` (not `String`) for Arrow's UTF-8 string type — `String` is
   not a member of the published Arrow vocabulary.
+
+**Write map:** cover the **full canonical vocabulary** — Boolean,
+Int8–64, UInt8–64, Float16/32/64, Decimal (regex with `${p}`/`${s}`
+captures), Utf8/LargeUtf8, Json, Binary/LargeBinary/FixedSizeBinary,
+Date32/64, Time, Timestamp bare + tz variants. The validator probes
+every family and warns on gaps. A deliberate gap is legitimate only
+when the connector's dialect takes over that family's rendering via a
+`render_column_type` override (BigQuery ships no Decimal rule because
+NUMERIC/BIGNUMERIC selection needs precision-range arithmetic rules
+cannot express) — never as a way to cut scope.
+
+Mind precision survival on the write side: MySQL's write map renders
+`DATETIME(6)` / `TIME(6)` so microseconds survive the round trip — a
+bare `DATETIME` silently truncates.
 
 ## Canonical types
 
@@ -139,38 +203,55 @@ Do NOT emit a bare parameterized name from an `exact` rule
 (`{"match": "exact", "native": "TIMESTAMP_NTZ", "canonical": "Timestamp"}`
 is wrong — `Timestamp` requires a unit).
 
-## Worked example: Postgres
+## Worked example: Postgres (read)
 
-The Postgres example demonstrates the split-rule pattern for `numeric`
-(an `exact` default plus a `regex` with named captures) and the
-literal-form pattern for parameterized time/timestamp types.
+Excerpt from the reference read map — uppercase patterns, the
+split-rule pattern for `NUMERIC` (a `regex` family rule above an
+`exact` fallback), and text-materialized JSON:
 
 ```json
 [
-  { "match": "exact", "native": "smallint",          "canonical": "Int16" },
-  { "match": "exact", "native": "integer",           "canonical": "Int32" },
-  { "match": "exact", "native": "bigint",            "canonical": "Int64" },
-  { "match": "exact", "native": "boolean",           "canonical": "Boolean" },
-  { "match": "exact", "native": "text",              "canonical": "Utf8" },
-  { "match": "regex", "native": "^character varying(\\([0-9]+\\))?$", "canonical": "Utf8" },
-  { "match": "exact", "native": "uuid",              "canonical": "Utf8" },
-  { "match": "exact", "native": "date",              "canonical": "Date32" },
-  { "match": "regex", "native": "^time(\\([0-9]+\\))?( without time zone)?$",      "canonical": "Time64(MICROSECOND)" },
-  { "match": "regex", "native": "^timestamp(\\([0-9]+\\))?( without time zone)?$", "canonical": "Timestamp(MICROSECOND)" },
-  { "match": "regex", "native": "^timestamp(\\([0-9]+\\))? with time zone$",       "canonical": "Timestamp(MICROSECOND, UTC)" },
-  { "match": "regex", "native": "^numeric\\((?<precision>[0-9]+),\\s*(?<scale>[0-9]+)\\)$", "canonical": "Decimal128(${precision}, ${scale})" },
-  { "match": "exact", "native": "numeric",           "canonical": "Decimal128(38, 0)" },
-  { "match": "exact", "native": "bytea",             "canonical": "Binary" },
-  { "match": "exact", "native": "jsonb",             "canonical": "Json" },
-  { "match": "exact", "native": "json",              "canonical": "Json" }
+  { "match": "exact", "native": "SMALLINT",                                 "canonical": "Int16" },
+  { "match": "exact", "native": "INTEGER",                                  "canonical": "Int32" },
+  { "match": "exact", "native": "BIGINT",                                   "canonical": "Int64" },
+  { "match": "exact", "native": "BOOLEAN",                                  "canonical": "Boolean" },
+  { "match": "exact", "native": "TEXT",                                     "canonical": "Utf8" },
+  { "match": "regex", "native": "^CHARACTER VARYING(\\(.+\\))?$",           "canonical": "Utf8" },
+  { "match": "exact", "native": "UUID",                                     "canonical": "Utf8" },
+  { "match": "exact", "native": "JSONB",                                    "canonical": "Utf8" },
+  { "match": "exact", "native": "DATE",                                     "canonical": "Date32" },
+  { "match": "regex", "native": "^TIME(\\(.+\\))?( WITHOUT TIME ZONE)?$",   "canonical": "Time64(MICROSECOND)" },
+  { "match": "regex", "native": "^TIMESTAMP(\\(.+\\))?( WITHOUT TIME ZONE)?$", "canonical": "Timestamp(MICROSECOND)" },
+  { "match": "regex", "native": "^TIMESTAMP(\\(.+\\))? WITH TIME ZONE$",    "canonical": "Timestamp(MICROSECOND, UTC)" },
+  { "match": "regex", "native": "^NUMERIC(\\(.+\\))?$",                     "canonical": "Decimal128(38, 9)" },
+  { "match": "exact", "native": "BYTEA",                                    "canonical": "Binary" }
 ]
 ```
 
-The `numeric` split — regex (with `(?<precision>…)` / `(?<scale>…)`
-named captures rendering into `Decimal128(${precision}, ${scale})`)
-above an `exact` fallback for unqualified `numeric` — is the canonical
-pattern for parameterized DB types. First-match-wins means the more
-specific regex must come **before** the bare-name fallback.
+## Worked example: Postgres (write)
+
+Excerpt from the reference write map — `canonical` is the matcher (note
+the regex over the canonical string with lowercase capture names), and
+`native` is the rendered DDL:
+
+```json
+[
+  { "match": "exact", "canonical": "Boolean",   "native": "BOOLEAN" },
+  { "match": "exact", "canonical": "Int64",     "native": "BIGINT" },
+  { "match": "regex", "canonical": "^Decimal(128|256)\\((?<p>\\d+),\\s*(?<s>\\d+)\\)$", "native": "NUMERIC(${p}, ${s})" },
+  { "match": "exact", "canonical": "Utf8",      "native": "TEXT" },
+  { "match": "exact", "canonical": "Json",      "native": "JSONB" },
+  { "match": "regex", "canonical": "^FixedSizeBinary\\(\\d+\\)$",          "native": "BYTEA" },
+  { "match": "regex", "canonical": "^Time(32|64)\\([A-Z]+\\)$",            "native": "TIME" },
+  { "match": "regex", "canonical": "^Timestamp\\([A-Z]+\\)$",              "native": "TIMESTAMP" },
+  { "match": "regex", "canonical": "^Timestamp\\([A-Z]+,\\s*UTC\\)$",      "native": "TIMESTAMPTZ" }
+]
+```
+
+First-match-wins applies per file: more specific rules come **before**
+broader fallbacks (the tz Timestamp rule never fires above because the
+bare `^Timestamp\([A-Z]+\)$` doesn't match a two-argument canonical —
+but a genuinely overlapping family rule must be ordered carefully).
 
 ## Out of scope
 

@@ -7,11 +7,16 @@ fields are:
 
 | `transport_type` | Identity field | Extras |
 |---|---|---|
-| `sqlalchemy` | `driver` (e.g. `"postgresql+asyncpg"`) | optional `tls` block (canonical `ssl_mode` + `ssl_ca_certificate` refs) |
+| `sqlalchemy` | `driver` — an **async** DBAPI (e.g. `"postgresql+asyncpg"`, `"mysql+aiomysql"`; sync drivers fail at connect) | optional `tls` block (`ssl_mode` + `ssl_ca_certificate` refs; mode vocabulary is connector-defined) |
 | `adbc` | `driver` — closed enum: `postgresql`, `snowflake`, `bigquery` | `db_kwargs` (object; values may be value expressions). **AdbcTransport requires at least one of `dsn` / `db_kwargs`.** TLS lives inside `db_kwargs` (e.g. `adbc.postgresql.sslmode`); no `tls` block. |
 
-For databases in the ADBC driver enum, prefer `adbc` — it exchanges
-Arrow columns natively and avoids the SQLAlchemy row-to-Arrow conversion.
+Transport choice follows the decision order in
+`spec-driver-selection.md` (first-class ADBC → Flight SQL → async
+SQLAlchemy + native bulk path → async SQLAlchemy batched INSERT; never
+the JDBC bridge). For databases in the ADBC driver enum, prefer `adbc`
+— it exchanges Arrow columns natively and avoids the SQLAlchemy
+row-to-Arrow conversion. The chosen driver ships ONLY in the
+connector's `requirements.txt` (the engine pins no database drivers).
 ADBC drivers that accept all connection state via `db_kwargs` (e.g.
 Snowflake) may omit `dsn` entirely.
 
@@ -71,7 +76,7 @@ Snowflake) may omit `dsn` entirely.
 | Driver | Template |
 |---|---|
 | `postgresql+asyncpg` | `postgresql+asyncpg://{username}:{password}@{host}:{port}/{database}` |
-| `mysql+asyncmy` | `mysql+asyncmy://{username}:{password}@{host}:{port}/{database}` |
+| `mysql+aiomysql` | `mysql+aiomysql://{username}:{password}@{host}:{port}/{database}` |
 | `snowflake` | `snowflake://{username}:{password}@{account}/{database}/{schema}?warehouse={warehouse}&role={role}` |
 | `mongodb` | `mongodb://{username}:{password}@{host}:{port}/{database}?authSource=admin` |
 

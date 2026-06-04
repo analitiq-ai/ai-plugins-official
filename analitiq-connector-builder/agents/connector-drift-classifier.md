@@ -13,14 +13,18 @@ object.
 
 - `previous_release_path` — absolute path to the prior released
   connector directory or `connector.json`. The classifier also reads
-  the sibling `type-map.json` when present.
+  the sibling `type-map-read.json` and `type-map-write.json` when
+  present (and a pre-split `type-map.json` in older releases — diff it
+  against the draft's `type-map-read.json`).
 - `current_path` — absolute path to the assembled draft (connector JSON
   or its directory). The classifier also reads the sibling draft
-  `type-map.json` when present.
+  `type-map-read.json` / `type-map-write.json` when present.
 
 ## Process
 
-1. Read both documents AND their sibling `type-map.json` files.
+1. Read both documents AND their sibling type-map files (read and,
+   for database connectors, write). The two maps are diffed
+   independently; a change in either drives the bump.
 2. Compute the structural diff. Use `diff` or `jq` via Bash, or compare in
    your reasoning against the rules below.
 3. For each change, classify it under the categories in the `DriftVerdict`
@@ -38,12 +42,15 @@ object.
 - **major**: input-removed, input-renamed, input-type-changed,
   input-enum-narrowed, storage-changed, non-optional-input-added,
   auth-shape-changed, discovery-shape-changed, type-map-rule-removed,
-  type-map-canonical-changed (an existing `native` now resolves to a
-  different canonical — invalidates downstream consumers).
+  type-map-canonical-changed (an existing matcher now resolves to a
+  different render — read map: an existing `native` resolves to a
+  different canonical; write map: an existing `canonical` renders a
+  different native DDL — either invalidates downstream consumers).
 - **minor**: optional-input-added, optional-output-added,
   optional-endpoint-added, type-map-rule-added.
 - **patch**: bug-fix, doc-fix, tuning, type-map-rule-reordered (when the
-  reorder doesn't change first-match resolution for any existing native).
+  reorder doesn't change first-match resolution for any existing input
+  in that map's direction).
 
 ## Hard rules
 

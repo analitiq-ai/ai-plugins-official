@@ -22,9 +22,10 @@ and `connectors/connector-schema-parameterization.md`.
 | `connection_contract` | Yes | Connection-contract shape. |
 | `resource_discovery` | No | Resource discovery declarations. |
 
-Note: the connector's type map is **not** a top-level field. It ships
-as a separate sibling artifact at
-`{connector_id}/definition/type-map.json` and validates against
+Note: the connector's type maps are **not** top-level fields. They ship
+as separate sibling artifacts — `{connector_id}/definition/type-map-read.json`
+(native → Arrow, all kinds) and `{connector_id}/definition/type-map-write.json`
+(Arrow → native, database only) — and both validate against
 `https://schemas.analitiq.ai/type-map/latest.json`. See
 `connector-spec-db/spec-type-maps.md` for authoring.
 
@@ -58,9 +59,13 @@ the connector release table:
 
 | Bump | Meaning | Examples |
 |---|---|---|
-| Patch | No connection drift. | Bug fixes, doc fixes, transport implementation tuning, type-map rule reordered (when the reorder does not change first-match resolution for any existing native). |
+| Patch | No connection drift. | Bug fixes, doc fixes, transport implementation tuning, type-map rule reordered (when the reorder does not change first-match resolution for any existing input). |
 | Minor | Additive, non-drifting. | Optional input added, optional discovery output added, optional endpoint added, type-map rule added. |
-| Major | Possible connection drift. | Input removed, renamed, type-changed, enum narrowed, storage moved, non-optional input added, auth-shape change, discovery-shape change, type-map rule removed, `canonical` changed for an existing `native`. |
+| Major | Possible connection drift. | Input removed, renamed, type-changed, enum narrowed, storage moved, non-optional input added, auth-shape change, discovery-shape change, type-map rule removed, render side changed for an existing matcher (read map: `canonical` changed for an existing `native`; write map: `native` changed for an existing `canonical`). |
+
+Type-map drift categories apply per file: `type-map-read.json` and
+`type-map-write.json` are diffed independently, and a change in either
+drives the bump per the table above.
 
 The drift-classifier sub-agent computes this bump from a diff between
 the previous release and the new draft.

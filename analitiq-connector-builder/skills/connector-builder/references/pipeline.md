@@ -70,7 +70,10 @@ Based on `kind`:
 - `kind ∈ {file, s3, stdout}` → invoke `storage-connector-creator` (stub).
 
 Receive a `CreatorOutput` JSON object containing the assembled connector
-body.
+body and type map(s). For `kind = database` it additionally carries the
+`package_files` block (`connector.py`, `__init__.py`, `requirements.txt`,
+`pyproject.toml` contents) — the connector is an installable Python
+package and the creator owns all of its files.
 
 ### 4. Endpoint files (api only)
 
@@ -86,13 +89,26 @@ combinations are connection-scoped and discovered at runtime via
 
 Invoke `connector-schema-validator` with the connector document and
 `schema_url=https://schemas.analitiq.ai/connector/latest.json`. Also
-validate the standalone `type-map.json` against
-`https://schemas.analitiq.ai/type-map/latest.json`. For each endpoint
+validate the standalone `type-map-read.json` against
+`https://schemas.analitiq.ai/type-map/latest.json`, and — for database
+connectors — `type-map-write.json` with `--semantic-only`: the
+published type-map schema is read-direction-only today (its
+`canonical` constraint rejects the write map's regex matchers — a
+contract gap, raised upstream); Layer 2 fully owns write-map rule
+shape and vocabulary coverage. The validator derives the rule
+direction from the filename, so write the maps under their exact
+filenames before standalone validation, or validate via the connector
+document so the sibling walk picks them up. For each endpoint
 document, invoke the validator with the kind-specific URL:
 
 - API endpoint → `https://schemas.analitiq.ai/api-endpoint/latest.json`.
 - Database endpoint (when applicable in future) →
   `https://schemas.analitiq.ai/database-endpoint/latest.json`.
+
+The validator validates JSON documents only — the database package
+files (`connector.py`, `__init__.py`, `requirements.txt`,
+`pyproject.toml`) are enforced by registry CI (wheel build,
+entry-point checks), not by this pipeline.
 
 The orchestrator should attempt at most 5 fix passes per artifact —
 re-dispatch the matching creator with the validator's findings,
@@ -114,18 +130,27 @@ If `previous_release_path` was not supplied, this is a first release; set
 
 ### 7. Write
 
-Write the connector document and any endpoint files to disk at
-predictable paths:
+Write the connector document, type map(s), package files (database
+only), and any endpoint files to disk at predictable paths. The
+connector root IS the Python package for database connectors:
 
 ```
 {connector_id}/
 ├── definition/
 │   ├── connector.json
-│   ├── type-map.json               # required for both api and db; standalone file
+│   ├── type-map-read.json          # required for both api and db; native → Arrow
+│   ├── type-map-write.json         # database only; Arrow → native DDL render rules
 │   └── endpoints/
 │       └── {endpoint_id}.json      # api connectors only — one file per endpoint; filename = document.endpoint_id
+├── __init__.py                     # database only — re-exports the connector class
+├── connector.py                    # database only — {Name}Dialect(SqlDialect) + {Name}Connector(GenericSQLConnector)
+├── requirements.txt                # database only — THIS connector's driver(s) only
+├── pyproject.toml                  # database only — analitiq-connector-{connector_id}; entry points named {connector_id}
 └── README.md
 ```
+
+Never write a `type-map.json` — that pre-split filename is dead to the
+engine and the validator rejects it with a migration finding.
 
 ## Failure modes
 

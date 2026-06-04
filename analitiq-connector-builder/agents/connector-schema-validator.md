@@ -18,7 +18,17 @@ files.
   - `https://schemas.analitiq.ai/database-endpoint/latest.json`
   - `https://schemas.analitiq.ai/type-map/latest.json`
   - `https://schemas.analitiq.ai/connection/latest.json` (other plugin uses this)
-- `document_path` — absolute path to the draft JSON document.
+- `document_path` — absolute path to the draft JSON document. Type-map
+  documents must be validated under their on-disk filenames
+  (`type-map-read.json` / `type-map-write.json`) — the rule direction is
+  derived from the filename. Validate `type-map-write.json` with
+  `--semantic-only`: the published type-map schema is
+  read-direction-only today (its `canonical` constraint requires a
+  literal/template Arrow type and rejects the write map's regex
+  matchers — a known contract gap); Layer 2 fully owns write-map rule
+  shape and vocabulary coverage. The validator checks JSON documents
+  only; database package files (`connector.py`, `pyproject.toml`, …)
+  are registry CI's responsibility.
 
 The `$schema` const inside each published schema points at
 `schemas.analitiq.ai`, so authored documents declare the same URL in
@@ -51,8 +61,9 @@ the document type:
 | `dsn-binding` | Every `{placeholder}` has a binding; every binding is referenced; `encoding` is in the closed enum. |
 | `auth-shape` | OAuth2 variants (`oauth2_authorization_code` requires `authorize`+`token_exchange`; `oauth2_client_credentials` requires `token_exchange` and forbids `authorize`) and `none` (forbids all auth ops). Other auth types are validated by JSON Schema only. |
 | `tls-consistency` | If `ssl_mode` enum allows `verify-ca` / `verify-full`, then `ssl_ca_certificate` is declared in `connection_contract.inputs`. |
-| `type-map-coverage` | Connector docs require a sibling `type-map.json` (non-empty array). For API connectors, every endpoint `(native_type, arrow_type)` pair must resolve through that file with rendered canonical equal to the endpoint's `arrow_type` (`Object` / `List` are accepted narrowings of `Json`). |
-| `type-map-rule` | For `type-map.json` documents: `exact` rules must not use `${…}` substitution; `regex` rules' `native` must always compile (even when `canonical` is not templated); `regex` rules must use ECMA-262 named-group syntax `(?<name>…)` — non-ECMA `(?P[<=>]…)` extensions (Python stdlib `(?P<…>)` / `(?P=…)`, PyPI `regex`-library's `(?P>…)`) are rejected; `regex` rules referencing `${name}` must define a matching `(?<name>…)` capture in `native`; duplicate `(match, native)` pairs warn. Also runs against the sibling `type-map.json` when validating a connector. |
+| `type-map-coverage` | Connector docs require a sibling `type-map-read.json` (non-empty array); database connectors additionally require a sibling `type-map-write.json`, and API connectors must NOT ship one. A pre-split `type-map.json` sibling is an error with a migration pointer. For API connectors, every endpoint `(native_type, arrow_type)` pair must resolve through the read map — natives are normalized (UPPERCASE, whitespace-collapsed) before matching — with rendered canonical equal to the endpoint's `arrow_type` (`Object` / `List` are accepted narrowings of `Json`). |
+| `type-map-rule` | For type-map documents (direction derived from the filename: `type-map-write.json` → write, else read; the write direction swaps matcher and render sides — `canonical` matches, `native` renders): `exact` rules must not use `${…}` substitution on the render side; `regex` rules' matcher must always compile (even when the render side is not templated); `regex` rules must use ECMA-262 named-group syntax `(?<name>…)` — non-ECMA `(?P[<=>]…)` extensions (Python stdlib `(?P<…>)` / `(?P=…)`, PyPI `regex`-library's `(?P>…)`) are rejected; `regex` rules referencing `${name}` on the render side must define a matching `(?<name>…)` capture in the matcher; read-direction regex matchers containing lowercase literals warn (patterns are matched against UPPERCASED natives); duplicate (match, matcher) pairs warn. Also runs against the sibling map files when validating a connector. |
+| `type-map-write-coverage` | For `type-map-write.json` documents (standalone or as a database connector's sibling): probes the map against the full canonical vocabulary (Boolean, Int8–64, UInt8–64, Float16/32/64, Decimal, Utf8/LargeUtf8, Json, Binary/LargeBinary/FixedSizeBinary, Date32/64, Time, Timestamp bare + tz). Gaps are a single grouped **warning** — a dialect may deliberately leave a family to a `render_column_type` override. |
 | `endpoint-annotations` | For api-endpoint documents validated directly (under `api-endpoint/latest.json`): every typed field's `(native_type, arrow_type)` pair must be both-present and both-string; sub-trees that aren't JSON objects emit a `non_dict_subtree` warning. (When walking endpoints from a connector, the same checks fire via `type-map-coverage`.) |
 
 ## Output

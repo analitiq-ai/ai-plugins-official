@@ -60,5 +60,5 @@ Omit `replication` entirely when:
 - The cursor value expression must resolve per-record, not once per
   page — use `ref: "record.X"`, not `ref: "response.body.records[-1].X"`.
 - Don't add a `type-map` field to `cursor_mappings`; canonical types
-  are resolved through the standalone `type-map.json` file shipped
+  are resolved through the standalone `type-map-read.json` file shipped
   alongside the connector.

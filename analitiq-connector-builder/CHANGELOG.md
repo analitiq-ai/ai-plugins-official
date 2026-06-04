@@ -3,6 +3,64 @@
 ## [unreleased]
 
 ### Changed
+- **Type-map split: `type-map.json` → `type-map-read.json` + `type-map-write.json`**
+  (per `connector-driver-selection.md` / `dip-registry-connector-packages.md`
+  specs; the engine reads only the new filenames).
+  - The read map (`type-map-read.json`, native → Arrow) is required for
+    every connector; the new write map (`type-map-write.json`, Arrow →
+    native DDL render rules) is **required for `kind: database` and
+    forbidden for `kind: api`**. The read map validates against the
+    existing `type-map/latest.json` schema; the write map is validated
+    semantically only (`--semantic-only`) because the published schema
+    is read-direction-only today — its `canonical` constraint rejects
+    write-direction regex matchers (contract gap raised upstream). The
+    validator derives the rule direction from the filename. A leftover
+    `type-map.json` sibling is an error with a migration pointer.
+  - Write-map rules invert the matcher/render sides: `canonical`
+    matches (regex with ECMA named captures for parameterized types)
+    and `native` renders (`${name}` substitutions backed by those
+    captures). New `type-map-write-coverage` validator probes the write
+    map against the full canonical vocabulary and warns on gaps
+    (legitimate only behind a `render_column_type` dialect override).
+  - Read-map regex patterns are now matched against UPPERCASED,
+    whitespace-collapsed natives (mirroring the engine): author
+    patterns uppercase; lowercase regex literals warn; exact rules are
+    normalized automatically; the endpoint coverage walker normalizes
+    natives before matching.
+  - `tls-consistency` now recognizes connector-defined verification
+    modes (`VERIFY_CA` / `VERIFY_IDENTITY` alongside
+    `verify-ca` / `verify-full`).
+- **Database connectors are installable Python packages.**
+  `db-connector-creator` now authors the package files alongside the
+  JSON artifacts: `connector.py` (`{Name}Dialect(SqlDialect)` +
+  `{Name}Connector(GenericSQLConnector)`; CDK imports only),
+  `__init__.py`, `requirements.txt` (this connector's drivers only),
+  and `pyproject.toml` (`analitiq-connector-{connector_id}`, dynamic
+  deps, entry points named `{connector_id}` under both source and
+  destination groups). `CreatorOutput` gained `type_map_read`,
+  `type_map_write`, and `package_files` (replacing `type_map`). The
+  schema validator stays JSON-only — package files are registry CI's
+  responsibility. New reference: `connector-spec-db/spec-connector-package.md`.
+- **Driver selection decision order.** New
+  `connector-spec-db/spec-driver-selection.md` + reworked
+  `TransportTypeMapper`: (1) first-class ADBC driver → (2) Arrow Flight
+  SQL → (3) async SQLAlchemy + native bulk path in the connector class
+  → (4) async SQLAlchemy batched INSERT, never the JDBC bridge.
+  SQLAlchemy drivers must be async — guidance and examples moved from
+  `mysql+asyncmy` to `mysql+aiomysql` (with the `pymysql<1.2` pin
+  noted). `ProviderFacts` (database branch) gained
+  `adbc_driver_package`, `flight_sql_endpoint`, `bulk_load_protocol`,
+  `async_sqlalchemy_driver`.
+- **Examples mirror the engine reference packages** (engine workspace
+  `connectors/{id}/` is source of truth): postgres/mysql/snowflake
+  read+write maps copied verbatim (uppercase natives; postgres/mysql
+  read `JSON`/`JSONB` as `Utf8` — text on the wire — while Snowflake
+  keeps `VARIANT`/`OBJECT`/`ARRAY` → `Json`); the mysql example adopts
+  MySQL's native TLS vocabulary (`DISABLED`…`VERIFY_IDENTITY`),
+  interpreted by the dialect's `build_tls_connect_arg` (the SSL-mode
+  vocabulary is now documented as connector-defined).
+- `connector-drift-classifier` diffs both map files independently; the
+  type-map drift categories apply per file/direction.
 - **Validator surface hardening.** Several `--semantic-only` silent-pass
   cases now emit structured findings:
   - New `endpoint-annotations` validator id surfaces malformed

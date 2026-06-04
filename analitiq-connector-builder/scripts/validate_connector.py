@@ -90,6 +90,7 @@ VALIDATOR_IDS = {
     "tls-consistency",
     "type-map-coverage",
     "type-map-rule",
+    "type-map-write-coverage",
     "endpoint-annotations",
 }
 
@@ -658,7 +659,16 @@ def check_tls_consistency(doc: dict) -> list[dict]:
             )
         )
         return findings
-    requires_ca = any(v in {"verify-ca", "verify-full"} for v in enum)
+    # The ssl_mode vocabulary is connector-defined (libpq-shaped systems
+    # declare verify-ca/verify-full; MySQL/MariaDB declare
+    # VERIFY_CA/VERIFY_IDENTITY) — normalize before matching so every
+    # certificate-verification mode triggers the CA-input requirement.
+    _verification_modes = {"verify-ca", "verify-full", "verify-identity"}
+    requires_ca = any(
+        isinstance(v, str)
+        and v.lower().replace("_", "-") in _verification_modes
+        for v in enum
+    )
     has_ca_input = "ssl_ca_certificate" in inputs
     if requires_ca and not has_ca_input:
         findings.append(
@@ -666,7 +676,7 @@ def check_tls_consistency(doc: dict) -> list[dict]:
                 "tls-consistency",
                 "error",
                 "/connection_contract/inputs",
-                "ssl_mode allows verify-ca/verify-full but ssl_ca_certificate input is not declared.",
+                "ssl_mode allows a certificate-verification mode (verify-ca/verify-full/VERIFY_CA/VERIFY_IDENTITY) but ssl_ca_certificate input is not declared.",
                 rule_doc="connectors/connector-schema-parameterization.md#transport-contracts",
             )
         )
@@ -1194,7 +1204,7 @@ _PYTHON_REGEX_FEATURE = re.compile(r"\(\?P[<=>]")
 def _to_python_regex(pattern: str) -> str:
     """Translate ECMA-262 `(?<name>…)` named groups to Python's `(?P<name>…)`.
 
-    The published `type-map.json` schema documents ECMA-262 regex syntax;
+    The published type-map schema documents ECMA-262 regex syntax;
     Python's `re` module only accepts the `(?P<…>)` spelling, so the
     validator translates the well-defined named-group form before
     compiling. Anonymous groups (`(...)`) and non-capturing (`(?:…)`)
@@ -1208,27 +1218,131 @@ def _to_python_regex(pattern: str) -> str:
     return _ECMA_NAMED_GROUP.sub(r"(?P<\1>", pattern)
 
 
+# On-disk sibling filenames under `{connector_id}/definition/`. The read map
+# (native → Arrow) is required for api and database kinds; the write map
+# (Arrow → native DDL render rules) is required for database kinds only.
+# The pre-split filename is rejected with a migration finding.
+_READ_MAP_FILENAME = "type-map-read.json"
+_WRITE_MAP_FILENAME = "type-map-write.json"
+_LEGACY_MAP_FILENAME = "type-map.json"
+
+# Per-direction (matcher key, render key) for type-map rules. Read maps match
+# on `native` and render `canonical`; write maps invert: they match on
+# `canonical` (which may be a regex with named captures) and render `native`
+# (which may carry `${name}` substitutions backed by those captures).
+_DIRECTION_KEYS = {
+    "read": ("native", "canonical"),
+    "write": ("canonical", "native"),
+}
+
+# Representative probes for the write-direction canonical vocabulary
+# (dip-registry-connector-packages.md, authoring rule 8). Each entry is
+# (family label, probe canonical); a write map should resolve every probe.
+# Gaps are warnings, not errors — a dialect may deliberately leave a family
+# unmapped and take over rendering via a `render_column_type` override
+# (BigQuery's NUMERIC/BIGNUMERIC precision-range arithmetic is the
+# canonical example).
+_WRITE_VOCABULARY_PROBES: tuple[tuple[str, str], ...] = (
+    ("Boolean", "Boolean"),
+    ("Int8", "Int8"),
+    ("Int16", "Int16"),
+    ("Int32", "Int32"),
+    ("Int64", "Int64"),
+    ("UInt8", "UInt8"),
+    ("UInt16", "UInt16"),
+    ("UInt32", "UInt32"),
+    ("UInt64", "UInt64"),
+    ("Float16", "Float16"),
+    ("Float32", "Float32"),
+    ("Float64", "Float64"),
+    ("Decimal128(p, s)", "Decimal128(38, 9)"),
+    ("Utf8", "Utf8"),
+    ("LargeUtf8", "LargeUtf8"),
+    ("Json", "Json"),
+    ("Binary", "Binary"),
+    ("LargeBinary", "LargeBinary"),
+    ("FixedSizeBinary(n)", "FixedSizeBinary(16)"),
+    ("Date32", "Date32"),
+    ("Date64", "Date64"),
+    ("Time", "Time64(MICROSECOND)"),
+    ("Timestamp (bare)", "Timestamp(MICROSECOND)"),
+    ("Timestamp (tz)", "Timestamp(MICROSECOND, UTC)"),
+)
+
+
+def _strip_regex_meta(pattern: str) -> str:
+    """Strip named-group declarations and backslash escapes from a regex.
+
+    What remains of the pattern after `(?<name>` declarations and `\\x`
+    escape pairs are removed is (approximately) the literal text the
+    pattern must match. Used by the uppercase-pattern check: lowercase
+    letters surviving this strip are literal matches that can never fire
+    against the engine's UPPERCASED native strings.
+    """
+    without_groups = _ECMA_NAMED_GROUP.sub("(", pattern)
+    return re.sub(r"\\.", "", without_groups)
+
+
+def _load_sibling_type_map(tm_path: Path) -> tuple[list | None, list[dict]]:
+    """Read, parse, and shape-check a sibling type-map file.
+
+    Returns `(doc, findings)`: `doc` is the parsed top-level array on
+    success and `None` when the file is unreadable, unparsable, or not a
+    non-empty array — in which case `findings` carries the corresponding
+    `type-map-coverage` error naming the file.
+    """
+    try:
+        tm_doc = json.loads(tm_path.read_text())
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        return None, [
+            finding(
+                "type-map-coverage",
+                "error",
+                "/",
+                f"sibling {tm_path.name} could not be read or parsed ({exc}).",
+                rule_doc="shared/type-maps.md",
+            )
+        ]
+    if not isinstance(tm_doc, list) or not tm_doc:
+        return None, [
+            finding(
+                "type-map-coverage",
+                "error",
+                "/",
+                f"sibling {tm_path.name} must be a non-empty array of rules.",
+                rule_doc="shared/type-maps.md",
+            )
+        ]
+    return tm_doc, []
+
+
 def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dict]:
-    """Validate connector ↔ sibling `type-map.json` coverage and consistency.
+    """Validate connector ↔ sibling type-map coverage and consistency.
 
-    API and database kinds require a sibling `type-map.json` (non-empty
-    array) per `shared/type-maps.md`. The validator emits an error when
-    the file is missing, unreadable, or empty. Storage kinds (file / s3
-    / stdout) follow a separate branch where the sibling is optional
-    but, when present, is still rule-checked.
+    API and database kinds require a sibling `type-map-read.json`
+    (native → Arrow, non-empty array) per `shared/type-maps.md`; database
+    kinds additionally require a sibling `type-map-write.json` (Arrow →
+    native render rules). API kinds must NOT ship a write map. A
+    pre-split `type-map.json` sibling is an error with a migration
+    pointer. The validator emits an error when a required file is
+    missing, unreadable, or empty. Storage kinds (file / s3 / stdout)
+    follow a separate branch where the siblings are optional but, when
+    present, are still rule-checked.
 
-    For database connectors, presence of any rules is sufficient at
+    For database connectors, presence of read rules is sufficient at
     author time — runtime discovery reconciles natives against the
-    user's database. For API connectors, the validator walks sibling
-    endpoint files and asserts every typed field's
-    `(native_type, arrow_type)` pair resolves via the sibling
-    `type-map.json`, rendering templated canonicals (named-capture
-    substitution) before comparison. The `Object` / `List` markers are
-    accepted as narrowings of a `Json`-resolved rule (the endpoint has
-    declared the inner shape via `properties` / `items`).
+    user's database; the write map is additionally probed against the
+    canonical vocabulary (warnings via `type-map-write-coverage`). For
+    API connectors, the validator walks sibling endpoint files and
+    asserts every typed field's `(native_type, arrow_type)` pair
+    resolves via the sibling `type-map-read.json`, rendering templated
+    canonicals (named-capture substitution) before comparison. The
+    `Object` / `List` markers are accepted as narrowings of a
+    `Json`-resolved rule (the endpoint has declared the inner shape via
+    `properties` / `items`).
 
     `doc_path` is the absolute path to the connector document on disk;
-    used to locate the sibling `type-map.json` and `endpoints/`
+    used to locate the sibling type-map files and `endpoints/`
     directory. When omitted, the check is skipped (the validator was
     invoked without a filesystem-anchored connector).
     """
@@ -1242,7 +1356,7 @@ def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dic
     # malformed connector OR a stray-kind endpoint. `check_transport_refs`
     # will surface its own "transports is required" error which is the
     # canonical signal that something connector-shaped is missing fields.
-    # Demanding a sibling type-map.json here would be misleading on a doc
+    # Demanding sibling type-map files here would be misleading on a doc
     # that turns out to be an endpoint, so we skip when none of the four
     # sentinel keys is present.
     if not any(k in doc for k in ("transports", "connection_contract", "default_transport", "auth")):
@@ -1253,7 +1367,7 @@ def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dic
                 "type-map-coverage",
                 "warning",
                 "/",
-                "type-map coverage skipped: validator was invoked without a filesystem-anchored document path; sibling type-map.json cannot be located.",
+                "type-map coverage skipped: validator was invoked without a filesystem-anchored document path; sibling type-map files cannot be located.",
                 rule_doc="shared/type-maps.md",
             )
         )
@@ -1285,90 +1399,103 @@ def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dic
             )
         )
         return findings
+    # Pre-split filename. The read map was renamed `type-map.json` →
+    # `type-map-read.json` when the write direction split out into its own
+    # file; a sibling still carrying the old name will never be read by the
+    # engine. Applies to every kind (a stale file is equally dead under a
+    # storage kind).
+    legacy_path = doc_path.parent / _LEGACY_MAP_FILENAME
+    if legacy_path.is_file():
+        findings.append(
+            finding(
+                "type-map-coverage",
+                "error",
+                "/",
+                f"legacy sibling {_LEGACY_MAP_FILENAME} found; the read map is now {_READ_MAP_FILENAME} "
+                f"(database connectors additionally ship {_WRITE_MAP_FILENAME}). Rename the file and re-validate.",
+                rule_doc="shared/type-maps.md",
+            )
+        )
+
+    read_path = doc_path.parent / _READ_MAP_FILENAME
+    write_path = doc_path.parent / _WRITE_MAP_FILENAME
+
     if kind not in ("api", "database"):
         # storage kinds (file/s3/stdout) are accepted by the schema but not
         # yet executed by the engine, so no per-kind coverage contract
-        # applies. If a sibling `type-map.json` exists, surface read / parse /
-        # shape / rule errors anyway so authors who ship a type-map ahead of
-        # engine support don't get a silent pass on a broken file. Absence
-        # of the sibling is allowed for storage kinds (unlike api/db).
-        tm_path = doc_path.parent / "type-map.json"
-        if tm_path.is_file():
-            try:
-                tm_doc = json.loads(tm_path.read_text())
-            except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
-                findings.append(
-                    finding(
-                        "type-map-coverage",
-                        "error",
-                        "/",
-                        f"sibling type-map.json could not be read or parsed ({exc}).",
-                        rule_doc="shared/type-maps.md",
-                    )
-                )
-                return findings
-            if not isinstance(tm_doc, list) or not tm_doc:
-                findings.append(
-                    finding(
-                        "type-map-coverage",
-                        "error",
-                        "/",
-                        "sibling type-map.json must be a non-empty array of rules.",
-                        rule_doc="shared/type-maps.md",
-                    )
-                )
-                return findings
-            findings.extend(_safe_check_type_map_rules(tm_doc))
+        # applies. If sibling map files exist, surface read / parse / shape /
+        # rule errors anyway so authors who ship type maps ahead of engine
+        # support don't get a silent pass on a broken file. Absence of the
+        # siblings is allowed for storage kinds (unlike api/db).
+        for sibling_path, direction in ((read_path, "read"), (write_path, "write")):
+            if not sibling_path.is_file():
+                continue
+            tm_doc, load_findings = _load_sibling_type_map(sibling_path)
+            findings.extend(load_findings)
+            if tm_doc is not None:
+                findings.extend(_safe_check_type_map_rules(tm_doc, direction=direction))
         return findings
 
-    tm_path = doc_path.parent / "type-map.json"
-    if not tm_path.is_file():
+    if not read_path.is_file():
         findings.append(
             finding(
                 "type-map-coverage",
                 "error",
                 "/",
-                f"connector requires sibling type-map.json at {tm_path.name}; file is missing.",
+                f"connector requires sibling {_READ_MAP_FILENAME} (native → Arrow rules); file is missing.",
                 rule_doc="shared/type-maps.md",
             )
         )
         return findings
 
-    try:
-        tm_doc = json.loads(tm_path.read_text())
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
-        findings.append(
-            finding(
-                "type-map-coverage",
-                "error",
-                "/",
-                f"sibling type-map.json could not be read or parsed ({exc}).",
-                rule_doc="shared/type-maps.md",
-            )
-        )
-        return findings
-
-    if not isinstance(tm_doc, list) or not tm_doc:
-        findings.append(
-            finding(
-                "type-map-coverage",
-                "error",
-                "/",
-                "sibling type-map.json must be a non-empty array of rules.",
-                rule_doc="shared/type-maps.md",
-            )
-        )
+    tm_doc, load_findings = _load_sibling_type_map(read_path)
+    findings.extend(load_findings)
+    if tm_doc is None:
         return findings
 
     # Surface rule-shape errors from the sibling (broken regex, Python-syntax,
     # duplicates, etc.) at connector-validation time, not just when the
-    # validator is invoked directly against type-map.json. Use the safe wrapper
+    # validator is invoked directly against the map file. Use the safe wrapper
     # so a crash in the inner validator can't discard the in-progress
     # `findings` list we've accumulated.
-    findings.extend(_safe_check_type_map_rules(tm_doc))
+    findings.extend(_safe_check_type_map_rules(tm_doc, direction="read"))
 
     if kind == "database":
+        # Database connectors ship the write direction as a sibling
+        # `type-map-write.json`: Arrow → native DDL render rules consumed by
+        # `dialect.render_column_type`. Rule-shape errors surface the same
+        # way as for the read map; vocabulary gaps (rule 8) are warnings.
+        if not write_path.is_file():
+            findings.append(
+                finding(
+                    "type-map-coverage",
+                    "error",
+                    "/",
+                    f"database connector requires sibling {_WRITE_MAP_FILENAME} (Arrow → native render rules); file is missing.",
+                    rule_doc="shared/type-maps.md",
+                )
+            )
+            return findings
+        write_doc, load_findings = _load_sibling_type_map(write_path)
+        findings.extend(load_findings)
+        if write_doc is not None:
+            findings.extend(_safe_check_type_map_rules(write_doc, direction="write"))
+            findings.extend(_write_map_vocabulary_findings(write_doc))
         return findings
+
+    # API connectors are read-only at the type-map layer: the write direction
+    # is a database-package concept (DDL rendering). A write map on an api
+    # connector would never be consumed and signals a misunderstood contract.
+    if write_path.is_file():
+        findings.append(
+            finding(
+                "type-map-coverage",
+                "error",
+                "/",
+                f"api connector must not ship a sibling {_WRITE_MAP_FILENAME}; the write direction applies to database connectors only.",
+                rule_doc="shared/type-maps.md",
+            )
+        )
 
     endpoint_dir = doc_path.parent / "endpoints"
     if not endpoint_dir.is_dir():
@@ -1449,7 +1576,7 @@ def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dic
                         "type-map-coverage",
                         "error",
                         "/",
-                        f"native_type {native!r} at {site} has no matching rule in sibling type-map.json.",
+                        f"native_type {native!r} at {site} has no matching rule in sibling {_READ_MAP_FILENAME}.",
                         rule_doc="shared/type-maps.md",
                     )
                 )
@@ -1465,7 +1592,7 @@ def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dic
                     "/",
                     (
                         f"native_type {native!r} at {site} resolves to {rendered!r} "
-                        f"via sibling type-map.json but endpoint declares arrow_type={arrow!r}."
+                        f"via sibling {_READ_MAP_FILENAME} but endpoint declares arrow_type={arrow!r}."
                     ),
                     rule_doc="shared/type-maps.md",
                 )
@@ -1473,7 +1600,7 @@ def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dic
     return findings
 
 
-def _safe_check_type_map_rules(doc: Any) -> list[dict]:
+def _safe_check_type_map_rules(doc: Any, direction: str = "read") -> list[dict]:
     """Call `check_type_map_rules` with a crash guard.
 
     Used when one accumulating validator (e.g. `check_type_map_coverage`)
@@ -1485,7 +1612,7 @@ def _safe_check_type_map_rules(doc: Any) -> list[dict]:
     findings — so we catch here and convert to a structured finding.
     """
     try:
-        return check_type_map_rules(doc)
+        return check_type_map_rules(doc, direction=direction)
     except Exception as exc:  # noqa: BLE001 — last-resort guard
         return [
             finding(
@@ -1498,11 +1625,25 @@ def _safe_check_type_map_rules(doc: Any) -> list[dict]:
         ]
 
 
-def check_type_map_rules(doc: Any) -> list[dict]:
-    """Validate self-contained rules in a `type-map.json` document.
+def check_type_map_rules(
+    doc: Any,
+    doc_path: Path | None = None,
+    *,
+    direction: str | None = None,
+) -> list[dict]:
+    """Validate self-contained rules in a type-map document.
 
     Runs against a top-level array (the on-disk shape of
-    `type-map.json`). Enforces, beyond what JSON Schema covers:
+    `type-map-read.json` / `type-map-write.json`). The two directions
+    share the rule shape but invert which key is the matcher and which
+    is rendered: read maps match on `native` and render `canonical`;
+    write maps match on `canonical` and render `native`. `direction`
+    selects the orientation explicitly; when omitted it is derived from
+    `doc_path` (filename `type-map-write.json` → write, anything else →
+    read, matching the on-disk contract).
+
+    Enforces, beyond what JSON Schema covers (key names below follow
+    the read orientation; swap native/canonical for write maps):
 
     - Rules missing required key(s) (`match`, `native`, `canonical`)
       emit a warning and are skipped — Layer 1 owns the schema error.
@@ -1512,21 +1653,26 @@ def check_type_map_rules(doc: Any) -> list[dict]:
     - `match` outside the closed `{"exact", "regex"}` enum errors out
       (including `null`, typos, or future schema additions the
       validator pre-dates).
-    - `match: "exact"` rules must not use `${...}` substitution in
-      `canonical` (those are regex-only).
-    - For `match: "exact"` or `"regex"`, `native` must be a string —
-      non-string values would silently shadow valid rules at runtime.
-    - `match: "regex"` rules' `native` must compile as a valid regex
-      (regardless of whether `canonical` is templated).
+    - `match: "exact"` rules must not use `${...}` substitution in the
+      render-side value (those are regex-only).
+    - The matcher-side value must be a string — non-string values would
+      silently shadow valid rules at runtime.
+    - `match: "regex"` rules' matcher must compile as a valid regex
+      (regardless of whether the render side is templated).
     - `match: "regex"` rules must use ECMA-262 named-group syntax
       `(?<name>…)`; non-ECMA `(?P[<=>]…)` extensions (Python stdlib's
       `(?P<…>)` / `(?P=…)`, PyPI `regex`-library's `(?P>…)`) are
       contract violations.
-    - `match: "regex"` rules referencing `${name}` in `canonical` must
-      define a matching named capture group `(?<name>…)` in `native`.
-    - `canonical` must be a string — non-string values silently inert
-      a rule at runtime.
-    - Duplicate `(match, native)` pairs are flagged as warnings —
+    - `match: "regex"` rules referencing `${name}` on the render side
+      must define a matching named capture group `(?<name>…)` in the
+      matcher.
+    - Read-direction regex matchers are evaluated against UPPERCASED,
+      whitespace-collapsed native strings; lowercase literals left in
+      the pattern after stripping group declarations and escapes can
+      never match, so they warn (capture group names stay lowercase).
+    - The render-side value must be a string — non-string values
+      silently inert a rule at runtime.
+    - Duplicate (match, matcher) pairs are flagged as warnings —
       first-match-wins makes later duplicates unreachable.
 
     Other layout rules (top-level type, required keys, minItems ≥ 1) are
@@ -1535,6 +1681,13 @@ def check_type_map_rules(doc: Any) -> list[dict]:
     findings: list[dict] = []
     if not isinstance(doc, list):
         return findings
+    if direction is None:
+        direction = (
+            "write"
+            if doc_path is not None and doc_path.name == _WRITE_MAP_FILENAME
+            else "read"
+        )
+    matcher_key, render_key = _DIRECTION_KEYS[direction]
     seen: set[tuple[Any, Any]] = set()
     for i, rule in enumerate(doc):
         if not isinstance(rule, dict):
@@ -1549,17 +1702,17 @@ def check_type_map_rules(doc: Any) -> list[dict]:
             )
             continue
         match = rule.get("match")
-        native = rule.get("native")
-        canonical = rule.get("canonical")
+        matcher_value = rule.get(matcher_key)
+        render_value = rule.get(render_key)
         # Required keys. Layer 1 enforces `required: [match, native, canonical]`;
         # under `--semantic-only` an omitted key would silently shadow downstream
         # validation. Treat key-absent here (`not in`). Explicit `null` per
         # key is handled separately by the per-key gates below:
         #   - `match: null` → caught by the closed-enum gate below (null is
         #     not in {"exact","regex"}, so it's flagged as an unknown value).
-        #   - `native: null` with `match in {"exact","regex"}` → caught by the
-        #     non-string-native gate below.
-        #   - `canonical: null` → caught by the non-string-canonical gate at
+        #   - matcher `null` with `match in {"exact","regex"}` → caught by the
+        #     non-string-matcher gate below.
+        #   - render-side `null` → caught by the non-string-render gate at
         #     the bottom of the loop.
         missing = [k for k in ("match", "native", "canonical") if k not in rule]
         if missing:
@@ -1614,27 +1767,28 @@ def check_type_map_rules(doc: Any) -> list[dict]:
                 )
             )
             continue
-        # `native` must be a string for both `exact` and `regex`. Without this
-        # gate, a `regex` rule with `native: null` skips the regex compile
-        # branch (gated on isinstance) and an `exact` rule never matches
-        # — the rule silently shadows valid rules at runtime.
-        if match in ("exact", "regex") and not isinstance(native, str):
+        # The matcher-side value must be a string for both `exact` and
+        # `regex`. Without this gate, a `regex` rule with a `null` matcher
+        # skips the regex compile branch (gated on isinstance) and an `exact`
+        # rule never matches — the rule silently shadows valid rules at
+        # runtime.
+        if match in ("exact", "regex") and not isinstance(matcher_value, str):
             findings.append(
                 finding(
                     "type-map-rule",
                     "warning",
-                    f"/{i}/native",
-                    f"native must be a string for {match!r} rules; got {type(native).__name__}. Layer 1 enforces this — rerun without `--semantic-only` to see the schema error. The rule will not match any native at runtime.",
+                    f"/{i}/{matcher_key}",
+                    f"{matcher_key} must be a string for {match!r} rules; got {type(matcher_value).__name__}. Layer 1 enforces this — rerun without `--semantic-only` to see the schema error. The rule will not match anything at runtime.",
                     rule_doc="shared/type-maps.md",
                 )
             )
             continue
-        # Dedupe set. Layer 1 should already reject non-string match/native, but
+        # Dedupe set. Layer 1 should already reject non-string values, but
         # `--semantic-only` bypasses Layer 1, so the dedupe set must tolerate
         # unhashable rule values. Tuple construction is always safe; only
         # `hash()` (called by `in` / `add`) can raise TypeError. When it does,
         # emit a warning so the un-checkable rule isn't a silent skip.
-        key: tuple[Any, Any] = (match, native)
+        key: tuple[Any, Any] = (match, matcher_value)
         try:
             if key in seen:
                 findings.append(
@@ -1642,7 +1796,7 @@ def check_type_map_rules(doc: Any) -> list[dict]:
                         "type-map-rule",
                         "warning",
                         f"/{i}",
-                        f"duplicate rule for (match={match!r}, native={native!r}); first-match-wins makes later duplicates unreachable.",
+                        f"duplicate rule for (match={match!r}, {matcher_key}={matcher_value!r}); first-match-wins makes later duplicates unreachable.",
                         rule_doc="shared/type-maps.md",
                     )
                 )
@@ -1654,73 +1808,91 @@ def check_type_map_rules(doc: Any) -> list[dict]:
                     "type-map-rule",
                     "warning",
                     f"/{i}",
-                    "rule's (match, native) key is not hashable; dedupe analysis skipped for this entry. Layer 1 should have rejected non-primitive values.",
+                    f"rule's (match, {matcher_key}) key is not hashable; dedupe analysis skipped for this entry. Layer 1 should have rejected non-primitive values.",
                     rule_doc="shared/type-maps.md",
                 )
             )
 
-        # Regex compile + Python-syntax checks run BEFORE the canonical-string
-        # gate so that a broken regex with a non-string canonical still
+        # Regex compile + Python-syntax checks run BEFORE the render-string
+        # gate so that a broken regex with a non-string render value still
         # surfaces as an error instead of being silently swallowed. Note: a
-        # regex rule with non-string `native` is short-circuited by the
-        # non-string-native gate above and never reaches this block, so the
-        # only way here is `match == "regex" and isinstance(native, str)`.
-        if match == "regex" and isinstance(native, str):
+        # regex rule with a non-string matcher is short-circuited by the
+        # non-string-matcher gate above and never reaches this block, so the
+        # only way here is `match == "regex" and isinstance(matcher_value, str)`.
+        if match == "regex" and isinstance(matcher_value, str):
             # Contract: ECMA-262 syntax only. Python-only `(?P<name>…)`
             # declarations, `(?P=name)` backreferences, and `(?P>name)`
             # recursive calls are all contract violations — none have
             # ECMA-262 equivalents.
-            if _PYTHON_REGEX_FEATURE.search(native):
+            if _PYTHON_REGEX_FEATURE.search(matcher_value):
                 findings.append(
                     finding(
                         "type-map-rule",
                         "error",
-                        f"/{i}/native",
-                        "native uses Python-only '(?P…)' regex syntax; the contract requires ECMA-262 (use '(?<name>…)' for named groups).",
+                        f"/{i}/{matcher_key}",
+                        f"{matcher_key} uses Python-only '(?P…)' regex syntax; the contract requires ECMA-262 (use '(?<name>…)' for named groups).",
                         rule_doc="shared/type-maps.md",
                     )
                 )
                 continue
             try:
-                compiled = re.compile(_to_python_regex(native))
+                compiled = re.compile(_to_python_regex(matcher_value))
             except re.error as exc:
                 findings.append(
                     finding(
                         "type-map-rule",
                         "error",
-                        f"/{i}/native",
-                        f"native is not a valid regex ({exc}).",
+                        f"/{i}/{matcher_key}",
+                        f"{matcher_key} is not a valid regex ({exc}).",
                         rule_doc="shared/type-maps.md",
                     )
                 )
                 continue
+            # Read-direction matchers are evaluated against UPPERCASED,
+            # whitespace-collapsed native type strings (the engine
+            # normalizes before matching; exact rules are normalized
+            # automatically). A lowercase literal left in the pattern can
+            # therefore never match — the rule is dead. Capture group
+            # names stay lowercase and are stripped before the check, as
+            # are backslash escapes (`\d`, `\s`, …). Write-direction
+            # matchers run against PascalCase canonicals and are exempt.
+            if direction == "read" and re.search(r"[a-z]", _strip_regex_meta(matcher_value)):
+                findings.append(
+                    finding(
+                        "type-map-rule",
+                        "warning",
+                        f"/{i}/{matcher_key}",
+                        f"regex {matcher_key} patterns are matched against UPPERCASED, whitespace-collapsed native types; lowercase literals in {matcher_value!r} can never match. Author the pattern uppercase (named capture group names stay lowercase).",
+                        rule_doc="shared/type-maps.md",
+                    )
+                )
         else:
             compiled = None  # type: ignore[assignment]
 
-        if not isinstance(canonical, str):
-            # Layer 1 enforces `canonical: string`; under `--semantic-only`
-            # a non-string canonical (`null`, list, etc.) would silently
-            # propagate to `_render_canonical`, which also skips non-string
-            # canonicals — meaning the rule never resolves any native at
-            # runtime. Surface it explicitly.
+        if not isinstance(render_value, str):
+            # Layer 1 enforces string values; under `--semantic-only` a
+            # non-string render value (`null`, list, etc.) would silently
+            # propagate to the first-match renderer, which also skips
+            # non-string values — meaning the rule never resolves anything
+            # at runtime. Surface it explicitly.
             findings.append(
                 finding(
                     "type-map-rule",
                     "warning",
-                    f"/{i}/canonical",
-                    f"canonical must be a string; got {type(canonical).__name__}. Layer 1 enforces this — rerun without `--semantic-only` to see the schema error. The rule will not resolve any native at runtime.",
+                    f"/{i}/{render_key}",
+                    f"{render_key} must be a string; got {type(render_value).__name__}. Layer 1 enforces this — rerun without `--semantic-only` to see the schema error. The rule will not resolve anything at runtime.",
                     rule_doc="shared/type-maps.md",
                 )
             )
             continue
-        placeholders = _PLACEHOLDER_RE.findall(canonical)
+        placeholders = _PLACEHOLDER_RE.findall(render_value)
         if match == "exact" and placeholders:
             findings.append(
                 finding(
                     "type-map-rule",
                     "error",
-                    f"/{i}/canonical",
-                    f"exact rules must not use ${{...}} substitution; got canonical={canonical!r}.",
+                    f"/{i}/{render_key}",
+                    f"exact rules must not use ${{...}} substitution; got {render_key}={render_value!r}.",
                     rule_doc="shared/type-maps.md",
                 )
             )
@@ -1735,40 +1907,63 @@ def check_type_map_rules(doc: Any) -> list[dict]:
                         finding(
                             "type-map-rule",
                             "error",
-                            f"/{i}/canonical",
-                            f"canonical references ${{{name}}} but native has no matching (?<{name}>…) capture group.",
+                            f"/{i}/{render_key}",
+                            f"{render_key} references ${{{name}}} but {matcher_key} has no matching (?<{name}>…) capture group.",
                             rule_doc="shared/type-maps.md",
                         )
                     )
     return findings
 
 
-def _render_canonical(native: str, rules: list[Any]) -> str | None:
-    """Apply first-match-wins; return the rendered canonical or None.
+def _normalize_native(value: str) -> str:
+    """Normalize a native type string the way the engine does before
+    matching read-map rules: UPPERCASE with runs of whitespace collapsed
+    to a single space."""
+    return re.sub(r"\s+", " ", value.strip()).upper()
 
-    For regex rules with named capture groups, substitutes `${name}`
-    placeholders in `canonical` with the captured value. Returns None
-    when no rule matches.
+
+def _first_match_render(
+    value: str,
+    rules: list[Any],
+    matcher_key: str,
+    render_key: str,
+    normalize: Callable[[str], str] | None = None,
+) -> str | None:
+    """Apply first-match-wins; return the rendered value or None.
+
+    Direction-agnostic core shared by `_render_canonical` (read maps:
+    match `native`, render `canonical`) and `_render_native` (write
+    maps: match `canonical`, render `native`). For regex rules with
+    named capture groups, substitutes `${name}` placeholders on the
+    render side with the captured value. Returns None when no rule
+    matches.
+
+    `normalize` mirrors the engine's pre-match normalization: read maps
+    match against UPPERCASED, whitespace-collapsed natives, with exact
+    matchers normalized the same way; write maps match canonicals
+    verbatim (PascalCase is case-significant).
 
     Broken regex rules (re.error from `_to_python_regex` output) are
     skipped silently here — `check_type_map_rules` runs first via the
     cross-validator wiring in `check_type_map_coverage` and surfaces
     those as `type-map-rule` errors, so they don't slip through unseen.
     """
+    probe = normalize(value) if normalize else value
     for rule in rules:
         if not isinstance(rule, dict):
             continue
         match = rule.get("match")
-        rule_native = rule.get("native")
-        canonical = rule.get("canonical")
-        if not isinstance(rule_native, str) or not isinstance(canonical, str):
+        matcher_value = rule.get(matcher_key)
+        render_value = rule.get(render_key)
+        if not isinstance(matcher_value, str) or not isinstance(render_value, str):
             continue
         if match == "exact":
-            if rule_native == native:
-                return canonical
+            target = normalize(matcher_value) if normalize else matcher_value
+            if target == probe:
+                return render_value
         elif match == "regex":
             try:
-                m = re.fullmatch(_to_python_regex(rule_native), native)
+                m = re.fullmatch(_to_python_regex(matcher_value), probe)
             except re.error:
                 continue
             if not m:
@@ -1778,18 +1973,82 @@ def _render_canonical(native: str, rules: list[Any]) -> str | None:
             def _sub(placeholder: re.Match) -> str:
                 name = placeholder.group(1)
                 if name not in groups:
-                    # Placeholder name absent from native captures —
+                    # Placeholder name absent from matcher captures —
                     # leave the literal `${name}` so the downstream
                     # mismatch surfaces visibly.
                     return placeholder.group(0)
                 value = groups[name]
                 # An unmatched alternation captures None; render as empty
                 # string rather than the literal placeholder so an empty
-                # match in canonical position is unambiguous.
+                # match in render position is unambiguous.
                 return value if value is not None else ""
 
-            return _PLACEHOLDER_RE.sub(_sub, canonical)
+            return _PLACEHOLDER_RE.sub(_sub, render_value)
     return None
+
+
+def _render_canonical(native: str, rules: list[Any]) -> str | None:
+    """Read direction: first-match a native type, render the canonical.
+
+    The native probe and exact matchers are normalized (UPPERCASE,
+    whitespace-collapsed) before comparison, mirroring the engine.
+    """
+    return _first_match_render(
+        native, rules, "native", "canonical", normalize=_normalize_native
+    )
+
+
+def _render_native(canonical: str, rules: list[Any]) -> str | None:
+    """Write direction: first-match a canonical type, render the native DDL."""
+    return _first_match_render(canonical, rules, "canonical", "native")
+
+
+def _write_map_vocabulary_findings(rules: list[Any]) -> list[dict]:
+    """Probe a write map against the canonical vocabulary (rule 8).
+
+    Every probe in `_WRITE_VOCABULARY_PROBES` should resolve to a native
+    DDL render through the write map. Gaps are a single grouped warning
+    (not an error): a dialect may deliberately leave a family unmapped
+    and take over rendering via a `render_column_type` override.
+    """
+    missing = [
+        family
+        for family, probe in _WRITE_VOCABULARY_PROBES
+        if _render_native(probe, rules) is None
+    ]
+    if not missing:
+        return []
+    return [
+        finding(
+            "type-map-write-coverage",
+            "warning",
+            "/",
+            (
+                f"write map does not resolve canonical famil{'y' if len(missing) == 1 else 'ies'}: "
+                f"{', '.join(missing)}. The write direction should cover the full canonical "
+                "vocabulary; leave a family unmapped only when the connector's dialect "
+                "deliberately takes over its rendering via a render_column_type override."
+            ),
+            rule_doc="shared/type-maps.md",
+        )
+    ]
+
+
+def check_type_map_write_coverage(doc: Any, doc_path: Path | None = None) -> list[dict]:
+    """Vocabulary coverage for a standalone `type-map-write.json` document.
+
+    Runs only when the validated document's filename is the write map —
+    direction is a filesystem contract, not a document-shape one (read
+    and write maps share the rule shape). The same probe also runs from
+    `check_type_map_coverage` when a database connector is validated
+    with its siblings; this validator covers the case where the
+    orchestrator validates the write map file by itself.
+    """
+    if doc_path is None or doc_path.name != _WRITE_MAP_FILENAME:
+        return []
+    if not isinstance(doc, list) or not doc:
+        return []
+    return _write_map_vocabulary_findings(doc)
 
 
 def _collect_endpoint_native_arrow_pairs(endpoint_doc: dict) -> list[tuple[str, str, str]]:
@@ -2165,13 +2424,16 @@ SEMANTIC_VALIDATORS: dict[str, Callable[..., list[dict]]] = {
     "phase-resolvability": check_phase_resolvability,
     "type-map-coverage": check_type_map_coverage,
     "type-map-rule": check_type_map_rules,
+    "type-map-write-coverage": check_type_map_write_coverage,
     "endpoint-annotations": check_endpoint_annotations,
 }
 
 # Validators that accept an optional `doc_path` second positional argument.
-_PATH_AWARE_VALIDATORS = {"type-map-coverage"}
+# `type-map-rule` and `type-map-write-coverage` use it to derive the rule
+# direction from the on-disk filename (`type-map-write.json` → write).
+_PATH_AWARE_VALIDATORS = {"type-map-coverage", "type-map-rule", "type-map-write-coverage"}
 _CONNECTOR_ONLY = {"transport-ref", "dsn-binding", "auth-shape", "tls-consistency", "type-map-coverage"}
-_TYPE_MAP_ONLY = {"type-map-rule"}
+_TYPE_MAP_ONLY = {"type-map-rule", "type-map-write-coverage"}
 _ENDPOINT_ONLY = {"endpoint-annotations"}
 
 # Module-load invariant: every dispatched validator id MUST be registered in
@@ -2242,7 +2504,7 @@ def is_endpoint_doc(doc: Any) -> bool:
 
 
 def is_type_map_doc(doc: Any) -> bool:
-    """Detect a `type-map.json` document.
+    """Detect a type-map document (`type-map-read.json` / `type-map-write.json`).
 
     True when `doc` is a list AND at least one element looks like a rule
     (a dict). This dispatches `check_type_map_rules` on any plausible
@@ -2381,7 +2643,7 @@ def run_semantic_validators(doc: Any, doc_path: Path | None = None) -> list[dict
                 "document carries `endpoint_id` without `operations` (looks like a database-endpoint). Database endpoints are produced at runtime by `resource_discovery` and are not authored by this plugin — rerun against the published `database-endpoint/latest.json` schema for Layer 1 validation.",
             )
         )
-    # Empty top-level array. Today only type-map.json has a list root, so
+    # Empty top-level array. Today only type-map files have a list root, so
     # this nearly always means an empty type-map; phrase the warning to be
     # informative without presuming intent. The warning fires from any
     # Layer 2 run (not only `--semantic-only`); under default validation
@@ -2392,7 +2654,7 @@ def run_semantic_validators(doc: Any, doc_path: Path | None = None) -> list[dict
                 "type-map-rule",
                 "warning",
                 "/",
-                "document root is an empty array. If this is meant to be a type-map.json, it must contain at least one rule (Layer 1's `minItems` rule); no other published artifact has a list root.",
+                "document root is an empty array. If this is meant to be a type map (type-map-read.json / type-map-write.json), it must contain at least one rule (Layer 1's `minItems` rule); no other published artifact has a list root.",
                 rule_doc="shared/type-maps.md",
             )
         )
@@ -2412,7 +2674,7 @@ def run_semantic_validators(doc: Any, doc_path: Path | None = None) -> list[dict
                 "type-map-rule",
                 "warning",
                 "/",
-                "document looks like a pre-migration type-map shape (embedded `type_maps` inside connector.json, object wrapper such as `native_to_arrow.rules` or `{rules: [...]}`, OR a top-level list using the legacy `method` rule key). The current contract is a standalone `{connector_id}/definition/type-map.json` file holding a top-level JSON array of `{match, native, canonical}` rules — extract any embedded block to that sibling, rename `method` → `match`, and unwrap any object container. See `shared/type-maps.md`.",
+                "document looks like a pre-migration type-map shape (embedded `type_maps` inside connector.json, object wrapper such as `native_to_arrow.rules` or `{rules: [...]}`, OR a top-level list using the legacy `method` rule key). The current contract is standalone `{connector_id}/definition/type-map-read.json` (native → Arrow; plus `type-map-write.json` for database connectors) holding a top-level JSON array of `{match, native, canonical}` rules — extract any embedded block to those siblings, rename `method` → `match`, and unwrap any object container. See `shared/type-maps.md`.",
                 rule_doc="shared/type-maps.md",
             )
         )

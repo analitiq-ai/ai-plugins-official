@@ -36,6 +36,14 @@ one `ProviderFacts` JSON object per invocation.
   `notes`.
 - For databases: do NOT speculate about TLS modes if the driver's docs are
   ambiguous about TLS support — set `tls` to null and report the gap.
+- For databases: report the driver-selection facts the creator needs —
+  `adbc_driver_package` (only when a first-class production ADBC driver
+  exists), `flight_sql_endpoint` (only when the server documents an
+  Arrow Flight SQL endpoint), `bulk_load_protocol` (the documented
+  native bulk-load path, e.g. `COPY FROM stdin`, `LOAD DATA LOCAL
+  INFILE`), and `async_sqlalchemy_driver` (the async DBAPI, e.g.
+  `mysql+aiomysql`). Leave each unset when the docs don't establish it
+  — the JDBC bridge never counts as an ADBC driver.
 - Do not use WebSearch — the user must provide the official docs URL up front.
 
 ## Output format
