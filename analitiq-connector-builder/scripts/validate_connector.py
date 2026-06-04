@@ -1271,16 +1271,25 @@ _WRITE_VOCABULARY_PROBES: tuple[tuple[str, str], ...] = (
 
 
 def _strip_regex_meta(pattern: str) -> str:
-    """Strip named-group declarations and backslash escapes from a regex.
+    """Strip named-group declarations and non-literal escapes from a regex.
 
-    What remains of the pattern after `(?<name>` declarations and `\\x`
-    escape pairs are removed is (approximately) the literal text the
-    pattern must match. Used by the uppercase-pattern check: lowercase
-    letters surviving this strip are literal matches that can never fire
-    against the engine's UPPERCASED native strings.
+    What remains of the pattern after `(?<name>` declarations and the
+    recognized class/anchor escapes (`\\d`, `\\s`, `\\b`, …) are removed
+    is (approximately) the literal text the pattern must match. Any
+    OTHER escaped character (`\\(`, `\\.`) is a literal, so the
+    backslash is dropped but the character is kept. (Unknown
+    lowercase-letter escapes like `\\q` cannot reach this check at all:
+    Python's `re` rejects them at the compile gate, which runs first
+    and errors out.) Used by the uppercase-pattern check: lowercase
+    letters surviving this strip are literal matches that can never
+    fire against the engine's UPPERCASED native strings.
     """
     without_groups = _ECMA_NAMED_GROUP.sub("(", pattern)
-    return re.sub(r"\\.", "", without_groups)
+    # Class/anchor/whitespace escapes (plus \x/\u prefixes of hex and
+    # unicode escapes) are regex machinery, not literals — drop them.
+    without_class_escapes = re.sub(r"\\[dDsSwWbBAZfnrtvux0]", "", without_groups)
+    # Everything else escaped is a literal character — keep it.
+    return re.sub(r"\\(.)", r"\1", without_class_escapes)
 
 
 def _load_sibling_type_map(tm_path: Path) -> tuple[list | None, list[dict]]:
@@ -1687,6 +1696,25 @@ def check_type_map_rules(
             if doc_path is not None and doc_path.name == _WRITE_MAP_FILENAME
             else "read"
         )
+        # Direction is a filesystem contract. When the filename is neither
+        # recognized map name, read semantics are assumed — surface that
+        # assumption instead of silently mis-validating a write map (whose
+        # write-direction checks, incl. vocabulary coverage, would otherwise
+        # vanish and whose many-to-one render rules would false-positive as
+        # duplicates).
+        if doc_path is not None and doc_path.name not in (
+            _READ_MAP_FILENAME,
+            _WRITE_MAP_FILENAME,
+        ):
+            findings.append(
+                finding(
+                    "type-map-rule",
+                    "warning",
+                    "/",
+                    f"rule direction defaulted to 'read': filename {doc_path.name!r} is neither {_READ_MAP_FILENAME!r} nor {_WRITE_MAP_FILENAME!r}. If this is a write map, validate it under its on-disk filename — write-direction checks (incl. vocabulary coverage) did not run.",
+                    rule_doc="shared/type-maps.md",
+                )
+            )
     matcher_key, render_key = _DIRECTION_KEYS[direction]
     seen: set[tuple[Any, Any]] = set()
     for i, rule in enumerate(doc):

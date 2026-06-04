@@ -33,7 +33,9 @@ resolve through the same `connection_contract.inputs` definitions.
 - `tls.ca_certificate` is a value expression that resolves to a
   PEM-encoded CA bundle. It should `ref` the canonical secret
   `secrets.ssl_ca_certificate`.
-- If the `ssl_mode` enum allows `verify-ca` or `verify-full`, the
+- If the `ssl_mode` enum allows any certificate-verification mode
+  (`verify-ca` / `verify-full`, or MySQL-style `VERIFY_CA` /
+  `VERIFY_IDENTITY` — the validator normalizes case and `_`/`-`), the
   connection contract must declare `ssl_ca_certificate` as an input.
   The `tls-consistency` validator enforces this.
 - Connector authors must NOT embed driver-specific TLS objects, file
@@ -67,8 +69,9 @@ resolves empty.
 
 1. Always declare `ssl_mode` as a connection input with an explicit
    `enum`.
-2. Always declare `ssl_ca_certificate` as a secret input when
-   `verify-ca`/`verify-full` are in the enum.
+2. Always declare `ssl_ca_certificate` as a secret input when any
+   certificate-verification mode (`verify-ca`/`verify-full`,
+   `VERIFY_CA`/`VERIFY_IDENTITY`) is in the enum.
 3. Reference both via `ref` inside the transport's `tls` block.
 4. Do not duplicate driver-specific SSL options elsewhere in the JSON —
    the dialect's `build_tls_connect_arg` is the single place that

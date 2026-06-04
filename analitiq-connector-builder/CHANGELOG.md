@@ -30,6 +30,10 @@
   - `tls-consistency` now recognizes connector-defined verification
     modes (`VERIFY_CA` / `VERIFY_IDENTITY` alongside
     `verify-ca` / `verify-full`).
+  - A type map validated under a filename that is neither
+    `type-map-read.json` nor `type-map-write.json` now warns that the
+    rule direction defaulted to read (a misplaced write map's
+    write-direction checks would otherwise vanish silently).
 - **Database connectors are installable Python packages.**
   `db-connector-creator` now authors the package files alongside the
   JSON artifacts: `connector.py` (`{Name}Dialect(SqlDialect)` +

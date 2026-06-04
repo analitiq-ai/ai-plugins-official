@@ -1093,6 +1093,100 @@ def test_read_exact_lowercase_not_warned(tmp_path):
     assert not warns, f"exact rules must be exempt from the uppercase warning; got {warns}"
 
 
+def test_unrecognized_filename_direction_default_warned(tmp_path):
+    """A type map validated under a filename that is neither
+    type-map-read.json nor type-map-write.json silently got READ semantics
+    before; now the defaulted direction must surface as a warning so a
+    misplaced write map's vanished write-direction checks aren't silent."""
+    odd_path = tmp_path / "some-map.json"
+    odd_path.write_text(json.dumps(WRITE_MAP_RULES))
+    result = run_validator(odd_path, "--semantic-only", schema_url=TYPE_MAP_SCHEMA_URL)
+    warns = warnings_of(result, "type-map-rule")
+    assert any("direction defaulted to 'read'" in w["message"] for w in warns), \
+        f"expected direction-default warning for unrecognized filename; got {warns}"
+    # Under the recognized filenames the warning must NOT fire.
+    for name in ("type-map-read.json", "type-map-write.json"):
+        good_path = tmp_path / name
+        good_path.write_text(json.dumps(WRITE_MAP_RULES))
+        result = run_validator(good_path, "--semantic-only", schema_url=TYPE_MAP_SCHEMA_URL)
+        warns = warnings_of(result, "type-map-rule")
+        assert not any("direction defaulted" in w["message"] for w in warns), \
+            f"direction-default warning must not fire for {name}; got {warns}"
+
+
+def test_escaped_lowercase_letter_not_silent(tmp_path):
+    """An unknown lowercase-letter escape (`\\q`) cannot slip past the
+    uppercase check unseen: Python's `re` rejects unknown ASCII-letter
+    escapes outright, so the rule surfaces as a compile ERROR before the
+    warning stage. Escaped punctuation (`\\(`) and known class escapes
+    (`\\d`, `\\s`) stay exempt from the uppercase warning."""
+    tm = tmp_path / "type-map-read.json"
+    tm.write_text(json.dumps([
+        {"match": "regex", "native": "^NUMERIC\\(\\q\\)$", "canonical": "Utf8"},
+        {"match": "regex", "native": "^VARCHAR\\(\\d+\\)\\s*$", "canonical": "Utf8"},
+    ]))
+    result = run_validator(tm, "--semantic-only", schema_url=TYPE_MAP_SCHEMA_URL)
+    errs = errors_of(result, "type-map-rule")
+    assert any("not a valid regex" in e["message"] and e["path"] == "/0/native" for e in errs), \
+        f"expected \\q rule to fail the compile gate; got {errs}"
+    warns = [w for w in warnings_of(result, "type-map-rule") if "UPPERCASED" in w["message"]]
+    assert not warns, \
+        f"the all-uppercase rule with \\d/\\s escapes must not warn; got {warns}"
+
+
+def test_tls_consistency_uppercase_verify_modes_caught(tmp_path):
+    """MySQL-style VERIFY_CA / VERIFY_IDENTITY enum values must trigger the
+    ssl_ca_certificate requirement (the check normalizes case and _/-)."""
+    base = json.loads((FIXTURES / "valid_db_connector" / "connector.json").read_text())
+    inputs = base["connection_contract"]["inputs"]
+    inputs["ssl_mode"] = {
+        "source": "user",
+        "phase": "pre_auth",
+        "storage": "connection.parameters",
+        "type": "string",
+        "required": False,
+        "default": "PREFERRED",
+        "enum": ["DISABLED", "PREFERRED", "REQUIRED", "VERIFY_CA", "VERIFY_IDENTITY"],
+    }
+    inputs.pop("ssl_ca_certificate", None)
+    doc_path = tmp_path / "connector.json"
+    doc_path.write_text(json.dumps(base))
+    result = run_validator(doc_path, "--semantic-only")
+    errs = errors_of(result, "tls-consistency")
+    assert any("ssl_ca_certificate" in e["message"] for e in errs), \
+        f"expected VERIFY_CA/VERIFY_IDENTITY to require ssl_ca_certificate; got {errs}"
+    # Positive counterpart: declaring the CA input clears the finding.
+    inputs["ssl_ca_certificate"] = {
+        "source": "user",
+        "phase": "pre_auth",
+        "storage": "secrets",
+        "type": "string",
+        "required": False,
+        "secret": True,
+    }
+    doc_path.write_text(json.dumps(base))
+    result = run_validator(doc_path, "--semantic-only")
+    errs = errors_of(result, "tls-consistency")
+    assert not errs, f"expected no tls-consistency error once ssl_ca_certificate declared; got {errs}"
+
+
+def test_storage_kind_write_map_sibling_rule_checked(tmp_path):
+    """The storage-kind branch must rule-check a present type-map-write.json
+    with WRITE direction — a broken matcher regex (in `canonical` for the
+    write direction) must surface."""
+    base = json.loads(VALID_API_CONNECTOR.read_text())
+    base["kind"] = "file"
+    doc_path = tmp_path / "connector.json"
+    doc_path.write_text(json.dumps(base))
+    (tmp_path / "type-map-write.json").write_text(json.dumps([
+        {"match": "regex", "canonical": "^Decimal128([0-9", "native": "NUMERIC"}
+    ]))
+    result = run_validator(doc_path, "--semantic-only")
+    errs = errors_of(result, "type-map-rule")
+    assert any("not a valid regex" in e["message"] and e["path"] == "/0/canonical" for e in errs), \
+        f"storage-kind write-map sibling must be rule-checked in write direction; got {errs}"
+
+
 def test_read_coverage_normalizes_native_case(tmp_path):
     """Endpoint natives are matched after UPPERCASE + whitespace-collapse
     normalization, so an uppercase exact rule covers a lowercase endpoint
@@ -1110,6 +1204,45 @@ def test_read_coverage_normalizes_native_case(tmp_path):
     result = run_validator(doc_path, "--semantic-only")
     errs = errors_of(result, "type-map-coverage")
     assert not errs, f"expected lowercase endpoint natives to resolve via uppercase rules; got {errs}"
+
+
+def test_read_coverage_collapses_native_whitespace(tmp_path):
+    """The other half of native normalization: runs of whitespace collapse
+    to a single space, so 'double  precision' (two spaces) matches an
+    exact rule authored 'DOUBLE PRECISION'."""
+    base = json.loads(VALID_API_CONNECTOR.read_text())
+    doc_path = tmp_path / "connector.json"
+    doc_path.write_text(json.dumps(base))
+    (tmp_path / "type-map-read.json").write_text(json.dumps([
+        {"match": "exact", "native": "DOUBLE PRECISION", "canonical": "Float64"},
+    ]))
+    (tmp_path / "endpoints").mkdir()
+    (tmp_path / "endpoints" / "items.json").write_text(json.dumps({
+        "$schema": "https://schemas.analitiq.ai/api-endpoint/latest.json",
+        "endpoint_id": "items",
+        "operations": {
+            "read": {
+                "request": {"method": "GET", "path": "/items"},
+                "response": {
+                    "records": {"ref": "response.body"},
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "number",
+                                "native_type": "double  precision",
+                                "arrow_type": "Float64",
+                            }
+                        },
+                    },
+                },
+            }
+        },
+    }))
+    result = run_validator(doc_path, "--semantic-only")
+    errs = errors_of(result, "type-map-coverage")
+    assert not errs, \
+        f"expected multi-space native to collapse and match single-space rule; got {errs}"
 
 
 # ---------------------------------------------------------------------------
