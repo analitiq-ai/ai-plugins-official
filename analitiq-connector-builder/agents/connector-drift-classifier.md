@@ -14,8 +14,7 @@ object.
 - `previous_release_path` — absolute path to the prior released
   connector directory or `connector.json`. The classifier also reads
   the sibling `type-map-read.json` and `type-map-write.json` when
-  present (and a pre-split `type-map.json` in older releases — diff it
-  against the draft's `type-map-read.json`).
+  present.
 - `current_path` — absolute path to the assembled draft (connector JSON
   or its directory). The classifier also reads the sibling draft
   `type-map-read.json` / `type-map-write.json` when present.
