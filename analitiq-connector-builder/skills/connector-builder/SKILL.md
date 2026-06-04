@@ -14,9 +14,10 @@ writing files.
 ## Inputs to collect
 
 - `provider` (required) — provider name or slug (e.g. `stripe`, `postgresql`).
-- `docs_url` (required for research) — official documentation URL.
-  `connector-provider-researcher` does not run web searches; the user
-  must point it at first-party docs.
+- `docs_url` (optional, preferred) — official documentation URL. When
+  omitted, `connector-provider-researcher` locates the provider's
+  official docs via WebSearch; facts are still extracted from
+  first-party documentation pages only.
 - `kind_hint` (optional) — `api` or `database`. (Storage kinds `file`,
   `s3`, `stdout` are recognized by the schema but not yet supported by
   the engine.)
@@ -55,8 +56,9 @@ sub-agents own those skills.
      connector authored from scratch.
 
 1. **Research** — invoke `connector-provider-researcher`. Receive
-   `ProviderFacts` (discriminated by kind). If the user did not supply
-   `docs_url`, halt and ask.
+   `ProviderFacts` (discriminated by kind). Pass `docs_url` when the
+   user supplied one; otherwise the researcher locates the official
+   docs itself and reports the URL it used.
 2. **Classify** — run the closed-enum mappers inline (see
    `references/enum-mappers.md`):
    - `KindMapper` → `kind`.

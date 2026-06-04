@@ -39,13 +39,15 @@ re-running.
 ### 1. Research
 
 Invoke `connector-provider-researcher` with `provider`, optional
-`kind_hint`, and the official-docs URL the user supplied. Receive a
-`ProviderFacts` JSON object discriminated by `kind`.
+`kind_hint`, and the official-docs URL when the user supplied one
+(when omitted, the researcher locates the official docs via WebSearch
+and reports the URL it used). Receive a `ProviderFacts` JSON object
+discriminated by `kind`.
 
-**Input:** `provider`, `kind_hint?`, `docs_url`.
-**Output:** `ProviderFacts`.
-**Failure mode:** if researcher cannot access the docs, halt and ask the
-user to fix the URL or pass through manually-supplied facts.
+**Input:** `provider`, `kind_hint?`, `docs_url?`.
+**Output:** `ProviderFacts` (plus the docs URLs actually used).
+**Failure mode:** if the researcher cannot access or locate official
+docs, halt and ask the user for a URL or manually-supplied facts.
 
 ### 2. Classify
 

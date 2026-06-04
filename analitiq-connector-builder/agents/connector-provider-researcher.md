@@ -1,7 +1,7 @@
 ---
 name: connector-provider-researcher
 description: Extract structured ProviderFacts from a third-party provider's official documentation. Use when the connector-builder skill needs provider truth — base URLs, auth model, OAuth scopes, pagination style, rate limits, post-auth selections, discovery endpoints, DSN format, native types, default port. Output is a discriminated-union ProviderFacts JSON object keyed by kind (api or database) as defined in connector-builder/references/io-contracts.md.
-tools: WebFetch, Read
+tools: WebFetch, WebSearch, Read
 ---
 
 # connector-provider-researcher
@@ -17,8 +17,10 @@ one `ProviderFacts` JSON object per invocation.
    → `api`). Do not invent additional kinds; the supported set is `api` and
    `database`. (`file`, `s3`, and `stdout` are valid connector kinds in the
    schema but out of scope for this researcher.)
-2. The user must provide an official documentation URL. If they did not,
-   stop and ask for one. Do not fall back to web search.
+2. Prefer the official documentation URL the user supplied. If none was
+   provided, use WebSearch to locate the provider's official
+   documentation — first-party domain only — and continue with that
+   URL. List it under `Sources:` so the user can correct it.
 3. Fetch the relevant pages with WebFetch. Prefer first-party docs only.
 4. Extract the facts required by the `ProviderFacts` schema branch for the
    chosen kind.
@@ -44,7 +46,10 @@ one `ProviderFacts` JSON object per invocation.
   INFILE`), and `async_sqlalchemy_driver` (the async DBAPI, e.g.
   `mysql+aiomysql`). Leave each unset when the docs don't establish it
   — the JDBC bridge never counts as an ADBC driver.
-- Do not use WebSearch — the user must provide the official docs URL up front.
+- WebSearch is for locating the official docs only (when the user did
+  not supply a URL) — never a source of facts. Every extracted fact
+  must come from a first-party documentation page fetched with
+  WebFetch; never cite blogs, forum posts, or third-party tutorials.
 
 ## Output format
 

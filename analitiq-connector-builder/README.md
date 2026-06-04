@@ -30,7 +30,7 @@ or *"/connector-builder &lt;provider&gt;"*.
 
 ```
 connector-builder (skill, orchestrator)
-├── connector-provider-researcher   # extracts ProviderFacts from official docs (no WebSearch)
+├── connector-provider-researcher   # extracts ProviderFacts from official docs (WebSearch only to locate them)
 ├── api-connector-creator           # authors kind=api connectors (loads connector-spec-api)
 ├── db-connector-creator            # authors kind=database connectors (loads connector-spec-db)
 ├── endpoint-creator                # authors API endpoint documents

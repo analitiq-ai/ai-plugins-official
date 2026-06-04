@@ -65,6 +65,12 @@
   vocabulary is now documented as connector-defined).
 - `connector-drift-classifier` diffs both map files independently; the
   type-map drift categories apply per file/direction.
+- `connector-provider-researcher`: `docs_url` is now optional. When the
+  user does not supply one, the researcher uses WebSearch to locate the
+  provider's official documentation (first-party domain only) and
+  reports the URL it used. WebSearch never serves as a source of
+  facts — extraction still happens exclusively from first-party
+  documentation pages fetched with WebFetch.
 - **Validator surface hardening.** Several `--semantic-only` silent-pass
   cases now emit structured findings:
   - New `endpoint-annotations` validator id surfaces malformed
