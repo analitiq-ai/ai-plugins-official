@@ -27,6 +27,7 @@ The `connector-spec-api` skill is preloaded. Beyond that, read:
 - `${CLAUDE_PLUGIN_ROOT}/skills/connector-builder/references/connection-contract.md`
 - `${CLAUDE_PLUGIN_ROOT}/skills/connector-builder/references/lifecycle-phases.md`
 - `${CLAUDE_PLUGIN_ROOT}/skills/connector-builder/references/metadata-and-versioning.md`
+- `${CLAUDE_PLUGIN_ROOT}/skills/connector-builder/references/definition-of-done.md`
 
 ## Authoring order
 
@@ -67,6 +68,30 @@ The `connector-spec-api` skill is preloaded. Beyond that, read:
    ship NO `type-map-write.json` — the write direction is a
    database-package concept; return `type_map_write: null` and
    `package_files: null`.
+
+## Definition of Done
+
+Before returning `CreatorOutput`, confirm the shared-core checklist in
+`references/definition-of-done.md` AND these API-only items. These cover
+what the `connector-schema-validator` cannot enforce — completeness
+against the provider's docs and behavior the schema can't see. Do not
+restate validator rules.
+
+- [ ] **Every resource the user asked for has an endpoint** authored.
+  (The validator checks each authored endpoint resolves through the read
+  map; it cannot know which resources were requested.)
+- [ ] **Pagination is configured for every endpoint whose API
+  paginates.** (The validator cannot know the upstream API paginates.)
+- [ ] **An incremental/replication cursor is set wherever the resource
+  supports one.** (Provider behavior, not schema.)
+- [ ] **The auth flow matches the provider's documented auth**, including
+  token refresh where the provider issues short-lived tokens. (The
+  `auth-shape` validator checks the structural validity of the chosen
+  flow, not that it is the correct flow.)
+- [ ] **No write map and no package files were produced**
+  (`type_map_write: null`, `package_files: null`). (Also validator-
+  enforced via `type-map-coverage`; kept here as the defining API/DB
+  boundary check.)
 
 ## Output
 
