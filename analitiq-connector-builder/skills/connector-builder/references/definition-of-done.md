@@ -45,7 +45,11 @@ shared core.
   to, its auth, and any setup. (The in-plugin validator ignores README
   entirely.)
 - [ ] **Both read and write land as a working unit for this system**
-  (the both-directions-first-class principle) — scope was not cut to
-  source-only or destination-only.
+  (the both-directions-first-class *capability* principle) — scope was
+  not cut to source-only or destination-only. This means the connector's
+  read/write capability, not a write *type-map* file: an API connector
+  realizes the write direction through endpoints/operations (and ships
+  no write map), a database connector through its two `pyproject.toml`
+  entry-point groups.
 - [ ] **Version is consistent**: first release → `1.0.0`; otherwise the
   drift verdict the orchestrator computed was applied.

@@ -88,10 +88,11 @@ restate validator rules.
   token refresh where the provider issues short-lived tokens. (The
   `auth-shape` validator checks the structural validity of the chosen
   flow, not that it is the correct flow.)
-- [ ] **No write map and no package files were produced**
-  (`type_map_write: null`, `package_files: null`). (Also validator-
-  enforced via `type-map-coverage`; kept here as the defining API/DB
-  boundary check.)
+- [ ] **No package files and no write map were produced**
+  (`package_files: null`, `type_map_write: null`). Package-file absence
+  is something the validator cannot see — it checks JSON documents only;
+  a stray write map is separately caught by `type-map-coverage`. Kept
+  here as the defining API/DB boundary check.
 
 ## Output
 
