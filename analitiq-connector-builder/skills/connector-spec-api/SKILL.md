@@ -53,7 +53,10 @@ operations vocabulary it consumes is API-specific and worth pinning here:
   `insert` and `upsert`. Each mode block holds required `request` +
   `input` (`{"schema": <JsonSchemaPropertyNode>}` for one destination
   record) and optional `batching` (`{"max_records": <int ≥ 2>}`),
-  `params`, `response`.
+  `params`, `response`. `upsert` additionally **requires**
+  `conflict_keys` — an array of ≥1 top-level field names from
+  `input.schema` forming the natural key the upsert matches on; `insert`
+  forbids it (the schema pins it to `null`).
 - At least one of `read` / `write` must be present; omit the other when
   the resource is one-directional.
 

@@ -49,13 +49,22 @@ containing one endpoint document body.
    - `response.schema` — JSON Schema describing the response body.
 4. Author `operations.write` when the resource is writable. `write` is a
    **mode-keyed map**; the schema accepts only `insert` and `upsert` as
-   keys, and at least one mode is required when `write` is present.
-   Each mode block holds:
+   keys, and at least one mode is required when `write` is present. The
+   two modes share the same block shape and differ only in
+   `conflict_keys`. Each mode block holds:
    - `request` (required) — `method` (`POST` / `PUT` / `PATCH`), `path`,
      and the same optional `query` / `headers` / `path_params` / `body`
      / `transport_ref` keys as the read request.
    - `input` (required) — `{"schema": <JsonSchemaPropertyNode>}`
      describing one provider-facing destination record.
+   - `conflict_keys` — **required for `upsert`, forbidden for `insert`.**
+     An array of one or more strings, each a top-level field name
+     declared in this mode's `input.schema`; together they are the
+     provider-defined natural key the upsert matches on. For `insert`
+     omit it (the schema pins it to `null`); an `upsert` without it
+     fails validation. Use the provider's documented idempotency / match
+     key (e.g. an external id or a unique business key) — never invent
+     one.
    - `batching` (optional) — `{"max_records": <int ≥ 2>}` when the
      provider documents a per-request cap.
    - `params` (optional) — same shape as read params.

@@ -15,6 +15,18 @@
   (package files, README) — so they add no duplicated source of truth with
   the validator, save one deliberately-labeled API/DB boundary check.
 
+### Fixed
+- **Upsert API endpoints now document the required `conflict_keys`.**
+  `agents/endpoint-creator.md` step 4 and the `connector-spec-api` SKILL
+  operations cross-reference omitted `conflict_keys`, which the published
+  `api-endpoint` schema **requires on the `upsert` write mode** (an array
+  of ≥1 top-level `input.schema` field names forming the natural key the
+  upsert matches on) and **forbids on `insert`**. Without that guidance the
+  authoring agent would emit an `upsert` missing `conflict_keys` (a Layer 1
+  failure that churns the validate→fix loop) or silently fall back to
+  `insert`, dropping upsert capability. Docs-only fix; the schema and
+  validator were already correct. Surfaced in #46.
+
 ### Changed
 - **Type-map split: `type-map.json` → `type-map-read.json` + `type-map-write.json`**
   (per `connector-driver-selection.md` / `dip-registry-connector-packages.md`
