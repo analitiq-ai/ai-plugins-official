@@ -52,8 +52,12 @@ order, stopping at the first match (full guide:
    path. Redshift is libpq-compatible and takes `adbc` with driver
    `postgresql`.
 2. **The server exposes an Arrow Flight SQL endpoint** → `adbc` via the
-   generic Flight SQL driver (requires the enum entry; ordinary
-   MySQL/Postgres deployments do not expose Flight SQL).
+   generic Flight SQL driver. `flightsql` is **not yet in the
+   `AdbcTransport.driver` enum** (`postgresql`, `snowflake`, `bigquery`),
+   so this tier is currently unreachable — selecting it requires adding
+   the enum value first (a schema-contract change; see
+   `spec-driver-selection.md`). Ordinary MySQL/Postgres deployments do
+   not expose Flight SQL.
 3. **Neither, but the system has a native bulk-load protocol** →
    `sqlalchemy` (async DBAPI) for connect/DDL, with the bulk write
    implemented in the connector's own class against the raw cursor

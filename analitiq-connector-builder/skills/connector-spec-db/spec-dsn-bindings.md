@@ -77,9 +77,8 @@ Snowflake) may omit `dsn` entirely.
 |---|---|
 | `postgresql+asyncpg` | `postgresql+asyncpg://{username}:{password}@{host}:{port}/{database}` |
 | `mysql+aiomysql` | `mysql+aiomysql://{username}:{password}@{host}:{port}/{database}` |
-| `snowflake` | `snowflake://{username}:{password}@{account}/{database}/{schema}?warehouse={warehouse}&role={role}` |
-| `mongodb` | `mongodb://{username}:{password}@{host}:{port}/{database}?authSource=admin` |
 
-`mongodb` lives in a SQLAlchemy-shaped transport entry only when there's
-a SQLAlchemy adapter; for the canonical driver, prefer a transport
-declaration that uses MongoDB's native connection string format.
+These are async SQLAlchemy transports (DSN `url_template`). ADBC drivers
+(`postgresql`, `snowflake`, `bigquery`) carry connection state in
+`db_kwargs` rather than a DSN — see the `postgresql-adbc` and `snowflake`
+reference examples.
