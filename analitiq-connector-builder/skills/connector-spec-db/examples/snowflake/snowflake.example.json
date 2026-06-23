@@ -3,65 +3,41 @@
   "kind": "database",
   "connector_id": "snowflake-example",
   "display_name": "Snowflake Example",
-  "description": "Reference connector for Snowflake using the snowflake driver.",
+  "description": "Reference connector for Snowflake using the ADBC snowflake driver.",
   "tags": [
     "example",
     "database",
     "snowflake",
-    "warehouse"
+    "warehouse",
+    "adbc"
   ],
   "version": "1.0.0",
   "default_transport": "database",
   "transports": {
     "database": {
-      "transport_type": "sqlalchemy",
+      "transport_type": "adbc",
       "driver": "snowflake",
-      "dsn": {
-        "kind": "url_template",
-        "template": "snowflake://{username}:{password}@{account}/{database}/{schema}?warehouse={warehouse}&role={role}",
-        "bindings": {
-          "username": {
-            "value": {
-              "ref": "connection.parameters.username"
-            },
-            "encoding": "url_userinfo"
-          },
-          "password": {
-            "value": {
-              "ref": "secrets.password"
-            },
-            "encoding": "url_userinfo"
-          },
-          "account": {
-            "value": {
-              "ref": "connection.parameters.account"
-            },
-            "encoding": "host"
-          },
-          "database": {
-            "value": {
-              "ref": "connection.parameters.database"
-            },
-            "encoding": "url_path_segment"
-          },
-          "schema": {
-            "value": {
-              "ref": "connection.parameters.schema"
-            },
-            "encoding": "url_path_segment"
-          },
-          "warehouse": {
-            "value": {
-              "ref": "connection.parameters.warehouse"
-            },
-            "encoding": "url_query_value"
-          },
-          "role": {
-            "value": {
-              "ref": "connection.parameters.role"
-            },
-            "encoding": "url_query_value"
-          }
+      "db_kwargs": {
+        "username": {
+          "ref": "connection.parameters.username"
+        },
+        "password": {
+          "ref": "secrets.password"
+        },
+        "adbc.snowflake.sql.account": {
+          "ref": "connection.parameters.account"
+        },
+        "adbc.snowflake.sql.db": {
+          "ref": "connection.parameters.database"
+        },
+        "adbc.snowflake.sql.schema": {
+          "ref": "connection.parameters.schema"
+        },
+        "adbc.snowflake.sql.warehouse": {
+          "ref": "connection.parameters.warehouse"
+        },
+        "adbc.snowflake.sql.role": {
+          "ref": "connection.parameters.role"
         }
       }
     }

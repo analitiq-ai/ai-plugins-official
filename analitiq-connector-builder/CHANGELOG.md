@@ -63,6 +63,14 @@
   MySQL's native TLS vocabulary (`DISABLED`…`VERIFY_IDENTITY`),
   interpreted by the dialect's `build_tls_connect_arg` (the SSL-mode
   vocabulary is now documented as connector-defined).
+- **Snowflake example switched to ADBC; MongoDB example dropped.** The
+  snowflake reference example now uses `transport_type: "adbc"` with the
+  `snowflake` driver and `db_kwargs` (no DSN), per the driver-selection
+  decision order (Snowflake is a first-class ADBC system); the prior
+  sync `sqlalchemy` / `snowflake` transport violated the async-only
+  rule. The MongoDB example is removed — there is no async SQLAlchemy
+  MongoDB driver and a document store does not fit the SQL transport
+  contract, so it should not have shipped as a `sqlalchemy` example.
 - `connector-drift-classifier` diffs both map files independently; the
   type-map drift categories apply per file/direction.
 - `connector-provider-researcher`: `docs_url` is now optional. When the

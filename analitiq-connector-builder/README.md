@@ -48,7 +48,7 @@ agent owns the authoring vocabulary for its kind via a dedicated spec skill
 | Kind | Status | Auth types | Examples |
 |---|---|---|---|
 | `api` | shipped | `api_key`, `basic_auth`, `oauth2_authorization_code`, `oauth2_client_credentials`, `jwt`, `credentials`, `aws_iam`, `none` | Stripe, Pipedrive, Wise, Xero |
-| `database` | shipped | `db` | PostgreSQL, MySQL, Snowflake, MongoDB |
+| `database` | shipped | `db` | PostgreSQL, MySQL, Snowflake |
 | `file` / `s3` / `stdout` | stubbed | n/a | Recognized by schema; engine support pending. |
 
 ## Validation
