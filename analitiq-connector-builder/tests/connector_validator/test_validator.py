@@ -151,6 +151,22 @@ def test_whitespace_template_variable_caught(tmp_path):
         f"whitespace var should not be reported as unknown scope; got {errs}"
 
 
+def test_unclosed_template_variable_caught(tmp_path):
+    """A `${` with no closing `}` is not extracted, so it would survive as a
+    literal at runtime — flag it. A legitimate template with literal JSON
+    braces (`{ }` not preceded by `$`) must NOT trip this."""
+    base = json.loads(VALID_API_CONNECTOR.read_text())
+    base["transports"]["api"]["headers"]["X-Unclosed"] = {"template": "Bearer ${secrets.api_key"}
+    base["transports"]["api"]["headers"]["X-Json"] = {"template": '{"key": "${secrets.api_key}"}'}
+    doc_path = tmp_path / "connector.json"
+    doc_path.write_text(json.dumps(base))
+    result = run_validator(doc_path, "--semantic-only")
+    errs = errors_of(result, "expression-resolver")
+    unclosed = [e for e in errs if "unclosed template variable" in e["message"]]
+    # Exactly one: the dangling `${`. The literal-brace JSON template is clean.
+    assert len(unclosed) == 1, f"expected exactly one unclosed finding; got {result['findings']}"
+
+
 def test_transport_ref_caught():
     result = run_validator(FIXTURES / "invalid_transport_ref.json", "--semantic-only")
     errs = errors_of(result, "transport-ref")
@@ -218,6 +234,49 @@ def test_dsn_empty_placeholder_caught(tmp_path):
     # error is the empty one — not a generic 'no matching binding'.
     assert not any("has no matching binding" in e["message"] for e in errs), \
         f"valid bindings wrongly flagged as unbound; got {errs}"
+
+
+def test_dsn_unclosed_brace_caught(tmp_path):
+    """A `{` with no closing `}` in a DSN url_template is an unbalanced brace
+    that corrupts the connection string — flagged rather than silently ignored.
+    Braces are reserved for `{placeholder}` markers in a DSN, so any stray one
+    is malformed."""
+    base = {
+        "$schema": "https://schemas.analitiq.ai/connector/latest.json",
+        "kind": "database",
+        "connector_id": "fixture-dsn-unclosed",
+        "version": "1.0.0",
+        "default_transport": "db",
+        "transports": {
+            "db": {
+                "transport_type": "sqlalchemy",
+                "driver": "postgresql+asyncpg",
+                "dsn": {
+                    "kind": "url_template",
+                    "template": "postgresql://{host}/{database",
+                    "bindings": {
+                        "host": {"value": {"ref": "connection.parameters.host"}, "encoding": "host"},
+                        "database": {"value": {"ref": "connection.parameters.database"}, "encoding": "url_path_segment"},
+                    },
+                },
+            }
+        },
+        "auth": {"type": "db"},
+        "connection_contract": {
+            "inputs": {
+                "host": {"source": "user", "phase": "pre_auth", "storage": "connection.parameters", "type": "string", "required": True},
+                "database": {"source": "user", "phase": "pre_auth", "storage": "connection.parameters", "type": "string", "required": True},
+            }
+        },
+    }
+    doc_path = tmp_path / "connector.json"
+    doc_path.write_text(json.dumps(base))
+    result = run_validator(doc_path, "--semantic-only")
+    errs = errors_of(result, "dsn-binding")
+    assert any(
+        "unbalanced or unclosed brace" in e["message"] and e["path"] == "/transports/db/dsn/template"
+        for e in errs
+    ), f"expected unclosed-brace dsn-binding finding; got {errs}"
 
 
 def test_auth_shape_oauth_cc_forbidden_authorize_caught():
@@ -759,6 +818,19 @@ def test_type_map_regex_empty_placeholder_caught(tmp_path):
     # is not reported as unbacked — no misleading 'capture' error.
     assert not any("capture" in e["message"] for e in errs), \
         f"valid capture wrongly flagged; got {errs}"
+
+
+def test_type_map_unclosed_placeholder_caught(tmp_path):
+    """A `${` with no closing `}` on a render value renders as a literal —
+    flagged as a type-map-rule error (the #48 unclosed-brace fold-in)."""
+    write_path = tmp_path / "type-map-write.json"
+    write_path.write_text(json.dumps([
+        {"match": "regex", "canonical": "^Decimal128\\((?<p>\\d+)\\)$", "native": "NUMERIC(${p)"}
+    ]))
+    result = run_validator(write_path, "--semantic-only", schema_url=TYPE_MAP_SCHEMA_URL)
+    errs = errors_of(result, "type-map-rule")
+    assert any(e["path"] == "/0/native" and "unclosed" in e["message"] for e in errs), \
+        f"expected unclosed-placeholder finding on /0/native; got {errs}"
 
 
 def test_type_map_duplicate_rule_warned():

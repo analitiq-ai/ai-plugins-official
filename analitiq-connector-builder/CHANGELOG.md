@@ -26,7 +26,7 @@
   failure that churns the validate→fix loop) or silently fall back to
   `insert`, dropping upsert capability. Docs-only fix; the schema and
   validator were already correct. Surfaced in #46.
-- **Validator now catches empty placeholders instead of ignoring them.**
+- **Validator now catches malformed placeholders instead of ignoring them.**
   Every placeholder-extraction regex used `[^}]+` (one-or-more), so an empty
   placeholder matched nothing and slipped through silently — at runtime it
   resolves to nothing, corrupting the URL/header (value-expression `${}`), the
@@ -34,9 +34,14 @@
   (type-map `${}`). Widened all of them to `[^}]*` and added explicit errors:
   `expression-resolver` flags an empty/whitespace template variable,
   `type-map-rule` flags an empty render-side placeholder, and `dsn-binding`
-  flags an empty `{}` in a `url_template`. All four sites are covered —
-  `check_expressions`, `check_phase_resolvability`, `_PLACEHOLDER_RE`
-  (type maps), and `check_dsn_bindings`. Fixes #48.
+  flags an empty `{}` in a `url_template`. The sibling **unclosed-brace** hole
+  is closed in the same pass: a dangling `${` (value-expression / type-map) or
+  an unbalanced `{`/`}` (DSN, where braces are reserved for `{placeholder}`
+  markers) is not extracted by the regex either, so it would likewise survive
+  as a literal at runtime — each now raises an error from the same validator.
+  Literal braces that are legitimate (e.g. a JSON body in a `${…}` template, or
+  a native DDL type) are not flagged. Covered in `check_expressions`,
+  `_PLACEHOLDER_RE` (type maps), and `check_dsn_bindings`. Fixes #48.
 
 ### Changed
 - **Type-map split: `type-map.json` → `type-map-read.json` + `type-map-write.json`**
