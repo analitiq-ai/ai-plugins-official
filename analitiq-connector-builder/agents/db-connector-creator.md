@@ -31,6 +31,7 @@ The `connector-spec-db` skill is preloaded. Beyond that, read:
 - `${CLAUDE_PLUGIN_ROOT}/skills/connector-builder/references/connection-contract.md`
 - `${CLAUDE_PLUGIN_ROOT}/skills/connector-builder/references/lifecycle-phases.md`
 - `${CLAUDE_PLUGIN_ROOT}/skills/connector-builder/references/metadata-and-versioning.md`
+- `${CLAUDE_PLUGIN_ROOT}/skills/connector-builder/references/definition-of-done.md`
 
 ## Authoring order
 
@@ -133,6 +134,55 @@ The `connector-spec-db` skill is preloaded. Beyond that, read:
      mapping the repo root, and entry points named `{connector_id}`
      under BOTH `analitiq.source_connectors` and
      `analitiq.destination_connectors`.
+
+## Definition of Done
+
+Before returning `CreatorOutput`, confirm the shared-core checklist in
+`references/definition-of-done.md` AND these database-only items. These
+cover what the `connector-schema-validator` cannot enforce — the Python
+package files it never sees (registry CI owns the wheel build), driver
+discipline, and dialect behavior. Do not restate validator rules.
+
+- [ ] **Driver chosen strictly per the decision order** in
+  `spec-driver-selection.md` (first-class ADBC → Arrow Flight SQL →
+  async SQLAlchemy + native bulk path → async SQLAlchemy batched
+  INSERT), and a one-line rationale holds for why earlier tiers were
+  skipped. (The validator accepts any in-enum driver; it cannot check
+  the *order* was followed.)
+- [ ] **Every SQLAlchemy driver is async** (`postgresql+asyncpg`,
+  `mysql+aiomysql`, `mariadb+aiomysql`) — no sync DBAPI. (A sync driver
+  is schema-valid but fails at connect time; nothing in the validator
+  catches it.)
+- [ ] **`requirements.txt` lists only this connector's driver(s)** — no
+  engine pins, no stray dependencies.
+- [ ] **`pyproject.toml` entry points are named `{connector_id}` under
+  BOTH `analitiq.source_connectors` and
+  `analitiq.destination_connectors`.** (Registry CI checks entry points;
+  the in-plugin validator never sees `pyproject.toml`. The two groups
+  are where the both-directions principle becomes concrete for a DB
+  connector.)
+- [ ] **`connector.py` imports the CDK only** — never another connector,
+  never the engine/runtime.
+- [ ] **The dialect implements exactly the hooks its transports require**
+  (SQLAlchemy + TLS → `build_tls_connect_arg`; upsert →
+  `build_sqlalchemy_upsert` + `supports_upsert_sqlalchemy`; ADBC upsert →
+  `adbc_stage_table_sql` + `supports_upsert_adbc`) and ships **no Python
+  type-rendering table** — the write map owns the write direction.
+- [ ] **Structural overrides exist only where the portable form is
+  genuinely invalid** (`batch_commits_key_type`,
+  `current_timestamp_default`, and a `render_column_type` override only
+  for logic the write map cannot express).
+- [ ] **Every `type-map-write-coverage` warning is reconciled** — each
+  unmapped canonical family is intentional and backed by a
+  `render_column_type` override, not an accidental gap. (The validator
+  only *warns* and cannot tell intentional from accidental.)
+- [ ] **`resource_discovery` enumerates schemas, tables, and columns**
+  for this engine.
+- [ ] **TLS is declared in the right place for the transport**:
+  SQLAlchemy → the generic `tls` block; ADBC → driver-namespaced
+  `db_kwargs` entries with no `tls` block. (The `tls-consistency`
+  validator checks the ssl_ca / verify-mode pairing, not that the block
+  sits on the correct transport family.)
 
 ## Output
 

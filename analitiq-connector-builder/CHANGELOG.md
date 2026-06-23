@@ -2,6 +2,19 @@
 
 ## [unreleased]
 
+### Added
+- **Definition-of-Done self-check for the connector creators.** New
+  `connector-builder/references/definition-of-done.md` carries a shared-core
+  checklist, and `api-connector-creator` / `db-connector-creator` each gained
+  a kind-specific `## Definition of Done` section run as a gate before
+  returning `CreatorOutput`. The lists deliberately cover what the
+  `connector-schema-validator` cannot enforce — classification correctness,
+  read-map completeness against the provider's docs, the both-directions
+  principle, driver-selection discipline (async-only SQLAlchemy, decision
+  order), and the non-JSON artifacts the in-plugin validator never sees
+  (package files, README) — so they add no duplicated source of truth with
+  the validator, save one deliberately-labeled API/DB boundary check.
+
 ### Changed
 - **Type-map split: `type-map.json` → `type-map-read.json` + `type-map-write.json`**
   (per `connector-driver-selection.md` / `dip-registry-connector-packages.md`
