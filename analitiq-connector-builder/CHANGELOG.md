@@ -26,6 +26,15 @@
   failure that churns the validate→fix loop) or silently fall back to
   `insert`, dropping upsert capability. Docs-only fix; the schema and
   validator were already correct. Surfaced in #46.
+- **Validator now catches empty `${}` placeholders instead of ignoring them.**
+  The `${…}` extraction regex used `[^}]+` (one-or-more), so an empty `${}`
+  matched nothing and slipped through silently — at runtime it resolves to
+  nothing, corrupting the DSN/URL/header (value expressions) or surviving as a
+  literal `${}` in rendered DDL (type maps). Widened to `[^}]*` and added
+  explicit errors: `expression-resolver` flags an empty/whitespace template
+  variable, and `type-map-rule` flags an empty render-side placeholder. Both
+  the value-expression (`check_expressions` / `check_phase_resolvability`) and
+  type-map (`_PLACEHOLDER_RE`) sites are covered. Fixes #48.
 
 ### Changed
 - **Type-map split: `type-map.json` → `type-map-read.json` + `type-map-write.json`**

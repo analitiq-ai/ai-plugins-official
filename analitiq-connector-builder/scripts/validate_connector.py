@@ -266,7 +266,9 @@ def _scope_is_known(dotted: str) -> bool:
 def check_expressions(doc: dict) -> list[dict]:
     findings: list[dict] = []
     ref_pattern = re.compile(r"^([a-z_]+(?:\.[a-z_]+)*)(?:\.[A-Za-z0-9_-]+)*$")
-    template_var = re.compile(r"\$\{([^}]+)\}")
+    # `[^}]*` (not `+`) so an empty `${}` is captured and flagged below; with
+    # `+` it matched nothing and slipped through to corrupt the value at runtime.
+    template_var = re.compile(r"\$\{([^}]*)\}")
     for path, node in _walk(doc):
         kind = _is_value_expression(node)
         if not kind:
@@ -322,7 +324,17 @@ def check_expressions(doc: dict) -> list[dict]:
                 )
         elif kind == "template":
             for var in template_var.findall(node["template"]):
-                if not _scope_is_known(var):
+                if not var.strip():
+                    findings.append(
+                        finding(
+                            "expression-resolver",
+                            "error",
+                            path,
+                            "empty template variable '${}' resolves to nothing at runtime.",
+                            rule_doc="shared/value-expression-parameterization.md",
+                        )
+                    )
+                elif not _scope_is_known(var):
                     findings.append(
                         finding(
                             "expression-resolver",
@@ -987,7 +999,9 @@ def _walk_refs_with_phase(
 ) -> list[dict]:
     """Walk a sub-tree, validating every ref/template var against the phase model."""
     findings: list[dict] = []
-    template_var = re.compile(r"\$\{([^}]+)\}")
+    # `[^}]*` mirrors `check_expressions`; an empty `${}` is reported there as
+    # an expression-resolver error, so this phase walker just skips it (below).
+    template_var = re.compile(r"\$\{([^}]*)\}")
     for path, node in _walk(container, base_path):
         if not isinstance(node, dict):
             continue
@@ -1007,6 +1021,8 @@ def _walk_refs_with_phase(
         tmpl = node.get("template")
         if isinstance(tmpl, str):
             for var in template_var.findall(tmpl):
+                if not var.strip():
+                    continue
                 problem = _ref_phase_problem(var, phase, auth_op, auth_type, input_idx, output_idx)
                 if problem:
                     findings.append(
@@ -1191,7 +1207,10 @@ def check_phase_resolvability(doc: dict) -> list[dict]:
     return findings
 
 
-_PLACEHOLDER_RE = re.compile(r"\$\{([^}]+)\}")
+# `[^}]*` (not `+`) so an empty `${}` is captured and flagged by
+# `check_type_map_rules`; with `+` it matched nothing and survived into the
+# rendered DDL as a literal `${}`.
+_PLACEHOLDER_RE = re.compile(r"\$\{([^}]*)\}")
 _NARROWING_ARROW_TYPES = {"Object", "List"}
 _ECMA_NAMED_GROUP = re.compile(r"\(\?<([A-Za-z_][A-Za-z0-9_]*)>")
 # Catches all non-ECMA `(?P…` regex extensions: Python stdlib's named-group
@@ -1914,6 +1933,17 @@ def check_type_map_rules(
             )
             continue
         placeholders = _PLACEHOLDER_RE.findall(render_value)
+        if any(not name.strip() for name in placeholders):
+            findings.append(
+                finding(
+                    "type-map-rule",
+                    "error",
+                    f"/{i}/{render_key}",
+                    f"{render_key}={render_value!r} contains an empty ${{}} placeholder, which renders to nothing.",
+                    rule_doc="shared/type-maps.md",
+                )
+            )
+            continue
         if match == "exact" and placeholders:
             findings.append(
                 finding(

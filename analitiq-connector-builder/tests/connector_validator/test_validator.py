@@ -120,6 +120,37 @@ def test_unknown_scope_caught():
     assert "hmac_sign" in messages, f"expected unknown function 'hmac_sign' caught; got: {messages}"
 
 
+def test_empty_template_variable_caught(tmp_path):
+    """`${}` names no scope and resolves to nothing at runtime, so it must be
+    flagged rather than slip through (the `[^}]*` regex fix in #48)."""
+    base = json.loads(VALID_API_CONNECTOR.read_text())
+    base["transports"]["api"]["headers"]["X-Empty"] = {"template": "Bearer ${}"}
+    doc_path = tmp_path / "connector.json"
+    doc_path.write_text(json.dumps(base))
+    result = run_validator(doc_path, "--semantic-only")
+    errs = errors_of(result, "expression-resolver")
+    empty = [e for e in errs if "empty template variable" in e["message"]]
+    assert len(empty) == 1, f"expected exactly one empty-template finding; got {result['findings']}"
+    # The valid `${secrets.api_key}` template in the same doc must not be flagged.
+    assert not any("secrets.api_key" in e["message"] for e in errs), \
+        f"valid template var wrongly flagged; got {errs}"
+
+
+def test_whitespace_template_variable_caught(tmp_path):
+    """`${   }` is empty after stripping — reported as empty, not as an
+    unknown scope (which would be a misleading message)."""
+    base = json.loads(VALID_API_CONNECTOR.read_text())
+    base["transports"]["api"]["headers"]["X-Blank"] = {"template": "Bearer ${   }"}
+    doc_path = tmp_path / "connector.json"
+    doc_path.write_text(json.dumps(base))
+    result = run_validator(doc_path, "--semantic-only")
+    errs = errors_of(result, "expression-resolver")
+    assert any("empty template variable" in e["message"] for e in errs), \
+        f"expected empty-template finding for '${{   }}'; got {result['findings']}"
+    assert not any("unknown scope" in e["message"] for e in errs), \
+        f"whitespace var should not be reported as unknown scope; got {errs}"
+
+
 def test_transport_ref_caught():
     result = run_validator(FIXTURES / "invalid_transport_ref.json", "--semantic-only")
     errs = errors_of(result, "transport-ref")
@@ -637,6 +668,22 @@ def test_type_map_regex_missing_capture_caught():
     errs = errors_of(result, "type-map-rule")
     assert any("precision" in e["message"] and "capture" in e["message"] for e in errs), \
         f"expected missing-capture finding; got {errs}"
+
+
+def test_type_map_empty_placeholder_caught(tmp_path):
+    """An empty `${}` on a render value renders to nothing — flagged as a
+    type-map-rule error rather than surviving into the output verbatim (the
+    `_PLACEHOLDER_RE` `[^}]*` fix in #48)."""
+    read_path = tmp_path / "type-map-read.json"
+    read_path.write_text(json.dumps([
+        {"match": "exact", "native": "BOOLEAN", "canonical": "Boolean${}"}
+    ]))
+    result = run_validator(read_path, "--semantic-only", schema_url=TYPE_MAP_SCHEMA_URL)
+    errs = errors_of(result, "type-map-rule")
+    assert any(
+        e["path"] == "/0/canonical" and "empty" in e["message"] and "${}" in e["message"]
+        for e in errs
+    ), f"expected empty-placeholder finding on /0/canonical; got {errs}"
 
 
 def test_type_map_duplicate_rule_warned():
