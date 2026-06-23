@@ -429,7 +429,10 @@ def check_dsn_bindings(doc: dict) -> list[dict]:
     transports = doc.get("transports", {})
     if not isinstance(transports, dict):
         return findings  # `check_transport_refs` already emitted the structural error
-    placeholder_re = re.compile(r"\{([^}]+)\}")
+    # `[^}]*` (not `+`) so an empty `{}` is captured and flagged below; with
+    # `+` it matched nothing and slipped through to corrupt the DSN URL at
+    # runtime (same bug class as the `${}` value-expression/type-map sites).
+    placeholder_re = re.compile(r"\{([^}]*)\}")
     for tname, tspec in transports.items():
         if not isinstance(tspec, dict):
             findings.append(
@@ -513,7 +516,18 @@ def check_dsn_bindings(doc: dict) -> list[dict]:
                 )
             )
             continue
-        placeholders = set(placeholder_re.findall(template))
+        raw_placeholders = placeholder_re.findall(template)
+        if any(not ph.strip() for ph in raw_placeholders):
+            findings.append(
+                finding(
+                    "dsn-binding",
+                    "error",
+                    f"{path_prefix}/template",
+                    "empty placeholder '{}' has no binding name and resolves to nothing at runtime.",
+                    rule_doc="connectors/connector-schema-parameterization.md#transport-contracts",
+                )
+            )
+        placeholders = {ph for ph in raw_placeholders if ph.strip()}
         binding_keys = set(bindings.keys())
         for ph in placeholders - binding_keys:
             findings.append(

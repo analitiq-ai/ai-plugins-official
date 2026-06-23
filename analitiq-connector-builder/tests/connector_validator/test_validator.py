@@ -174,6 +174,52 @@ def test_dsn_unbound_placeholder_caught():
         f"expected unbound={{'password','port','database'}}, got {unbound}; findings={errs}"
 
 
+def test_dsn_empty_placeholder_caught(tmp_path):
+    """An empty `{}` in a DSN url_template names no binding and resolves to
+    nothing at runtime — flagged rather than silently ignored (the `[^}]*`
+    fix applied to the DSN `{placeholder}` markers, same bug class as `${}`)."""
+    base = {
+        "$schema": "https://schemas.analitiq.ai/connector/latest.json",
+        "kind": "database",
+        "connector_id": "fixture-dsn-empty",
+        "version": "1.0.0",
+        "default_transport": "db",
+        "transports": {
+            "db": {
+                "transport_type": "sqlalchemy",
+                "driver": "postgresql+asyncpg",
+                "dsn": {
+                    "kind": "url_template",
+                    "template": "postgresql://{host}:{}/{database}",
+                    "bindings": {
+                        "host": {"value": {"ref": "connection.parameters.host"}, "encoding": "host"},
+                        "database": {"value": {"ref": "connection.parameters.database"}, "encoding": "url_path_segment"},
+                    },
+                },
+            }
+        },
+        "auth": {"type": "db"},
+        "connection_contract": {
+            "inputs": {
+                "host": {"source": "user", "phase": "pre_auth", "storage": "connection.parameters", "type": "string", "required": True},
+                "database": {"source": "user", "phase": "pre_auth", "storage": "connection.parameters", "type": "string", "required": True},
+            }
+        },
+    }
+    doc_path = tmp_path / "connector.json"
+    doc_path.write_text(json.dumps(base))
+    result = run_validator(doc_path, "--semantic-only")
+    errs = errors_of(result, "dsn-binding")
+    assert any(
+        "empty placeholder" in e["message"] and e["path"] == "/transports/db/dsn/template"
+        for e in errs
+    ), f"expected empty-placeholder dsn-binding finding; got {errs}"
+    # The valid `{host}`/`{database}` markers are bound, so the only dsn-binding
+    # error is the empty one — not a generic 'no matching binding'.
+    assert not any("has no matching binding" in e["message"] for e in errs), \
+        f"valid bindings wrongly flagged as unbound; got {errs}"
+
+
 def test_auth_shape_oauth_cc_forbidden_authorize_caught():
     result = run_validator(FIXTURES / "invalid_auth_shape_oauth_cc.json", "--semantic-only")
     errs = errors_of(result, "auth-shape")
