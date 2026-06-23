@@ -25,8 +25,9 @@ and `connectors/connector-schema-parameterization.md`.
 Note: the connector's type maps are **not** top-level fields. They ship
 as separate sibling artifacts — `{connector_id}/definition/type-map-read.json`
 (native → Arrow, all kinds) and `{connector_id}/definition/type-map-write.json`
-(Arrow → native, database only) — and both validate against
-`https://schemas.analitiq.ai/type-map/latest.json`. See
+(Arrow → native, database only) — validating against
+`https://schemas.analitiq.ai/type-map-read/latest.json` and
+`https://schemas.analitiq.ai/type-map-write/latest.json` respectively. See
 `connector-spec-db/spec-type-maps.md` for authoring.
 
 ## Authoring `connector_id`

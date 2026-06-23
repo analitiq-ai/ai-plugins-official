@@ -25,15 +25,14 @@ Both files are **standalone** siblings of `connector.json`:
 ```
 
 The read map validates against
-`https://schemas.analitiq.ai/type-map/latest.json`. The write map
-shares the same three-key rule shape, but the published schema is
-read-direction-only today — its `canonical` constraint requires a
-literal/template Arrow type and rejects the write map's regex matchers
-(a known contract gap) — so write maps are validated semantically only
-(`--semantic-only`); the validator derives the direction from the
-filename. Neither map is ever embedded inside `connector.json` or any
-endpoint document. Each present file must be **non-empty** — an empty
-array is rejected.
+`https://schemas.analitiq.ai/type-map-read/latest.json`. The write map
+shares the same three-key rule shape but inverts the direction
+(`canonical` matches, `native` renders) and validates against its own
+published schema, `https://schemas.analitiq.ai/type-map-write/latest.json`;
+the validator derives the direction from the filename and runs the full
+Layer 1 + Layer 2 pass on each. Neither map is ever embedded inside
+`connector.json` or any endpoint document. Each present file must be
+**non-empty** — an empty array is rejected.
 
 The pre-split filename `type-map.json` is dead: the engine never reads
 it and the validator rejects it with a migration finding.

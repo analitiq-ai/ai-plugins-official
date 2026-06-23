@@ -58,9 +58,9 @@ The plugin includes a Python validator script
 
 1. **JSON Schema validation** (Draft 2020-12) against the published schema:
    - Connector → `https://schemas.analitiq.ai/connector/latest.json`
-   - Read map (`type-map-read.json`) → `https://schemas.analitiq.ai/type-map/latest.json`
-     (`type-map-write.json` runs semantic-only: the published type-map
-     schema is read-direction-only today; direction derives from filename)
+   - Read map (`type-map-read.json`) → `https://schemas.analitiq.ai/type-map-read/latest.json`
+   - Write map (`type-map-write.json`, database only) → `https://schemas.analitiq.ai/type-map-write/latest.json`
+     (direction derives from the filename)
    - API endpoint → `https://schemas.analitiq.ai/api-endpoint/latest.json`
    - Database endpoint → `https://schemas.analitiq.ai/database-endpoint/latest.json`
 2. **Semantic validators** for rules JSON Schema can't express:

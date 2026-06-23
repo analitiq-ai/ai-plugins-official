@@ -238,7 +238,7 @@ Returned by `api-connector-creator` and `db-connector-creator`.
         {
           "type": "array",
           "minItems": 1,
-          "description": "On-disk shape of the standalone type-map-read.json (native → Arrow): a top-level, non-empty array of {match, native, canonical} rule objects where `native` is the matcher (regex patterns authored UPPERCASE) and `canonical` is the rendered Arrow type (may carry ${name} substitutions backed by named captures in `native`). Written by the orchestrator to {connector_id}/definition/type-map-read.json and validated against https://schemas.analitiq.ai/type-map/latest.json.",
+          "description": "On-disk shape of the standalone type-map-read.json (native → Arrow): a top-level, non-empty array of {match, native, canonical} rule objects where `native` is the matcher (regex patterns authored UPPERCASE) and `canonical` is the rendered Arrow type (may carry ${name} substitutions backed by named captures in `native`). Written by the orchestrator to {connector_id}/definition/type-map-read.json and validated against https://schemas.analitiq.ai/type-map-read/latest.json.",
           "items": {
             "type": "object",
             "required": ["match", "native", "canonical"],
@@ -258,7 +258,7 @@ Returned by `api-connector-creator` and `db-connector-creator`.
         {
           "type": "array",
           "minItems": 1,
-          "description": "On-disk shape of the standalone type-map-write.json (Arrow → native DDL render rules). REQUIRED for kind=database; MUST be null for kind=api. Same rule shape but the direction inverts: `canonical` is the matcher (regex with ECMA named captures for parameterized types) and `native` is the rendered DDL (may carry ${name} substitutions backed by captures in `canonical`). Must cover the full canonical vocabulary; deliberate gaps are allowed only when the dialect overrides render_column_type for that family. Written to {connector_id}/definition/type-map-write.json and validated semantically only (--semantic-only): the published type-map schema is read-direction-only today and rejects write-direction regex matchers in `canonical` — a known contract gap.",
+          "description": "On-disk shape of the standalone type-map-write.json (Arrow → native DDL render rules). REQUIRED for kind=database; MUST be null for kind=api. Same rule shape but the direction inverts: `canonical` is the matcher (regex with ECMA named captures for parameterized types) and `native` is the rendered DDL (may carry ${name} substitutions backed by captures in `canonical`). Must cover the full canonical vocabulary; deliberate gaps are allowed only when the dialect overrides render_column_type for that family. Written to {connector_id}/definition/type-map-write.json and validated against https://schemas.analitiq.ai/type-map-write/latest.json (full Layer 1 + Layer 2; direction derived from the filename).",
           "items": {
             "type": "object",
             "required": ["match", "native", "canonical"],

@@ -16,17 +16,19 @@ files.
   - `https://schemas.analitiq.ai/connector/latest.json`
   - `https://schemas.analitiq.ai/api-endpoint/latest.json`
   - `https://schemas.analitiq.ai/database-endpoint/latest.json`
-  - `https://schemas.analitiq.ai/type-map/latest.json`
+  - `https://schemas.analitiq.ai/type-map-read/latest.json`
+  - `https://schemas.analitiq.ai/type-map-write/latest.json`
   - `https://schemas.analitiq.ai/connection/latest.json` (other plugin uses this)
 - `document_path` — absolute path to the draft JSON document. Type-map
   documents must be validated under their on-disk filenames
   (`type-map-read.json` / `type-map-write.json`) — the rule direction is
-  derived from the filename. Validate `type-map-write.json` with
-  `--semantic-only`: the published type-map schema is
-  read-direction-only today (its `canonical` constraint requires a
-  literal/template Arrow type and rejects the write map's regex
-  matchers — a known contract gap); Layer 2 fully owns write-map rule
-  shape and vocabulary coverage. The validator checks JSON documents
+  derived from the filename, and each direction has its own published
+  schema: validate `type-map-read.json` against
+  `https://schemas.analitiq.ai/type-map-read/latest.json` and
+  `type-map-write.json` against
+  `https://schemas.analitiq.ai/type-map-write/latest.json`. Both run the
+  full Layer 1 + Layer 2 pass — do **not** pass `--semantic-only` for
+  type maps. The validator checks JSON documents
   only; database package files (`connector.py`, `pyproject.toml`, …)
   are registry CI's responsibility.
 
