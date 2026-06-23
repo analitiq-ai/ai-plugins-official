@@ -79,6 +79,7 @@ Snowflake) may omit `dsn` entirely.
 | `mysql+aiomysql` | `mysql+aiomysql://{username}:{password}@{host}:{port}/{database}` |
 
 These are async SQLAlchemy transports (DSN `url_template`). ADBC drivers
-(`postgresql`, `snowflake`, `bigquery`) carry connection state in
-`db_kwargs` rather than a DSN — see the `postgresql-adbc` and `snowflake`
-reference examples.
+differ by driver: Snowflake carries all connection state in `db_kwargs`
+and omits the DSN, while `postgresql` keeps core coordinates in a `dsn`
+`url_template` and reserves `db_kwargs` for driver-namespaced extras like
+TLS — compare the `snowflake` and `postgresql-adbc` reference examples.
