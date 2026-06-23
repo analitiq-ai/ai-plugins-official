@@ -686,6 +686,35 @@ def test_type_map_empty_placeholder_caught(tmp_path):
     ), f"expected empty-placeholder finding on /0/canonical; got {errs}"
 
 
+def test_type_map_regex_empty_placeholder_caught(tmp_path):
+    """The load-bearing path: a `regex` write rule whose render value mixes a
+    valid `${p}` with an empty `${}`. The empty-placeholder gate sits BEFORE
+    the named-capture check, so the empty `${}` short-circuits with a precise
+    error (not a misleading 'no matching capture group'), and the valid sibling
+    capture neither masks it nor is itself wrongly flagged. Also exercises the
+    write direction (render key = `native`), which the exact-rule test above
+    does not."""
+    write_path = tmp_path / "type-map-write.json"
+    write_path.write_text(json.dumps([
+        {
+            "match": "regex",
+            "canonical": "^Decimal128\\((?<p>\\d+),\\s*(?<s>\\d+)\\)$",
+            "native": "NUMERIC(${p}, ${})",
+        }
+    ]))
+    result = run_validator(write_path, "--semantic-only", schema_url=TYPE_MAP_SCHEMA_URL)
+    errs = errors_of(result, "type-map-rule")
+    empty = [
+        e for e in errs
+        if e["path"] == "/0/native" and "empty" in e["message"] and "${}" in e["message"]
+    ]
+    assert len(empty) == 1, f"expected one empty-placeholder finding on /0/native; got {errs}"
+    # The empty placeholder short-circuits the rule, so the valid `${p}` capture
+    # is not reported as unbacked — no misleading 'capture' error.
+    assert not any("capture" in e["message"] for e in errs), \
+        f"valid capture wrongly flagged; got {errs}"
+
+
 def test_type_map_duplicate_rule_warned():
     result = run_validator(
         FIXTURES / "invalid_type_map_duplicate.json",
