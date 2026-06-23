@@ -10,7 +10,9 @@ This skill is loaded by `api-connector-creator` when authoring an API
 connector. It carries the API-specific vocabulary and examples needed to
 populate `transports`, `auth`, `connection_contract`, and
 `resource_discovery` for `kind: "api"`, plus the standalone
-`type-map.json` shipped alongside the connector.
+`type-map-read.json` shipped alongside the connector. API connectors
+ship no write map and no package files — those are database-connector
+artifacts.
 
 ## Required reading (load on demand)
 
@@ -21,9 +23,10 @@ Pick what you need for the auth and pagination styles you're authoring:
 - This skill's `spec-pagination.md` (for endpoint pagination)
 - This skill's `spec-replication.md` (for incremental sync)
 - `connector-spec-db/spec-type-maps.md` for authoring the standalone
-  `type-map.json` (same file shape for API and DB)
+  `type-map-read.json` (same rule shape for API and DB; API ships the
+  read direction only)
 - The matching example under `examples/<name>/`, which contains both
-  `<name>.example.json` (connector body) and a sibling `type-map.json`
+  `<name>.example.json` (connector body) and a sibling `type-map-read.json`
 
 ## What this skill covers
 
@@ -60,5 +63,5 @@ operations vocabulary it consumes is API-specific and worth pinning here:
 - `tls` block (that's `connector-spec-db`).
 - Database `resource_discovery` (DB-specific shape).
 - Type-map file shape and authoring rules (see
-  `connector-spec-db/spec-type-maps.md` — the standalone `type-map.json`
+  `connector-spec-db/spec-type-maps.md` — the standalone `type-map-read.json`
   has the same shape for API and DB).

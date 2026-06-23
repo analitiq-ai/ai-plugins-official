@@ -26,46 +26,57 @@ resolve through the same `connection_contract.inputs` definitions.
 
 ## Rules
 
-- `tls.mode` is a value expression that resolves to one of the canonical
-  enum values: `none`, `require`, `verify-ca`, `verify-full`, `prefer`.
-  In practice it should `ref` the canonical input
-  `connection.parameters.ssl_mode`.
+- `tls.mode` is a value expression that resolves to one of the values
+  in the connector's declared `ssl_mode` enum (see below — the
+  vocabulary is connector-defined). In practice it should `ref` the
+  canonical input `connection.parameters.ssl_mode`.
 - `tls.ca_certificate` is a value expression that resolves to a
   PEM-encoded CA bundle. It should `ref` the canonical secret
   `secrets.ssl_ca_certificate`.
-- If the `ssl_mode` enum allows `verify-ca` or `verify-full`, the
+- If the `ssl_mode` enum allows any certificate-verification mode
+  (`verify-ca` / `verify-full`, or MySQL-style `VERIFY_CA` /
+  `VERIFY_IDENTITY` — the validator normalizes case and `_`/`-`), the
   connection contract must declare `ssl_ca_certificate` as an input.
   The `tls-consistency` validator enforces this.
 - Connector authors must NOT embed driver-specific TLS objects, file
   paths, or executable code in connector JSON. The runtime materializer
   converts the generic declaration into driver-specific arguments.
 
-## Canonical SSL mode enum
+## SSL mode vocabulary is connector-defined
 
-The canonical `ssl_mode` values across drivers are:
+The `ssl_mode` vocabulary belongs to the connector: declare the
+system's native mode names in the `connection_contract.inputs.ssl_mode`
+enum, and interpret them in the connector package's dialect via
+`build_tls_connect_arg(mode, ca_pem)` (see
+`spec-connector-package.md`). Users see the vocabulary their database's
+own docs use; no translation table ships anywhere.
 
-| Mode | Meaning |
+Reference vocabularies:
+
+| System family | Enum (from the reference packages) |
 |---|---|
-| `none` | Plain (no TLS). |
-| `require` | TLS without certificate validation. |
-| `verify-ca` | TLS with CA validation, no hostname check. |
-| `verify-full` | TLS with CA + hostname validation. |
-| `prefer` | TLS if available, fall back to plain. |
+| libpq-shaped (postgres, redshift) | `disable`, `allow`, `prefer`, `require`, `verify-ca`, `verify-full` |
+| MySQL / MariaDB | `DISABLED`, `PREFERRED`, `REQUIRED`, `VERIFY_CA`, `VERIFY_IDENTITY` |
 
-If a driver uses different mode names (e.g. `disable`, `allow`,
-`require`), the engine's runtime materializer translates the canonical
-`ssl_mode` value into the driver-native equivalent — connector authors
-do not ship a separate translation file. Authored connectors carry only
-the canonical enum on `connection_contract.inputs.ssl_mode` and
-reference it via `tls.mode`.
+The dialect maps each declared mode to the driver's connect argument —
+pass-through strings for libpq drivers, `False` / `SSLContext` objects
+for aiomysql (built with `cdk.transport_factory.ca_ssl_context` when a
+CA bundle is supplied). Verification modes (`verify-ca`/`verify-full`,
+`VERIFY_CA`/`VERIFY_IDENTITY`) must raise when `tls.ca_certificate`
+resolves empty.
 
 ## Authoring checklist
 
 1. Always declare `ssl_mode` as a connection input with an explicit
    `enum`.
-2. Always declare `ssl_ca_certificate` as a secret input when
-   `verify-ca`/`verify-full` are in the enum.
+2. Always declare `ssl_ca_certificate` as a secret input when any
+   certificate-verification mode (`verify-ca`/`verify-full`,
+   `VERIFY_CA`/`VERIFY_IDENTITY`) is in the enum.
 3. Reference both via `ref` inside the transport's `tls` block.
-4. Do not duplicate driver-specific SSL options elsewhere — if the
-   driver needs additional connection arguments derived from `ssl_mode`,
-   the engine handles that.
+4. Do not duplicate driver-specific SSL options elsewhere in the JSON —
+   the dialect's `build_tls_connect_arg` is the single place that
+   derives driver connect arguments from `ssl_mode`.
+5. Declare the system's native mode vocabulary in the enum and make the
+   dialect's `build_tls_connect_arg` handle exactly that vocabulary —
+   the validator checks enum ↔ `ssl_ca_certificate` consistency, the
+   dialect owns interpretation.

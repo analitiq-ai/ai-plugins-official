@@ -14,9 +14,10 @@ writing files.
 ## Inputs to collect
 
 - `provider` (required) — provider name or slug (e.g. `stripe`, `postgresql`).
-- `docs_url` (required for research) — official documentation URL.
-  `connector-provider-researcher` does not run web searches; the user
-  must point it at first-party docs.
+- `docs_url` (optional, preferred) — official documentation URL. When
+  omitted, `connector-provider-researcher` locates the provider's
+  official docs via WebSearch; facts are still extracted from
+  first-party documentation pages only.
 - `kind_hint` (optional) — `api` or `database`. (Storage kinds `file`,
   `s3`, `stdout` are recognized by the schema but not yet supported by
   the engine.)
@@ -55,8 +56,9 @@ sub-agents own those skills.
      connector authored from scratch.
 
 1. **Research** — invoke `connector-provider-researcher`. Receive
-   `ProviderFacts` (discriminated by kind). If the user did not supply
-   `docs_url`, halt and ask.
+   `ProviderFacts` (discriminated by kind). Pass `docs_url` when the
+   user supplied one; otherwise the researcher locates the official
+   docs itself and reports the URL it used.
 2. **Classify** — run the closed-enum mappers inline (see
    `references/enum-mappers.md`):
    - `KindMapper` → `kind`.
@@ -72,9 +74,22 @@ sub-agents own those skills.
    parallel — dispatch them in a single message.
 5. **Validate** — invoke `connector-schema-validator`:
    - Connector → `https://schemas.analitiq.ai/connector/latest.json`.
-   - Type map → `https://schemas.analitiq.ai/type-map/latest.json`.
+   - Read map (`type-map-read.json`) →
+     `https://schemas.analitiq.ai/type-map/latest.json`.
+   - Write map (`type-map-write.json`, database only) → validate with
+     `--semantic-only`. The published type-map schema is
+     read-direction-only today (its `canonical` constraint requires a
+     literal/template Arrow type and rejects the write map's regex
+     matchers) — a contract gap; Layer 2 fully owns write-map rule
+     shape and vocabulary coverage, deriving the direction from the
+     filename.
    - API endpoint → `https://schemas.analitiq.ai/api-endpoint/latest.json`.
    - Database endpoint → `https://schemas.analitiq.ai/database-endpoint/latest.json`.
+
+   The validator validates JSON documents only. The database package
+   files (`connector.py`, `__init__.py`, `requirements.txt`,
+   `pyproject.toml`) are NOT validated here — registry CI owns their
+   enforcement (wheel build + entry-point checks).
 
    The orchestrator should attempt at most 5 fix passes per artifact —
    re-dispatch the matching creator with the validator's findings,
@@ -88,15 +103,22 @@ sub-agents own those skills.
 6. **Drift** — if `previous_release_path` was supplied, invoke
    `connector-drift-classifier` and apply the bump to top-level
    `version`. Otherwise this is a first release; set `version: "1.0.0"`.
-7. **Write** — write files to disk:
+7. **Write** — write files to disk. API connectors carry only the
+   definition; database connectors are installable Python packages, so
+   the creator's package files land at the connector root:
 
    ```
    {connector_id}/
    ├── definition/
    │   ├── connector.json
-   │   ├── type-map.json               # required for both api and db; standalone file
+   │   ├── type-map-read.json          # required for both api and db; native → Arrow
+   │   ├── type-map-write.json         # database only; Arrow → native DDL render rules
    │   └── endpoints/
    │       └── {endpoint_id}.json      # api connectors only — one file per endpoint; filename = document.endpoint_id
+   ├── __init__.py                     # database only — re-exports the connector class
+   ├── connector.py                    # database only — {Name}Dialect + {Name}Connector
+   ├── requirements.txt                # database only — THIS connector's driver(s) only
+   ├── pyproject.toml                  # database only — analitiq-connector-{connector_id} + entry points
    └── README.md
    ```
 

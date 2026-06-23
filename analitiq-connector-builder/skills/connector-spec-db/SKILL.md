@@ -1,6 +1,6 @@
 ---
 name: connector-spec-db
-description: Database connector authoring vocabulary — DSN URL templates with bindings and encoding, TLS declarations, resource discovery, native type maps. Loaded by db-connector-creator only. Not invoked directly by users.
+description: Database connector authoring vocabulary — driver selection, DSN URL templates with bindings and encoding, TLS declarations, resource discovery, read/write type maps, and the Python package files. Loaded by db-connector-creator only. Not invoked directly by users.
 disable-model-invocation: true
 ---
 
@@ -10,18 +10,29 @@ This skill is loaded by `db-connector-creator` when authoring a database
 connector. It carries the DB-specific vocabulary and examples needed to
 populate `transports`, `auth`, `connection_contract`, and
 `resource_discovery` for `kind: "database"`, plus the standalone
-`type-map.json` shipped alongside the connector.
+`type-map-read.json` / `type-map-write.json` shipped alongside the
+connector and the package files (`connector.py`, `__init__.py`,
+`requirements.txt`, `pyproject.toml`) that make the connector an
+installable Python package.
 
 ## Required reading (load on demand)
 
+- This skill's `spec-driver-selection.md` — the transport/driver
+  decision order (ADBC → Flight SQL → native bulk path → batched
+  INSERT) and the async-driver constraint.
 - This skill's `spec-dsn-bindings.md` — DSN URL templates and bindings.
 - This skill's `spec-tls.md` — TLS declaration mechanics.
 - This skill's `spec-resource-discovery.md` — schema/table enumeration at
   connection time.
-- This skill's `spec-type-maps.md` — native → Arrow canonical mapping
-  authored into the standalone `type-map.json` file.
-- The matching example under `examples/<name>/`, which contains both
-  `<name>.example.json` (connector body) and a sibling `type-map.json`.
+- This skill's `spec-type-maps.md` — the read map (native → Arrow,
+  `type-map-read.json`) and the write map (Arrow → native DDL,
+  `type-map-write.json`), incl. the uppercase-pattern rule and the
+  direction inversion.
+- This skill's `spec-connector-package.md` — package layout,
+  `pyproject.toml` + entry points, dialect hooks, CDK import rules.
+- The matching example under `examples/<name>/`, which contains
+  `<name>.example.json` (connector body) plus sibling
+  `type-map-read.json` and `type-map-write.json`.
 
 ## What this skill covers
 
@@ -34,14 +45,18 @@ populate `transports`, `auth`, `connection_contract`, and
   entries (e.g. `adbc.postgresql.sslmode`) — they have no `tls` block.
 - `resource_discovery` declarations for enumerating schemas / tables /
   columns at connection time.
-- Authoring the standalone `type-map.json` covering native database
-  types (see `spec-type-maps.md`).
-- Transport types: `adbc` (preferred — closed `driver` enum
+- Authoring the standalone `type-map-read.json` (native → Arrow) and
+  `type-map-write.json` (Arrow → native DDL render rules; full
+  canonical-vocabulary coverage) — see `spec-type-maps.md`.
+- The connector package files and dialect hooks — see
+  `spec-connector-package.md`.
+- Transport types, chosen per the `spec-driver-selection.md` decision
+  order: `adbc` (closed `driver` enum
   `postgresql | snowflake | bigquery`; carries `dsn` and/or `db_kwargs`
   — **the AdbcTransport contract requires at least one of the two**;
-  TLS lives inside `db_kwargs`) and `sqlalchemy` (carries `driver`,
-  e.g. `postgresql+asyncpg`, `mysql+asyncmy`; supports the generic
-  `tls` block). When present, `dsn` carries the same
+  TLS lives inside `db_kwargs`) and `sqlalchemy` (carries an **async**
+  `driver`, e.g. `postgresql+asyncpg`, `mysql+aiomysql`; supports the
+  generic `tls` block). When present, `dsn` carries the same
   `dsn.kind: "url_template"` shape in both transport types; ADBC
   drivers that accept all connection state via `db_kwargs` (e.g.
   Snowflake) may omit `dsn` entirely.

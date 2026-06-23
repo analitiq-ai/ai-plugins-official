@@ -209,22 +209,22 @@ def test_post_auth_input_referenced_in_auth_caught():
 
 
 def test_type_map_missing_sibling_caught(tmp_path):
-    """A connector with no sibling type-map.json triggers a coverage error."""
+    """A connector with no sibling type-map-read.json triggers a coverage error."""
     base = json.loads(VALID_API_CONNECTOR.read_text())
     doc_path = tmp_path / "connector.json"
     doc_path.write_text(json.dumps(base))
     result = run_validator(doc_path, "--semantic-only")
     errs = errors_of(result, "type-map-coverage")
-    assert any("type-map.json" in e["message"] and "missing" in e["message"] for e in errs), \
+    assert any("type-map-read.json" in e["message"] and "missing" in e["message"] for e in errs), \
         f"expected missing-sibling finding; got {errs}"
 
 
 def test_type_map_empty_array_caught(tmp_path):
-    """A sibling type-map.json that is an empty array triggers a coverage error."""
+    """A sibling type-map-read.json that is an empty array triggers a coverage error."""
     base = json.loads(VALID_API_CONNECTOR.read_text())
     doc_path = tmp_path / "connector.json"
     doc_path.write_text(json.dumps(base))
-    (tmp_path / "type-map.json").write_text("[]")
+    (tmp_path / "type-map-read.json").write_text("[]")
     result = run_validator(doc_path, "--semantic-only")
     errs = errors_of(result, "type-map-coverage")
     assert any("non-empty" in e["message"] for e in errs), \
@@ -317,18 +317,73 @@ def test_db_connector_missing_sibling_type_map_caught(tmp_path):
     doc_path.write_text(json.dumps(base))
     result = run_validator(doc_path, "--semantic-only")
     errs = errors_of(result, "type-map-coverage")
-    assert any("type-map.json" in e["message"] and "missing" in e["message"] for e in errs), \
+    assert any("type-map-read.json" in e["message"] and "missing" in e["message"] for e in errs), \
         f"expected missing-sibling finding for DB connector; got {errs}"
 
 
-def test_db_connector_with_sibling_type_map_passes():
-    """Happy path for DB connectors — non-empty sibling type-map, no endpoints/ required."""
+def test_db_connector_with_sibling_type_maps_passes():
+    """Happy path for DB connectors — non-empty sibling read + write maps, no endpoints/ required."""
     result = run_validator(
         FIXTURES / "valid_db_connector" / "connector.json",
         "--semantic-only",
     )
     errs = errors_of(result, "type-map-coverage")
-    assert not errs, f"expected DB connector with sibling type-map to pass; got {errs}"
+    assert not errs, f"expected DB connector with sibling type maps to pass; got {errs}"
+    # The fixture write map covers the full canonical vocabulary, so the
+    # rule-8 probe must stay quiet too.
+    warns = warnings_of(result, "type-map-write-coverage")
+    assert not warns, f"expected no vocabulary-gap warnings; got {warns}"
+
+
+def test_db_connector_missing_write_map_caught(tmp_path):
+    """kind=database requires a sibling type-map-write.json; absence is an error."""
+    base = json.loads((FIXTURES / "valid_db_connector" / "connector.json").read_text())
+    doc_path = tmp_path / "connector.json"
+    doc_path.write_text(json.dumps(base))
+    (tmp_path / "type-map-read.json").write_text(
+        (FIXTURES / "valid_db_connector" / "type-map-read.json").read_text()
+    )
+    result = run_validator(doc_path, "--semantic-only")
+    errs = errors_of(result, "type-map-coverage")
+    assert any("type-map-write.json" in e["message"] and "missing" in e["message"] for e in errs), \
+        f"expected missing-write-map finding for DB connector; got {errs}"
+
+
+def test_legacy_type_map_filename_caught(tmp_path):
+    """A pre-split sibling `type-map.json` must surface a rename pointer even
+    when the new read map is also present — the stale file would otherwise
+    linger unnoticed."""
+    base = json.loads(VALID_API_CONNECTOR.read_text())
+    doc_path = tmp_path / "connector.json"
+    doc_path.write_text(json.dumps(base))
+    src = FIXTURES / "valid_api_connector"
+    (tmp_path / "type-map-read.json").write_text((src / "type-map-read.json").read_text())
+    (tmp_path / "type-map.json").write_text((src / "type-map-read.json").read_text())
+    (tmp_path / "endpoints").mkdir()
+    (tmp_path / "endpoints" / "ping.json").write_text((src / "endpoints" / "ping.json").read_text())
+    result = run_validator(doc_path, "--semantic-only")
+    errs = errors_of(result, "type-map-coverage")
+    assert any("legacy" in e["message"] and "type-map-read.json" in e["message"] for e in errs), \
+        f"expected legacy-filename finding; got {errs}"
+
+
+def test_api_connector_with_write_map_caught(tmp_path):
+    """API connectors must not ship a write map — the write direction is a
+    database-package concept."""
+    base = json.loads(VALID_API_CONNECTOR.read_text())
+    doc_path = tmp_path / "connector.json"
+    doc_path.write_text(json.dumps(base))
+    src = FIXTURES / "valid_api_connector"
+    (tmp_path / "type-map-read.json").write_text((src / "type-map-read.json").read_text())
+    (tmp_path / "type-map-write.json").write_text(json.dumps([
+        {"match": "exact", "canonical": "Utf8", "native": "TEXT"}
+    ]))
+    (tmp_path / "endpoints").mkdir()
+    (tmp_path / "endpoints" / "ping.json").write_text((src / "endpoints" / "ping.json").read_text())
+    result = run_validator(doc_path, "--semantic-only")
+    errs = errors_of(result, "type-map-coverage")
+    assert any("must not ship" in e["message"] and "type-map-write.json" in e["message"] for e in errs), \
+        f"expected api-with-write-map finding; got {errs}"
 
 
 def test_api_connector_missing_endpoints_dir_caught():
@@ -383,14 +438,14 @@ def test_unknown_kind_skipped_silently(tmp_path):
 
 def test_storage_kind_still_validates_sibling_type_map_rules(tmp_path):
     """Storage kinds (file/s3/stdout) have no per-kind coverage contract, but
-    a sibling broken type-map.json must still surface — authors who ship a
-    type-map ahead of engine support shouldn't get a silent pass."""
+    a sibling broken type-map-read.json must still surface — authors who ship
+    a type map ahead of engine support shouldn't get a silent pass."""
     base = json.loads(VALID_API_CONNECTOR.read_text())
     base["kind"] = "file"
     doc_path = tmp_path / "connector.json"
     doc_path.write_text(json.dumps(base))
-    (tmp_path / "type-map.json").write_text(json.dumps([
-        {"match": "regex", "native": "^bad[regex", "canonical": "Utf8"}
+    (tmp_path / "type-map-read.json").write_text(json.dumps([
+        {"match": "regex", "native": "^BAD[REGEX", "canonical": "Utf8"}
     ]))
     result = run_validator(doc_path, "--semantic-only")
     errs = errors_of(result, "type-map-rule")
@@ -471,10 +526,13 @@ def test_api_endpoint_arrow_template_substitution_renders():
         td = Path(td)
         connector = json.loads(VALID_API_CONNECTOR.read_text())
         (td / "connector.json").write_text(json.dumps(connector))
-        (td / "type-map.json").write_text(json.dumps([
+        # Pattern is authored UPPERCASE per the contract; the endpoint's
+        # lowercase native must still resolve via the engine-mirroring
+        # normalization (uppercase + whitespace-collapse) before matching.
+        (td / "type-map-read.json").write_text(json.dumps([
             {
                 "match": "regex",
-                "native": "^numeric\\((?<precision>[0-9]+),(?<scale>[0-9]+)\\)$",
+                "native": "^NUMERIC\\((?<precision>[0-9]+),(?<scale>[0-9]+)\\)$",
                 "canonical": "Decimal128(${precision}, ${scale})",
             }
         ]))
@@ -609,11 +667,11 @@ def test_to_python_regex_passthroughs():
 
 
 def test_malformed_sibling_type_map_caught(tmp_path):
-    """A sibling type-map.json that's syntactically broken JSON must raise a hard error."""
+    """A sibling type-map-read.json that's syntactically broken JSON must raise a hard error."""
     base = json.loads((VALID_API_CONNECTOR).read_text())
     doc_path = tmp_path / "connector.json"
     doc_path.write_text(json.dumps(base))
-    (tmp_path / "type-map.json").write_text("{")
+    (tmp_path / "type-map-read.json").write_text("{")
     result = run_validator(doc_path, "--semantic-only")
     errs = errors_of(result, "type-map-coverage")
     assert any("could not be read or parsed" in e["message"] for e in errs), \
@@ -625,10 +683,10 @@ def test_lambda_handles_empty_capture(tmp_path):
     base = json.loads((VALID_API_CONNECTOR).read_text())
     doc_path = tmp_path / "connector.json"
     doc_path.write_text(json.dumps(base))
-    (tmp_path / "type-map.json").write_text(json.dumps([
+    (tmp_path / "type-map-read.json").write_text(json.dumps([
         {
             "match": "regex",
-            "native": "^optional_(?<size>[0-9]*)$",
+            "native": "^OPTIONAL_(?<size>[0-9]*)$",
             "canonical": "FixedSizeBinary(${size})",
         }
     ]))
@@ -781,7 +839,7 @@ def test_storage_kind_malformed_sibling_type_map_surfaced(tmp_path):
     base["kind"] = "file"
     doc_path = tmp_path / "connector.json"
     doc_path.write_text(json.dumps(base))
-    (tmp_path / "type-map.json").write_text("{")  # malformed JSON
+    (tmp_path / "type-map-read.json").write_text("{")  # malformed JSON
     result = run_validator(doc_path, "--semantic-only")
     errs = errors_of(result, "type-map-coverage")
     assert any("could not be read or parsed" in e["message"] for e in errs), \
@@ -797,7 +855,7 @@ def test_storage_kind_legacy_wrapped_sibling_type_map_surfaced(tmp_path):
     base["kind"] = "stdout"
     doc_path = tmp_path / "connector.json"
     doc_path.write_text(json.dumps(base))
-    (tmp_path / "type-map.json").write_text(json.dumps({
+    (tmp_path / "type-map-read.json").write_text(json.dumps({
         "native_to_arrow": {"rules": [
             {"method": "exact", "native": "X", "canonical": "Utf8"}
         ]}
@@ -811,7 +869,7 @@ def test_storage_kind_legacy_wrapped_sibling_type_map_surfaced(tmp_path):
 def test_type_map_non_dict_entry_warned(tmp_path):
     """Mixed-content list `[{valid}, "garbage"]`: dict entries are validated;
     non-dict entries surface a warning instead of silent drop."""
-    tm = tmp_path / "type-map.json"
+    tm = tmp_path / "type-map-read.json"
     tm.write_text(json.dumps([
         {"match": "exact", "native": "BIGINT", "canonical": "Int64"},
         "stray-string",
@@ -839,7 +897,7 @@ def test_unhashable_rule_value_does_not_crash(tmp_path):
     AND must surface a finding so the un-checkable rule isn't a silent skip.
     The non-string-native check supersedes the unhashable-key path for most
     cases (caught earlier with a clearer message)."""
-    tm = tmp_path / "type-map.json"
+    tm = tmp_path / "type-map-read.json"
     tm.write_text(json.dumps([
         {"match": "exact", "native": ["X"], "canonical": "Utf8"},
         {"match": "exact", "native": "BIGINT", "canonical": "Int64"}
@@ -867,10 +925,10 @@ def test_regex_rule_with_nonstring_canonical_still_compile_validated():
 
 
 def test_empty_type_map_warns_under_semantic_only(tmp_path):
-    """An empty type-map.json must surface a warning under `--semantic-only`
+    """An empty type map must surface a warning under `--semantic-only`
     (Layer 1 owns the minItems error, but bypassing it would otherwise be a
     silent pass)."""
-    tm = tmp_path / "type-map.json"
+    tm = tmp_path / "type-map-read.json"
     tm.write_text("[]")
     result = run_validator(tm, "--semantic-only", schema_url=TYPE_MAP_SCHEMA_URL)
     warns = warnings_of(result, "type-map-rule")
@@ -880,8 +938,8 @@ def test_empty_type_map_warns_under_semantic_only(tmp_path):
 
 def test_connector_validation_surfaces_sibling_rule_errors():
     """check_type_map_coverage must run rule checks on the sibling so a broken regex
-    in type-map.json is caught when validating the connector, not only when invoked
-    against the type-map directly."""
+    in type-map-read.json is caught when validating the connector, not only when
+    invoked against the type map directly."""
     result = run_validator(
         FIXTURES / "connector_with_broken_type_map" / "connector.json",
         "--semantic-only",
@@ -889,6 +947,302 @@ def test_connector_validation_surfaces_sibling_rule_errors():
     errs = errors_of(result, "type-map-rule")
     assert any("not a valid regex" in e["message"] for e in errs), \
         f"expected broken sibling regex to surface via connector path; got {errs}"
+
+
+# ---------------------------------------------------------------------------
+# Write-direction maps (type-map-write.json) + uppercase pattern rule
+# ---------------------------------------------------------------------------
+
+
+WRITE_MAP_RULES = [
+    {"match": "exact", "canonical": "Utf8", "native": "TEXT"},
+    {
+        "match": "regex",
+        "canonical": "^Decimal(128|256)\\((?<p>\\d+),\\s*(?<s>\\d+)\\)$",
+        "native": "NUMERIC(${p}, ${s})",
+    },
+]
+
+
+def test_write_map_rules_pass_under_write_filename(tmp_path):
+    """Canonical-as-matcher / native-as-render rules (the write orientation)
+    must validate cleanly when the file is named type-map-write.json."""
+    write_path = tmp_path / "type-map-write.json"
+    write_path.write_text(json.dumps(WRITE_MAP_RULES))
+    result = run_validator(write_path, "--semantic-only", schema_url=TYPE_MAP_SCHEMA_URL)
+    errs = errors_of(result, "type-map-rule")
+    assert not errs, f"expected write-direction rules to validate under the write filename; got {errs}"
+
+
+def test_direction_detected_by_filename(tmp_path):
+    """Direction is a filename contract: the exact-rule `${}` gate applies to
+    the RENDER side, which is `native` for write maps and `canonical` for
+    read maps. The same two rules must flag opposite entries under the two
+    filenames."""
+    rules = [
+        # ${} in native → render-side violation under WRITE only.
+        {"match": "exact", "canonical": "Utf8", "native": "VARCHAR(${n})"},
+        # ${} in canonical → render-side violation under READ only.
+        {"match": "exact", "native": "TEXT", "canonical": "Utf8(${x})"},
+    ]
+    write_path = tmp_path / "type-map-write.json"
+    write_path.write_text(json.dumps(rules))
+    result = run_validator(write_path, "--semantic-only", schema_url=TYPE_MAP_SCHEMA_URL)
+    paths = [e["path"] for e in errors_of(result, "type-map-rule")]
+    assert paths == ["/0/native"], f"write direction must flag /0/native only; got {paths}"
+
+    read_path = tmp_path / "type-map-read.json"
+    read_path.write_text(json.dumps(rules))
+    result = run_validator(read_path, "--semantic-only", schema_url=TYPE_MAP_SCHEMA_URL)
+    paths = [e["path"] for e in errors_of(result, "type-map-rule")]
+    assert paths == ["/1/canonical"], f"read direction must flag /1/canonical only; got {paths}"
+
+
+def test_write_map_unbacked_placeholder_caught(tmp_path):
+    """`${name}` in the write map's `native` must be backed by a `(?<name>…)`
+    capture in `canonical` — the inverted form of the read-map rule."""
+    write_path = tmp_path / "type-map-write.json"
+    write_path.write_text(json.dumps([
+        {
+            "match": "regex",
+            "canonical": "^Decimal128\\((?<p>\\d+),\\s*(?<s>\\d+)\\)$",
+            "native": "NUMERIC(${p}, ${q})",
+        }
+    ]))
+    result = run_validator(write_path, "--semantic-only", schema_url=TYPE_MAP_SCHEMA_URL)
+    errs = errors_of(result, "type-map-rule")
+    assert any(
+        e["path"] == "/0/native" and "${q}" in e["message"] and "canonical" in e["message"]
+        for e in errs
+    ), f"expected unbacked ${{q}} finding on /0/native; got {errs}"
+
+
+def test_write_map_vocabulary_gap_warned(tmp_path):
+    """A write map that misses canonical families gets a grouped rule-8
+    warning (not an error — render_column_type overrides are legitimate)."""
+    write_path = tmp_path / "type-map-write.json"
+    write_path.write_text(json.dumps(WRITE_MAP_RULES))
+    result = run_validator(write_path, "--semantic-only", schema_url=TYPE_MAP_SCHEMA_URL)
+    warns = warnings_of(result, "type-map-write-coverage")
+    assert len(warns) == 1, f"expected one grouped vocabulary warning; got {warns}"
+    msg = warns[0]["message"]
+    listed = msg.split("families: ", 1)[1].split(". The write", 1)[0].split(", ")
+    for family in ("Boolean", "Int64", "Json", "Timestamp (tz)"):
+        assert family in listed, f"expected missing family {family!r} listed; got {listed}"
+    assert "Utf8" not in listed, \
+        f"Utf8 is covered and must not be listed as missing; got {listed}"
+    # Note: ", ".split also bisects "Decimal128(p, s)" — check the fragment.
+    assert "Decimal128(p" not in listed, \
+        f"Decimal is covered by the regex rule and must not be listed; got {listed}"
+
+
+def test_write_map_full_vocabulary_passes(tmp_path):
+    """The postgres-reference-shaped write map fixture resolves every probe."""
+    result = run_validator(
+        FIXTURES / "valid_db_connector" / "type-map-write.json",
+        "--semantic-only",
+        schema_url=TYPE_MAP_SCHEMA_URL,
+    )
+    errs = errors_of(result, "type-map-rule")
+    assert not errs, f"expected reference write map to pass rule checks; got {errs}"
+    warns = warnings_of(result, "type-map-write-coverage")
+    assert not warns, f"expected full vocabulary coverage; got {warns}"
+
+
+def test_write_map_vocabulary_gap_surfaces_from_connector_path(tmp_path):
+    """The rule-8 probe must also run when the connector is validated with
+    its siblings, not only against the standalone write map."""
+    base = json.loads((FIXTURES / "valid_db_connector" / "connector.json").read_text())
+    doc_path = tmp_path / "connector.json"
+    doc_path.write_text(json.dumps(base))
+    (tmp_path / "type-map-read.json").write_text(
+        (FIXTURES / "valid_db_connector" / "type-map-read.json").read_text()
+    )
+    (tmp_path / "type-map-write.json").write_text(json.dumps(WRITE_MAP_RULES))
+    result = run_validator(doc_path, "--semantic-only")
+    warns = warnings_of(result, "type-map-write-coverage")
+    assert warns and "Boolean" in warns[0]["message"], \
+        f"expected vocabulary-gap warning via connector path; got {warns}"
+
+
+def test_read_regex_lowercase_pattern_warned(tmp_path):
+    """Read-map regex patterns are matched against UPPERCASED natives;
+    lowercase literals are dead rules and must warn. Capture group names
+    and escapes (\\d) stay exempt."""
+    tm = tmp_path / "type-map-read.json"
+    tm.write_text(json.dumps([
+        {"match": "regex", "native": "^varchar\\((?<len>\\d+)\\)$", "canonical": "Utf8"},
+        {"match": "regex", "native": "^NUMERIC\\((?<p>\\d+)\\)$", "canonical": "Decimal128(${p}, 0)"},
+    ]))
+    result = run_validator(tm, "--semantic-only", schema_url=TYPE_MAP_SCHEMA_URL)
+    warns = warnings_of(result, "type-map-rule")
+    lowercase_warns = [w for w in warns if "UPPERCASED" in w["message"]]
+    assert len(lowercase_warns) == 1 and lowercase_warns[0]["path"] == "/0/native", \
+        f"expected exactly one uppercase warning on /0/native; got {warns}"
+
+
+def test_read_exact_lowercase_not_warned(tmp_path):
+    """Exact rules are normalized automatically by the engine — lowercase
+    exact natives must not trigger the uppercase warning."""
+    tm = tmp_path / "type-map-read.json"
+    tm.write_text(json.dumps([
+        {"match": "exact", "native": "jsonb", "canonical": "Json"},
+    ]))
+    result = run_validator(tm, "--semantic-only", schema_url=TYPE_MAP_SCHEMA_URL)
+    warns = [w for w in warnings_of(result, "type-map-rule") if "UPPERCASED" in w["message"]]
+    assert not warns, f"exact rules must be exempt from the uppercase warning; got {warns}"
+
+
+def test_unrecognized_filename_direction_default_warned(tmp_path):
+    """A type map validated under a filename that is neither
+    type-map-read.json nor type-map-write.json silently got READ semantics
+    before; now the defaulted direction must surface as a warning so a
+    misplaced write map's vanished write-direction checks aren't silent."""
+    odd_path = tmp_path / "some-map.json"
+    odd_path.write_text(json.dumps(WRITE_MAP_RULES))
+    result = run_validator(odd_path, "--semantic-only", schema_url=TYPE_MAP_SCHEMA_URL)
+    warns = warnings_of(result, "type-map-rule")
+    assert any("direction defaulted to 'read'" in w["message"] for w in warns), \
+        f"expected direction-default warning for unrecognized filename; got {warns}"
+    # Under the recognized filenames the warning must NOT fire.
+    for name in ("type-map-read.json", "type-map-write.json"):
+        good_path = tmp_path / name
+        good_path.write_text(json.dumps(WRITE_MAP_RULES))
+        result = run_validator(good_path, "--semantic-only", schema_url=TYPE_MAP_SCHEMA_URL)
+        warns = warnings_of(result, "type-map-rule")
+        assert not any("direction defaulted" in w["message"] for w in warns), \
+            f"direction-default warning must not fire for {name}; got {warns}"
+
+
+def test_escaped_lowercase_letter_not_silent(tmp_path):
+    """An unknown lowercase-letter escape (`\\q`) cannot slip past the
+    uppercase check unseen: Python's `re` rejects unknown ASCII-letter
+    escapes outright, so the rule surfaces as a compile ERROR before the
+    warning stage. Escaped punctuation (`\\(`) and known class escapes
+    (`\\d`, `\\s`) stay exempt from the uppercase warning."""
+    tm = tmp_path / "type-map-read.json"
+    tm.write_text(json.dumps([
+        {"match": "regex", "native": "^NUMERIC\\(\\q\\)$", "canonical": "Utf8"},
+        {"match": "regex", "native": "^VARCHAR\\(\\d+\\)\\s*$", "canonical": "Utf8"},
+    ]))
+    result = run_validator(tm, "--semantic-only", schema_url=TYPE_MAP_SCHEMA_URL)
+    errs = errors_of(result, "type-map-rule")
+    assert any("not a valid regex" in e["message"] and e["path"] == "/0/native" for e in errs), \
+        f"expected \\q rule to fail the compile gate; got {errs}"
+    warns = [w for w in warnings_of(result, "type-map-rule") if "UPPERCASED" in w["message"]]
+    assert not warns, \
+        f"the all-uppercase rule with \\d/\\s escapes must not warn; got {warns}"
+
+
+def test_tls_consistency_uppercase_verify_modes_caught(tmp_path):
+    """MySQL-style VERIFY_CA / VERIFY_IDENTITY enum values must trigger the
+    ssl_ca_certificate requirement (the check normalizes case and _/-)."""
+    base = json.loads((FIXTURES / "valid_db_connector" / "connector.json").read_text())
+    inputs = base["connection_contract"]["inputs"]
+    inputs["ssl_mode"] = {
+        "source": "user",
+        "phase": "pre_auth",
+        "storage": "connection.parameters",
+        "type": "string",
+        "required": False,
+        "default": "PREFERRED",
+        "enum": ["DISABLED", "PREFERRED", "REQUIRED", "VERIFY_CA", "VERIFY_IDENTITY"],
+    }
+    inputs.pop("ssl_ca_certificate", None)
+    doc_path = tmp_path / "connector.json"
+    doc_path.write_text(json.dumps(base))
+    result = run_validator(doc_path, "--semantic-only")
+    errs = errors_of(result, "tls-consistency")
+    assert any("ssl_ca_certificate" in e["message"] for e in errs), \
+        f"expected VERIFY_CA/VERIFY_IDENTITY to require ssl_ca_certificate; got {errs}"
+    # Positive counterpart: declaring the CA input clears the finding.
+    inputs["ssl_ca_certificate"] = {
+        "source": "user",
+        "phase": "pre_auth",
+        "storage": "secrets",
+        "type": "string",
+        "required": False,
+        "secret": True,
+    }
+    doc_path.write_text(json.dumps(base))
+    result = run_validator(doc_path, "--semantic-only")
+    errs = errors_of(result, "tls-consistency")
+    assert not errs, f"expected no tls-consistency error once ssl_ca_certificate declared; got {errs}"
+
+
+def test_storage_kind_write_map_sibling_rule_checked(tmp_path):
+    """The storage-kind branch must rule-check a present type-map-write.json
+    with WRITE direction — a broken matcher regex (in `canonical` for the
+    write direction) must surface."""
+    base = json.loads(VALID_API_CONNECTOR.read_text())
+    base["kind"] = "file"
+    doc_path = tmp_path / "connector.json"
+    doc_path.write_text(json.dumps(base))
+    (tmp_path / "type-map-write.json").write_text(json.dumps([
+        {"match": "regex", "canonical": "^Decimal128([0-9", "native": "NUMERIC"}
+    ]))
+    result = run_validator(doc_path, "--semantic-only")
+    errs = errors_of(result, "type-map-rule")
+    assert any("not a valid regex" in e["message"] and e["path"] == "/0/canonical" for e in errs), \
+        f"storage-kind write-map sibling must be rule-checked in write direction; got {errs}"
+
+
+def test_read_coverage_normalizes_native_case(tmp_path):
+    """Endpoint natives are matched after UPPERCASE + whitespace-collapse
+    normalization, so an uppercase exact rule covers a lowercase endpoint
+    native (mirrors the engine)."""
+    base = json.loads(VALID_API_CONNECTOR.read_text())
+    doc_path = tmp_path / "connector.json"
+    doc_path.write_text(json.dumps(base))
+    (tmp_path / "type-map-read.json").write_text(json.dumps([
+        {"match": "exact", "native": "STRING", "canonical": "Utf8"},
+        {"match": "exact", "native": "BOOLEAN", "canonical": "Boolean"},
+    ]))
+    src = FIXTURES / "valid_api_connector"
+    (tmp_path / "endpoints").mkdir()
+    (tmp_path / "endpoints" / "ping.json").write_text((src / "endpoints" / "ping.json").read_text())
+    result = run_validator(doc_path, "--semantic-only")
+    errs = errors_of(result, "type-map-coverage")
+    assert not errs, f"expected lowercase endpoint natives to resolve via uppercase rules; got {errs}"
+
+
+def test_read_coverage_collapses_native_whitespace(tmp_path):
+    """The other half of native normalization: runs of whitespace collapse
+    to a single space, so 'double  precision' (two spaces) matches an
+    exact rule authored 'DOUBLE PRECISION'."""
+    base = json.loads(VALID_API_CONNECTOR.read_text())
+    doc_path = tmp_path / "connector.json"
+    doc_path.write_text(json.dumps(base))
+    (tmp_path / "type-map-read.json").write_text(json.dumps([
+        {"match": "exact", "native": "DOUBLE PRECISION", "canonical": "Float64"},
+    ]))
+    (tmp_path / "endpoints").mkdir()
+    (tmp_path / "endpoints" / "items.json").write_text(json.dumps({
+        "$schema": "https://schemas.analitiq.ai/api-endpoint/latest.json",
+        "endpoint_id": "items",
+        "operations": {
+            "read": {
+                "request": {"method": "GET", "path": "/items"},
+                "response": {
+                    "records": {"ref": "response.body"},
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "number",
+                                "native_type": "double  precision",
+                                "arrow_type": "Float64",
+                            }
+                        },
+                    },
+                },
+            }
+        },
+    }))
+    result = run_validator(doc_path, "--semantic-only")
+    errs = errors_of(result, "type-map-coverage")
+    assert not errs, \
+        f"expected multi-space native to collapse and match single-space rule; got {errs}"
 
 
 # ---------------------------------------------------------------------------

@@ -12,7 +12,9 @@ Given a provider name and an official documentation URL, the plugin:
 
 1. Researches the provider's auth model, transports, and endpoints.
 2. Classifies kind, auth type, and transport types.
-3. Dispatches a kind-specific creator agent that authors the connector body.
+3. Dispatches a kind-specific creator agent that authors the connector body,
+   the read/write type maps, and — for database connectors — the Python
+   package files (dialect + connector class, requirements, pyproject).
 4. Authors endpoint files alongside (API connectors only — DB endpoints are
    discovered at runtime).
 5. Validates everything against the published JSON schemas plus a layer of
@@ -28,7 +30,7 @@ or *"/connector-builder &lt;provider&gt;"*.
 
 ```
 connector-builder (skill, orchestrator)
-├── connector-provider-researcher   # extracts ProviderFacts from official docs (no WebSearch)
+├── connector-provider-researcher   # extracts ProviderFacts from official docs (WebSearch only to locate them)
 ├── api-connector-creator           # authors kind=api connectors (loads connector-spec-api)
 ├── db-connector-creator            # authors kind=database connectors (loads connector-spec-db)
 ├── endpoint-creator                # authors API endpoint documents
@@ -46,7 +48,7 @@ agent owns the authoring vocabulary for its kind via a dedicated spec skill
 | Kind | Status | Auth types | Examples |
 |---|---|---|---|
 | `api` | shipped | `api_key`, `basic_auth`, `oauth2_authorization_code`, `oauth2_client_credentials`, `jwt`, `credentials`, `aws_iam`, `none` | Stripe, Pipedrive, Wise, Xero |
-| `database` | shipped | `db` | PostgreSQL, MySQL, Snowflake, MongoDB |
+| `database` | shipped | `db` | PostgreSQL, MySQL, Snowflake |
 | `file` / `s3` / `stdout` | stubbed | n/a | Recognized by schema; engine support pending. |
 
 ## Validation
@@ -56,13 +58,19 @@ The plugin includes a Python validator script
 
 1. **JSON Schema validation** (Draft 2020-12) against the published schema:
    - Connector → `https://schemas.analitiq.ai/connector/latest.json`
-   - Type map → `https://schemas.analitiq.ai/type-map/latest.json`
+   - Read map (`type-map-read.json`) → `https://schemas.analitiq.ai/type-map/latest.json`
+     (`type-map-write.json` runs semantic-only: the published type-map
+     schema is read-direction-only today; direction derives from filename)
    - API endpoint → `https://schemas.analitiq.ai/api-endpoint/latest.json`
    - Database endpoint → `https://schemas.analitiq.ai/database-endpoint/latest.json`
 2. **Semantic validators** for rules JSON Schema can't express:
    - `reserved-field`, `expression-resolver`, `phase-resolvability`,
      `transport-ref`, `dsn-binding`, `auth-shape`, `tls-consistency`,
-     `type-map-coverage`, `type-map-rule`.
+     `type-map-coverage`, `type-map-rule`, `type-map-write-coverage`,
+     `endpoint-annotations`.
+
+   The validator checks JSON documents only; the database package files
+   (`connector.py`, `pyproject.toml`, …) are enforced by registry CI.
 
 Run directly:
 
@@ -90,9 +98,14 @@ For each successfully built connector:
 {connector_id}/
 ├── definition/
 │   ├── connector.json              # the connector body
-│   ├── type-map.json               # standalone native→canonical rules (required, non-empty)
+│   ├── type-map-read.json          # native → Arrow rules (required, non-empty)
+│   ├── type-map-write.json         # Arrow → native DDL rules (database only)
 │   └── endpoints/                  # api connectors only
 │       └── {endpoint_id}.json      # filename matches the document's endpoint_id
+├── __init__.py                     # database only
+├── connector.py                    # database only — {Name}Dialect + {Name}Connector
+├── requirements.txt                # database only — this connector's driver(s)
+├── pyproject.toml                  # database only — analitiq-connector-{connector_id}
 └── README.md
 ```
 

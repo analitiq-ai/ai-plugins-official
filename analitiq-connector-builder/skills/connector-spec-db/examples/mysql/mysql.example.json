@@ -3,7 +3,7 @@
   "kind": "database",
   "connector_id": "mysql-example",
   "display_name": "MySQL Example",
-  "description": "Reference connector for MySQL using the asyncmy driver with TLS support.",
+  "description": "Reference connector for MySQL using the aiomysql driver with TLS support.",
   "tags": [
     "example",
     "database",
@@ -15,10 +15,10 @@
   "transports": {
     "database": {
       "transport_type": "sqlalchemy",
-      "driver": "mysql+asyncmy",
+      "driver": "mysql+aiomysql",
       "dsn": {
         "kind": "url_template",
-        "template": "mysql+asyncmy://{username}:{password}@{host}:{port}/{database}",
+        "template": "mysql+aiomysql://{username}:{password}@{host}:{port}/{database}",
         "bindings": {
           "username": {
             "value": {
@@ -109,14 +109,41 @@
         "phase": "pre_auth",
         "storage": "connection.parameters",
         "type": "string",
-        "required": true,
+        "required": false,
+        "default": "PREFERRED",
         "enum": [
-          "none",
-          "require",
-          "verify-ca",
-          "verify-full"
+          "DISABLED",
+          "PREFERRED",
+          "REQUIRED",
+          "VERIFY_CA",
+          "VERIFY_IDENTITY"
         ],
-        "default": "require"
+        "ui": {
+          "label": "SSL Mode",
+          "widget": "select",
+          "options": [
+            {
+              "label": "Disabled",
+              "value": "DISABLED"
+            },
+            {
+              "label": "Preferred",
+              "value": "PREFERRED"
+            },
+            {
+              "label": "Required",
+              "value": "REQUIRED"
+            },
+            {
+              "label": "Verify CA",
+              "value": "VERIFY_CA"
+            },
+            {
+              "label": "Verify Identity",
+              "value": "VERIFY_IDENTITY"
+            }
+          ]
+        }
       },
       "ssl_ca_certificate": {
         "source": "user",

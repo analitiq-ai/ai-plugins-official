@@ -92,7 +92,23 @@ Pin every I/O between phases and sub-agents as a JSON Schema fragment.
         "driver": { "type": "string" },
         "transport_family": {
           "type": "string",
-          "enum": ["sqlalchemy", "jdbc", "odbc", "mongodb"]
+          "enum": ["sqlalchemy", "adbc", "flight_sql", "jdbc", "odbc", "mongodb"]
+        },
+        "adbc_driver_package": {
+          "type": "string",
+          "description": "First-class ADBC driver wheel when one exists (e.g. 'adbc-driver-postgresql'); absent when the system has no production ADBC driver. Drives step 1 of the driver-selection decision order."
+        },
+        "flight_sql_endpoint": {
+          "type": "boolean",
+          "description": "True when the server exposes an Arrow Flight SQL endpoint (step 2 of the decision order — generic adbc-driver-flightsql)."
+        },
+        "bulk_load_protocol": {
+          "type": "string",
+          "description": "The system's native bulk-load path when no ADBC driver exists (e.g. 'LOAD DATA LOCAL INFILE', 'COPY FROM stdin BINARY', 'fast_executemany'). Drives step 3 — async SQLAlchemy transport with the bulk path implemented in the connector class."
+        },
+        "async_sqlalchemy_driver": {
+          "type": "string",
+          "description": "The async DBAPI for the SQLAlchemy transport (e.g. 'postgresql+asyncpg', 'mysql+aiomysql'). Sync drivers fail at connect — the engine requires the asyncio extension."
         },
         "dsn": {
           "type": "object",
@@ -147,6 +163,7 @@ Pin every I/O between phases and sub-agents as a JSON Schema fragment.
               "tls-consistency",
               "type-map-coverage",
               "type-map-rule",
+              "type-map-write-coverage",
               "endpoint-annotations"
             ]
           },
@@ -208,7 +225,7 @@ Returned by `api-connector-creator` and `db-connector-creator`.
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["connector", "type_map"],
+  "required": ["connector", "type_map_read"],
   "properties": {
     "connector": {
       "anyOf": [
@@ -216,12 +233,12 @@ Returned by `api-connector-creator` and `db-connector-creator`.
         { "type": "null", "description": "Returned by stub agents (e.g. storage-connector-creator) that decline to author." }
       ]
     },
-    "type_map": {
+    "type_map_read": {
       "anyOf": [
         {
           "type": "array",
           "minItems": 1,
-          "description": "On-disk shape of the standalone type-map.json: a top-level, non-empty array of {match, native, canonical} rule objects. Written by the orchestrator to {connector_id}/definition/type-map.json and validated against https://schemas.analitiq.ai/type-map/latest.json.",
+          "description": "On-disk shape of the standalone type-map-read.json (native → Arrow): a top-level, non-empty array of {match, native, canonical} rule objects where `native` is the matcher (regex patterns authored UPPERCASE) and `canonical` is the rendered Arrow type (may carry ${name} substitutions backed by named captures in `native`). Written by the orchestrator to {connector_id}/definition/type-map-read.json and validated against https://schemas.analitiq.ai/type-map/latest.json.",
           "items": {
             "type": "object",
             "required": ["match", "native", "canonical"],
@@ -234,6 +251,43 @@ Returned by `api-connector-creator` and `db-connector-creator`.
           }
         },
         { "type": "null", "description": "Returned by stub agents that decline to author." }
+      ]
+    },
+    "type_map_write": {
+      "anyOf": [
+        {
+          "type": "array",
+          "minItems": 1,
+          "description": "On-disk shape of the standalone type-map-write.json (Arrow → native DDL render rules). REQUIRED for kind=database; MUST be null for kind=api. Same rule shape but the direction inverts: `canonical` is the matcher (regex with ECMA named captures for parameterized types) and `native` is the rendered DDL (may carry ${name} substitutions backed by captures in `canonical`). Must cover the full canonical vocabulary; deliberate gaps are allowed only when the dialect overrides render_column_type for that family. Written to {connector_id}/definition/type-map-write.json and validated semantically only (--semantic-only): the published type-map schema is read-direction-only today and rejects write-direction regex matchers in `canonical` — a known contract gap.",
+          "items": {
+            "type": "object",
+            "required": ["match", "native", "canonical"],
+            "additionalProperties": false,
+            "properties": {
+              "match":     { "enum": ["exact", "regex"] },
+              "native":    { "type": "string", "minLength": 1 },
+              "canonical": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        { "type": "null", "description": "kind=api connectors and stub agents return null — the write direction is a database-package concept." }
+      ]
+    },
+    "package_files": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": ["connector_py", "init_py", "requirements_txt", "pyproject_toml"],
+          "additionalProperties": false,
+          "description": "Python package files for kind=database connectors (the connector root IS the package). MUST be null for kind=api. Written by the orchestrator to {connector_id}/connector.py, __init__.py, requirements.txt, pyproject.toml. Contents follow the connector-package contract in connector-spec-db/spec-connector-package.md; enforcement (wheel build, entry points) is registry CI's job, not the schema validator's.",
+          "properties": {
+            "connector_py":     { "type": "string", "minLength": 1, "description": "{Name}Dialect(SqlDialect) + {Name}Connector(GenericSQLConnector); CDK imports only." },
+            "init_py":          { "type": "string", "minLength": 1, "description": "Re-exports the connector + dialect classes." },
+            "requirements_txt": { "type": "string", "minLength": 1, "description": "THIS connector's driver(s) only — async DBAPI and/or adbc-driver-{driver} wheel." },
+            "pyproject_toml":   { "type": "string", "minLength": 1, "description": "name=analitiq-connector-{connector_id}; dynamic dependencies from requirements.txt; package-dir maps the repo root; entry points named {connector_id} under analitiq.source_connectors AND analitiq.destination_connectors." }
+          }
+        },
+        { "type": "null", "description": "kind=api connectors and stub agents return null — API connectors carry only the definition." }
       ]
     },
     "notes": {
