@@ -266,7 +266,9 @@ def _scope_is_known(dotted: str) -> bool:
 def check_expressions(doc: dict) -> list[dict]:
     findings: list[dict] = []
     ref_pattern = re.compile(r"^([a-z_]+(?:\.[a-z_]+)*)(?:\.[A-Za-z0-9_-]+)*$")
-    template_var = re.compile(r"\$\{([^}]+)\}")
+    # `[^}]*` (not `+`) so an empty `${}` is captured and flagged below; with
+    # `+` it matched nothing and slipped through to corrupt the value at runtime.
+    template_var = re.compile(r"\$\{([^}]*)\}")
     for path, node in _walk(doc):
         kind = _is_value_expression(node)
         if not kind:
@@ -322,7 +324,17 @@ def check_expressions(doc: dict) -> list[dict]:
                 )
         elif kind == "template":
             for var in template_var.findall(node["template"]):
-                if not _scope_is_known(var):
+                if not var.strip():
+                    findings.append(
+                        finding(
+                            "expression-resolver",
+                            "error",
+                            path,
+                            "empty template variable '${}' resolves to nothing at runtime.",
+                            rule_doc="shared/value-expression-parameterization.md",
+                        )
+                    )
+                elif not _scope_is_known(var):
                     findings.append(
                         finding(
                             "expression-resolver",
@@ -332,6 +344,21 @@ def check_expressions(doc: dict) -> list[dict]:
                             rule_doc="shared/value-expression-parameterization.md",
                         )
                     )
+            # A `${` with no closing `}` is not extracted by the loop above, so
+            # it would otherwise pass silently and survive as a literal at
+            # runtime. Literal `{`/`}` are legitimate here (e.g. a JSON body
+            # template), so only a dangling `${` opener is flagged — detected as
+            # a `${` left in the string after the well-formed vars are removed.
+            if "${" in template_var.sub("", node["template"]):
+                findings.append(
+                    finding(
+                        "expression-resolver",
+                        "error",
+                        path,
+                        "unclosed template variable: '${' without a closing '}' survives as a literal at runtime.",
+                        rule_doc="shared/value-expression-parameterization.md",
+                    )
+                )
         elif kind == "function":
             fn = node["function"]
             if fn not in KNOWN_FUNCTIONS:
@@ -417,7 +444,10 @@ def check_dsn_bindings(doc: dict) -> list[dict]:
     transports = doc.get("transports", {})
     if not isinstance(transports, dict):
         return findings  # `check_transport_refs` already emitted the structural error
-    placeholder_re = re.compile(r"\{([^}]+)\}")
+    # `[^}]*` (not `+`) so an empty `{}` is captured and flagged below; with
+    # `+` it matched nothing and slipped through to corrupt the DSN URL at
+    # runtime (same bug class as the `${}` value-expression/type-map sites).
+    placeholder_re = re.compile(r"\{([^}]*)\}")
     for tname, tspec in transports.items():
         if not isinstance(tspec, dict):
             findings.append(
@@ -501,7 +531,33 @@ def check_dsn_bindings(doc: dict) -> list[dict]:
                 )
             )
             continue
-        placeholders = set(placeholder_re.findall(template))
+        raw_placeholders = placeholder_re.findall(template)
+        if any(not ph.strip() for ph in raw_placeholders):
+            findings.append(
+                finding(
+                    "dsn-binding",
+                    "error",
+                    f"{path_prefix}/template",
+                    "empty placeholder '{}' has no binding name and resolves to nothing at runtime.",
+                    rule_doc="connectors/connector-schema-parameterization.md#transport-contracts",
+                )
+            )
+        # Braces are reserved for `{placeholder}` markers in a DSN template, so
+        # any `{` or `}` left after the well-formed markers are removed is an
+        # unclosed/unbalanced brace (e.g. `{abc` with no closer) that would
+        # otherwise pass silently and corrupt the connection string at runtime.
+        residue = placeholder_re.sub("", template)
+        if "{" in residue or "}" in residue:
+            findings.append(
+                finding(
+                    "dsn-binding",
+                    "error",
+                    f"{path_prefix}/template",
+                    "template has an unbalanced or unclosed brace outside a well-formed '{placeholder}', which corrupts the connection string at runtime.",
+                    rule_doc="connectors/connector-schema-parameterization.md#transport-contracts",
+                )
+            )
+        placeholders = {ph for ph in raw_placeholders if ph.strip()}
         binding_keys = set(bindings.keys())
         for ph in placeholders - binding_keys:
             findings.append(
@@ -987,7 +1043,9 @@ def _walk_refs_with_phase(
 ) -> list[dict]:
     """Walk a sub-tree, validating every ref/template var against the phase model."""
     findings: list[dict] = []
-    template_var = re.compile(r"\$\{([^}]+)\}")
+    # `[^}]*` mirrors `check_expressions`; an empty `${}` is reported there as
+    # an expression-resolver error, so this phase walker just skips it (below).
+    template_var = re.compile(r"\$\{([^}]*)\}")
     for path, node in _walk(container, base_path):
         if not isinstance(node, dict):
             continue
@@ -1007,6 +1065,8 @@ def _walk_refs_with_phase(
         tmpl = node.get("template")
         if isinstance(tmpl, str):
             for var in template_var.findall(tmpl):
+                if not var.strip():
+                    continue
                 problem = _ref_phase_problem(var, phase, auth_op, auth_type, input_idx, output_idx)
                 if problem:
                     findings.append(
@@ -1191,7 +1251,10 @@ def check_phase_resolvability(doc: dict) -> list[dict]:
     return findings
 
 
-_PLACEHOLDER_RE = re.compile(r"\$\{([^}]+)\}")
+# `[^}]*` (not `+`) so an empty `${}` is captured and flagged by
+# `check_type_map_rules`; with `+` it matched nothing and survived into the
+# rendered DDL as a literal `${}`.
+_PLACEHOLDER_RE = re.compile(r"\$\{([^}]*)\}")
 _NARROWING_ARROW_TYPES = {"Object", "List"}
 _ECMA_NAMED_GROUP = re.compile(r"\(\?<([A-Za-z_][A-Za-z0-9_]*)>")
 # Catches all non-ECMA `(?P…` regex extensions: Python stdlib's named-group
@@ -1914,6 +1977,31 @@ def check_type_map_rules(
             )
             continue
         placeholders = _PLACEHOLDER_RE.findall(render_value)
+        if any(not name.strip() for name in placeholders):
+            findings.append(
+                finding(
+                    "type-map-rule",
+                    "error",
+                    f"/{i}/{render_key}",
+                    f"{render_key}={render_value!r} contains an empty ${{}} placeholder, which renders to nothing.",
+                    rule_doc="shared/type-maps.md",
+                )
+            )
+            continue
+        # A `${` with no closing `}` is not captured above; it would otherwise
+        # pass silently and render as a literal. Only the dangling `${` opener
+        # is flagged (a bare `{`/`}` may be valid in a native DDL type).
+        if "${" in _PLACEHOLDER_RE.sub("", render_value):
+            findings.append(
+                finding(
+                    "type-map-rule",
+                    "error",
+                    f"/{i}/{render_key}",
+                    f"{render_key}={render_value!r} has an unclosed '${{' (missing closing '}}'), which renders as a literal.",
+                    rule_doc="shared/type-maps.md",
+                )
+            )
+            continue
         if match == "exact" and placeholders:
             findings.append(
                 finding(

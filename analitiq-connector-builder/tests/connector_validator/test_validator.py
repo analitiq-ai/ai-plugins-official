@@ -120,6 +120,53 @@ def test_unknown_scope_caught():
     assert "hmac_sign" in messages, f"expected unknown function 'hmac_sign' caught; got: {messages}"
 
 
+def test_empty_template_variable_caught(tmp_path):
+    """`${}` names no scope and resolves to nothing at runtime, so it must be
+    flagged rather than slip through (the `[^}]*` regex fix in #48)."""
+    base = json.loads(VALID_API_CONNECTOR.read_text())
+    base["transports"]["api"]["headers"]["X-Empty"] = {"template": "Bearer ${}"}
+    doc_path = tmp_path / "connector.json"
+    doc_path.write_text(json.dumps(base))
+    result = run_validator(doc_path, "--semantic-only")
+    errs = errors_of(result, "expression-resolver")
+    empty = [e for e in errs if "empty template variable" in e["message"]]
+    assert len(empty) == 1, f"expected exactly one empty-template finding; got {result['findings']}"
+    # The valid `${secrets.api_key}` template in the same doc must not be flagged.
+    assert not any("secrets.api_key" in e["message"] for e in errs), \
+        f"valid template var wrongly flagged; got {errs}"
+
+
+def test_whitespace_template_variable_caught(tmp_path):
+    """`${   }` is empty after stripping — reported as empty, not as an
+    unknown scope (which would be a misleading message)."""
+    base = json.loads(VALID_API_CONNECTOR.read_text())
+    base["transports"]["api"]["headers"]["X-Blank"] = {"template": "Bearer ${   }"}
+    doc_path = tmp_path / "connector.json"
+    doc_path.write_text(json.dumps(base))
+    result = run_validator(doc_path, "--semantic-only")
+    errs = errors_of(result, "expression-resolver")
+    assert any("empty template variable" in e["message"] for e in errs), \
+        f"expected empty-template finding for '${{   }}'; got {result['findings']}"
+    assert not any("unknown scope" in e["message"] for e in errs), \
+        f"whitespace var should not be reported as unknown scope; got {errs}"
+
+
+def test_unclosed_template_variable_caught(tmp_path):
+    """A `${` with no closing `}` is not extracted, so it would survive as a
+    literal at runtime — flag it. A legitimate template with literal JSON
+    braces (`{ }` not preceded by `$`) must NOT trip this."""
+    base = json.loads(VALID_API_CONNECTOR.read_text())
+    base["transports"]["api"]["headers"]["X-Unclosed"] = {"template": "Bearer ${secrets.api_key"}
+    base["transports"]["api"]["headers"]["X-Json"] = {"template": '{"key": "${secrets.api_key}"}'}
+    doc_path = tmp_path / "connector.json"
+    doc_path.write_text(json.dumps(base))
+    result = run_validator(doc_path, "--semantic-only")
+    errs = errors_of(result, "expression-resolver")
+    unclosed = [e for e in errs if "unclosed template variable" in e["message"]]
+    # Exactly one: the dangling `${`. The literal-brace JSON template is clean.
+    assert len(unclosed) == 1, f"expected exactly one unclosed finding; got {result['findings']}"
+
+
 def test_transport_ref_caught():
     result = run_validator(FIXTURES / "invalid_transport_ref.json", "--semantic-only")
     errs = errors_of(result, "transport-ref")
@@ -141,6 +188,95 @@ def test_dsn_unbound_placeholder_caught():
     # The fixture omits exactly these three placeholder bindings; assert all three.
     assert unbound == ["database", "password", "port"], \
         f"expected unbound={{'password','port','database'}}, got {unbound}; findings={errs}"
+
+
+def test_dsn_empty_placeholder_caught(tmp_path):
+    """An empty `{}` in a DSN url_template names no binding and resolves to
+    nothing at runtime — flagged rather than silently ignored (the `[^}]*`
+    fix applied to the DSN `{placeholder}` markers, same bug class as `${}`)."""
+    base = {
+        "$schema": "https://schemas.analitiq.ai/connector/latest.json",
+        "kind": "database",
+        "connector_id": "fixture-dsn-empty",
+        "version": "1.0.0",
+        "default_transport": "db",
+        "transports": {
+            "db": {
+                "transport_type": "sqlalchemy",
+                "driver": "postgresql+asyncpg",
+                "dsn": {
+                    "kind": "url_template",
+                    "template": "postgresql://{host}:{}/{database}",
+                    "bindings": {
+                        "host": {"value": {"ref": "connection.parameters.host"}, "encoding": "host"},
+                        "database": {"value": {"ref": "connection.parameters.database"}, "encoding": "url_path_segment"},
+                    },
+                },
+            }
+        },
+        "auth": {"type": "db"},
+        "connection_contract": {
+            "inputs": {
+                "host": {"source": "user", "phase": "pre_auth", "storage": "connection.parameters", "type": "string", "required": True},
+                "database": {"source": "user", "phase": "pre_auth", "storage": "connection.parameters", "type": "string", "required": True},
+            }
+        },
+    }
+    doc_path = tmp_path / "connector.json"
+    doc_path.write_text(json.dumps(base))
+    result = run_validator(doc_path, "--semantic-only")
+    errs = errors_of(result, "dsn-binding")
+    assert any(
+        "empty placeholder" in e["message"] and e["path"] == "/transports/db/dsn/template"
+        for e in errs
+    ), f"expected empty-placeholder dsn-binding finding; got {errs}"
+    # The valid `{host}`/`{database}` markers are bound, so the only dsn-binding
+    # error is the empty one — not a generic 'no matching binding'.
+    assert not any("has no matching binding" in e["message"] for e in errs), \
+        f"valid bindings wrongly flagged as unbound; got {errs}"
+
+
+def test_dsn_unclosed_brace_caught(tmp_path):
+    """A `{` with no closing `}` in a DSN url_template is an unbalanced brace
+    that corrupts the connection string — flagged rather than silently ignored.
+    Braces are reserved for `{placeholder}` markers in a DSN, so any stray one
+    is malformed."""
+    base = {
+        "$schema": "https://schemas.analitiq.ai/connector/latest.json",
+        "kind": "database",
+        "connector_id": "fixture-dsn-unclosed",
+        "version": "1.0.0",
+        "default_transport": "db",
+        "transports": {
+            "db": {
+                "transport_type": "sqlalchemy",
+                "driver": "postgresql+asyncpg",
+                "dsn": {
+                    "kind": "url_template",
+                    "template": "postgresql://{host}/{database",
+                    "bindings": {
+                        "host": {"value": {"ref": "connection.parameters.host"}, "encoding": "host"},
+                        "database": {"value": {"ref": "connection.parameters.database"}, "encoding": "url_path_segment"},
+                    },
+                },
+            }
+        },
+        "auth": {"type": "db"},
+        "connection_contract": {
+            "inputs": {
+                "host": {"source": "user", "phase": "pre_auth", "storage": "connection.parameters", "type": "string", "required": True},
+                "database": {"source": "user", "phase": "pre_auth", "storage": "connection.parameters", "type": "string", "required": True},
+            }
+        },
+    }
+    doc_path = tmp_path / "connector.json"
+    doc_path.write_text(json.dumps(base))
+    result = run_validator(doc_path, "--semantic-only")
+    errs = errors_of(result, "dsn-binding")
+    assert any(
+        "unbalanced or unclosed brace" in e["message"] and e["path"] == "/transports/db/dsn/template"
+        for e in errs
+    ), f"expected unclosed-brace dsn-binding finding; got {errs}"
 
 
 def test_auth_shape_oauth_cc_forbidden_authorize_caught():
@@ -637,6 +773,64 @@ def test_type_map_regex_missing_capture_caught():
     errs = errors_of(result, "type-map-rule")
     assert any("precision" in e["message"] and "capture" in e["message"] for e in errs), \
         f"expected missing-capture finding; got {errs}"
+
+
+def test_type_map_empty_placeholder_caught(tmp_path):
+    """An empty `${}` on a render value renders to nothing — flagged as a
+    type-map-rule error rather than surviving into the output verbatim (the
+    `_PLACEHOLDER_RE` `[^}]*` fix in #48)."""
+    read_path = tmp_path / "type-map-read.json"
+    read_path.write_text(json.dumps([
+        {"match": "exact", "native": "BOOLEAN", "canonical": "Boolean${}"}
+    ]))
+    result = run_validator(read_path, "--semantic-only", schema_url=TYPE_MAP_SCHEMA_URL)
+    errs = errors_of(result, "type-map-rule")
+    assert any(
+        e["path"] == "/0/canonical" and "empty" in e["message"] and "${}" in e["message"]
+        for e in errs
+    ), f"expected empty-placeholder finding on /0/canonical; got {errs}"
+
+
+def test_type_map_regex_empty_placeholder_caught(tmp_path):
+    """The load-bearing path: a `regex` write rule whose render value mixes a
+    valid `${p}` with an empty `${}`. The empty-placeholder gate sits BEFORE
+    the named-capture check, so the empty `${}` short-circuits with a precise
+    error (not a misleading 'no matching capture group'), and the valid sibling
+    capture neither masks it nor is itself wrongly flagged. Also exercises the
+    write direction (render key = `native`), which the exact-rule test above
+    does not."""
+    write_path = tmp_path / "type-map-write.json"
+    write_path.write_text(json.dumps([
+        {
+            "match": "regex",
+            "canonical": "^Decimal128\\((?<p>\\d+),\\s*(?<s>\\d+)\\)$",
+            "native": "NUMERIC(${p}, ${})",
+        }
+    ]))
+    result = run_validator(write_path, "--semantic-only", schema_url=TYPE_MAP_SCHEMA_URL)
+    errs = errors_of(result, "type-map-rule")
+    empty = [
+        e for e in errs
+        if e["path"] == "/0/native" and "empty" in e["message"] and "${}" in e["message"]
+    ]
+    assert len(empty) == 1, f"expected one empty-placeholder finding on /0/native; got {errs}"
+    # The empty placeholder short-circuits the rule, so the valid `${p}` capture
+    # is not reported as unbacked — no misleading 'capture' error.
+    assert not any("capture" in e["message"] for e in errs), \
+        f"valid capture wrongly flagged; got {errs}"
+
+
+def test_type_map_unclosed_placeholder_caught(tmp_path):
+    """A `${` with no closing `}` on a render value renders as a literal —
+    flagged as a type-map-rule error (the #48 unclosed-brace fold-in)."""
+    write_path = tmp_path / "type-map-write.json"
+    write_path.write_text(json.dumps([
+        {"match": "regex", "canonical": "^Decimal128\\((?<p>\\d+)\\)$", "native": "NUMERIC(${p)"}
+    ]))
+    result = run_validator(write_path, "--semantic-only", schema_url=TYPE_MAP_SCHEMA_URL)
+    errs = errors_of(result, "type-map-rule")
+    assert any(e["path"] == "/0/native" and "unclosed" in e["message"] for e in errs), \
+        f"expected unclosed-placeholder finding on /0/native; got {errs}"
 
 
 def test_type_map_duplicate_rule_warned():
