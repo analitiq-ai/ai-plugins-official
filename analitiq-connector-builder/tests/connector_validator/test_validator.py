@@ -93,6 +93,21 @@ def test_layer1_example_write_map_passes_against_live_schema(write_map):
     assert not errors, f"{write_map.parent.name} write map: {errors}"
 
 
+@pytest.mark.network
+def test_layer1_malformed_write_map_rejected_against_live_schema(tmp_path):
+    """The published write schema must actually constrain shape, not merely be
+    fetchable — a malformed write map is rejected at Layer 1. Without this, the
+    positive write-map test above could stay green against a no-op/over-permissive
+    or mis-referenced schema."""
+    bad = tmp_path / "type-map-write.json"
+    # `match` outside the enum and `native` (the render side) missing.
+    bad.write_text(json.dumps([{"match": "glob", "canonical": "Boolean"}]))
+    result = run_validator(bad, schema_url=TYPE_MAP_WRITE_SCHEMA_URL)
+    schema_errors = [f for f in result["findings"] if f["validator"] == "json-schema"]
+    assert schema_errors, f"expected a Layer-1 schema rejection; got {result['findings']}"
+    assert result["passed"] is False
+
+
 def test_db_example_maps_present():
     """Guard against the network parametrize collapsing to zero cases."""
     assert len(EXAMPLE_READ_MAPS) >= 3, f"expected ≥ 3 example read maps, found {EXAMPLE_READ_MAPS}"
@@ -1272,7 +1287,7 @@ def test_write_map_full_vocabulary_passes(tmp_path):
     result = run_validator(
         FIXTURES / "valid_db_connector" / "type-map-write.json",
         "--semantic-only",
-        schema_url=TYPE_MAP_READ_SCHEMA_URL,
+        schema_url=TYPE_MAP_WRITE_SCHEMA_URL,
     )
     errs = errors_of(result, "type-map-rule")
     assert not errs, f"expected reference write map to pass rule checks; got {errs}"
