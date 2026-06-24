@@ -103,8 +103,15 @@ def test_layer1_malformed_write_map_rejected_against_live_schema(tmp_path):
     # `match` outside the enum and `native` (the render side) missing.
     bad.write_text(json.dumps([{"match": "glob", "canonical": "Boolean"}]))
     result = run_validator(bad, schema_url=TYPE_MAP_WRITE_SCHEMA_URL)
-    schema_errors = [f for f in result["findings"] if f["validator"] == "json-schema"]
-    assert schema_errors, f"expected a Layer-1 schema rejection; got {result['findings']}"
+    # A real schema rejection points into the document (e.g. "/0", "/0/match");
+    # a schema-fetch failure carries the same validator id but an empty path.
+    # Require a document-anchored error so a misconfigured fetch can't pass as
+    # enforcement.
+    schema_errors = [
+        f for f in result["findings"]
+        if f["validator"] == "json-schema" and f["path"].startswith("/")
+    ]
+    assert schema_errors, f"expected a Layer-1 schema rejection into the document; got {result['findings']}"
     assert result["passed"] is False
 
 
