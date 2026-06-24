@@ -92,12 +92,10 @@ combinations are connection-scoped and discovered at runtime via
 Invoke `connector-schema-validator` with the connector document and
 `schema_url=https://schemas.analitiq.ai/connector/latest.json`. Also
 validate the standalone `type-map-read.json` against
-`https://schemas.analitiq.ai/type-map/latest.json`, and — for database
-connectors — `type-map-write.json` with `--semantic-only`: the
-published type-map schema is read-direction-only today (its
-`canonical` constraint rejects the write map's regex matchers — a
-contract gap, raised upstream); Layer 2 fully owns write-map rule
-shape and vocabulary coverage. The validator derives the rule
+`https://schemas.analitiq.ai/type-map-read/latest.json`, and — for
+database connectors — `type-map-write.json` against
+`https://schemas.analitiq.ai/type-map-write/latest.json`. Both maps run
+the full Layer 1 + Layer 2 pass. The validator derives the rule
 direction from the filename, so write the maps under their exact
 filenames before standalone validation, or validate via the connector
 document so the sibling walk picks them up. For each endpoint

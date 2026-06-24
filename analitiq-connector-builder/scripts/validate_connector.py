@@ -1748,7 +1748,8 @@ def check_type_map_rules(
       first-match-wins makes later duplicates unreachable.
 
     Other layout rules (top-level type, required keys, minItems ≥ 1) are
-    enforced by the published `type-map/latest.json` schema in Layer 1.
+    enforced by the published `type-map-read/latest.json` (read) and
+    `type-map-write/latest.json` (write) schemas in Layer 1.
     """
     findings: list[dict] = []
     if not isinstance(doc, list):

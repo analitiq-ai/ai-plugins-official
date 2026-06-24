@@ -61,7 +61,7 @@ The `connector-spec-api` skill is preloaded. Beyond that, read:
    equal to the endpoint's declared `arrow_type` (`Object` / `List` are
    accepted narrowings of `Json`). The orchestrator writes this array
    to `{connector_id}/definition/type-map-read.json` and validates it
-   against `https://schemas.analitiq.ai/type-map/latest.json`. Regex
+   against `https://schemas.analitiq.ai/type-map-read/latest.json`. Regex
    `native` patterns are matched against UPPERCASED, whitespace-collapsed
    native strings — author them uppercase (exact rules are normalized
    automatically; capture group names stay lowercase). API connectors

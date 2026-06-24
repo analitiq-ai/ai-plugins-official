@@ -44,19 +44,26 @@
   `_PLACEHOLDER_RE` (type maps), and `check_dsn_bindings`. Fixes #48.
 
 ### Changed
+- **Type maps validate against their published direction-specific schemas.**
+  The read map now validates against
+  `https://schemas.analitiq.ai/type-map-read/latest.json` and the write map
+  against `https://schemas.analitiq.ai/type-map-write/latest.json`, both
+  running the full Layer 1 + Layer 2 pass. This retires the interim
+  `--semantic-only` handling for write maps: the write-direction schema is
+  now published, so the earlier read-direction-only contract gap no longer
+  applies. The validator still derives the rule direction from the filename.
+  Adds Layer-1 network tests covering both directions against the reference
+  db example maps.
 - **Type-map split: `type-map.json` → `type-map-read.json` + `type-map-write.json`**
   (per `connector-driver-selection.md` / `dip-registry-connector-packages.md`
   specs; the engine reads only the new filenames).
   - The read map (`type-map-read.json`, native → Arrow) is required for
     every connector; the new write map (`type-map-write.json`, Arrow →
     native DDL render rules) is **required for `kind: database` and
-    forbidden for `kind: api`**. The read map validates against the
-    existing `type-map/latest.json` schema; the write map is validated
-    semantically only (`--semantic-only`) because the published schema
-    is read-direction-only today — its `canonical` constraint rejects
-    write-direction regex matchers (contract gap raised upstream). The
-    validator derives the rule direction from the filename. A leftover
-    `type-map.json` sibling is an error with a migration pointer.
+    forbidden for `kind: api`**. The validator derives the rule
+    direction from the filename (see the schema-validation entry above
+    for how each direction is checked). A leftover `type-map.json`
+    sibling is an error with a migration pointer.
   - Write-map rules invert the matcher/render sides: `canonical`
     matches (regex with ECMA named captures for parameterized types)
     and `native` renders (`${name}` substitutions backed by those

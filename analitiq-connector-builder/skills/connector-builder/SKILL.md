@@ -75,14 +75,11 @@ sub-agents own those skills.
 5. **Validate** — invoke `connector-schema-validator`:
    - Connector → `https://schemas.analitiq.ai/connector/latest.json`.
    - Read map (`type-map-read.json`) →
-     `https://schemas.analitiq.ai/type-map/latest.json`.
-   - Write map (`type-map-write.json`, database only) → validate with
-     `--semantic-only`. The published type-map schema is
-     read-direction-only today (its `canonical` constraint requires a
-     literal/template Arrow type and rejects the write map's regex
-     matchers) — a contract gap; Layer 2 fully owns write-map rule
-     shape and vocabulary coverage, deriving the direction from the
-     filename.
+     `https://schemas.analitiq.ai/type-map-read/latest.json`.
+   - Write map (`type-map-write.json`, database only) →
+     `https://schemas.analitiq.ai/type-map-write/latest.json`. Both maps
+     run the full Layer 1 + Layer 2 pass; the validator derives the
+     direction from the filename. Do not pass `--semantic-only`.
    - API endpoint → `https://schemas.analitiq.ai/api-endpoint/latest.json`.
    - Database endpoint → `https://schemas.analitiq.ai/database-endpoint/latest.json`.
 
