@@ -6,7 +6,9 @@ on demand by the orchestrator skill.
 ## Modes
 
 The orchestrator runs in one of three modes (input `mode`, default
-`build`); only phases 0, 6, and 7 branch on it.
+`build`). `build` and `update` share phases 1–5 and branch only at
+phases 0, 6, and 7; `validate` runs only phase 0 → phase 5 (report-only,
+no fix loop), skipping phases 1–4 and 6–7.
 
 - **`build`** (default) — author a fresh connector; phase 0 halts if the
   `{connector_id}/` directory already exists.
@@ -42,15 +44,23 @@ The warning must include:
 - A note that re-running after removal produces a fresh connector
   authored from scratch (no migration of legacy connector shapes).
 
-**`update`** — the `{connector_id}/` directory is expected. Record it as
-the read-only drift baseline (the default `previous_release_path`) and
-proceed to phase 1; do not edit it in place — phase 7 regenerates the
-tree. If the directory does NOT exist there is nothing to update: fall
-back to `build` semantics and tell the user.
+**`update`** — `connector_path` points at the existing connector. Read
+its directory name and `connector.json` `connector_id` up front (the
+target artifact, not spec material) and record it as the read-only drift
+baseline (the default `previous_release_path`). Proceed to phase 1; do
+not edit it in place — phase 7 regenerates the tree. If research/authoring
+later yields a `connector_id` that differs from `connector_path`'s,
+**halt** and surface the mismatch rather than writing a divergent tree (a
+changed slug is a new connector, not an update). If `connector_path` does
+NOT exist there is nothing to update: fall back to `build` semantics and
+tell the user.
 
-**`validate`** — locate the on-disk connector documents and skip directly
-to phase 5; do no research, authoring, or writing. If the directory does
-NOT exist, halt and tell the user there is nothing to validate.
+**`validate`** — read the on-disk documents under `connector_path`
+(`definition/connector.json`, `definition/type-map-read.json`,
+`definition/type-map-write.json` when present, and
+`definition/endpoints/*.json`) and skip directly to phase 5; do no
+research, authoring, or writing. If `connector_path` does NOT exist, halt
+and tell the user there is nothing to validate.
 
 **Why this exists.** The plugin authors connectors against the
 published schema contract. Pre-existing connectors authored against
@@ -139,12 +149,20 @@ files (`connector.py`, `__init__.py`, `requirements.txt`,
 `pyproject.toml`) are enforced by registry CI (wheel build,
 entry-point checks), not by this pipeline.
 
-The orchestrator should attempt at most 5 fix passes per artifact —
-re-dispatch the matching creator with the validator's findings,
-re-validate, repeat. The creator — not the orchestrator — decides
-whether each finding is a real defect or a validator false positive; it
-owns the spec. Pass `Diagnostics.findings` verbatim; do not pre-filter,
-pre-diagnose, or read spec material to interpret them. If
+In `validate` mode, run the validator once over the on-disk documents,
+report the resulting `Diagnostics`, and stop — there is no fix loop and
+no creator re-dispatch (phases 1–4 were skipped, so there is no
+`CreatorOutput` to revise). The fix loop below applies to `build` and
+`update` only.
+
+In `build` / `update` mode the orchestrator should attempt at most 5 fix
+passes per artifact — re-dispatch the matching creator with the
+validator's findings and the artifacts it produced on the prior pass
+(`CreatorOutput` / `EndpointCreatorOutput`), re-validate, repeat. The
+creator — not the orchestrator — decides whether each finding is a real
+defect or a validator false positive; it owns the spec. Pass
+`Diagnostics.findings` verbatim; do not pre-filter, pre-diagnose, or read
+spec material to interpret them. If
 `error`-severity findings persist after 5
 passes, halt and surface the diagnostics; do not write partial files.
 The validator script is single-shot; iteration discipline lives in
@@ -154,16 +172,22 @@ https://github.com/analitiq-ai/ai-plugins-official/issues/26.
 
 ### 6. Drift
 
-In `update` mode this step is **required**: stage the freshly-authored
-draft to a temporary path and invoke `connector-drift-classifier` with
-`previous_release_path` = the existing connector and `current_path` =
-the staged draft. Apply the returned bump to the prior release's
-`version` — never reset to `1.0.0` on an update.
+The classifier reads `previous_version` from `previous_release_path` and
+returns the computed `next_version`; set the connector's top-level
+`version` to that `next_version` directly (do not recompute the semver
+yourself). This `version` is the connector's own release semver, owned by
+`connector-drift-classifier` — unrelated to the plugin package version,
+which this repo bumps via PR labels. The classifier needs a `current_path`
+to diff, so stage the freshly-authored draft to a temporary path first.
 
-In `build` mode, if `previous_release_path` was supplied, invoke
-`connector-drift-classifier` and apply the returned bump to the
-top-level `version` of the assembled document. If it was not supplied,
-this is a first release; set `version` to `1.0.0`.
+- **`update`** — required: invoke `connector-drift-classifier` with
+  `previous_release_path` = the existing connector and `current_path` =
+  the staged draft, and apply the returned `next_version` (never reset to
+  `1.0.0`).
+- **`build`** — if `previous_release_path` was supplied, invoke
+  `connector-drift-classifier` the same way (staged draft as
+  `current_path`) and apply `next_version`; otherwise this is a first
+  release; set `version` to `1.0.0`.
 
 ### 7. Write
 
@@ -207,6 +231,6 @@ engine and the validator rejects it with a migration finding.
 - Classification ambiguity: fail closed; ask the user to confirm.
 - Validator stuck: surface findings; do not write incomplete files.
 - Drift classifier rolls back to `none`: treat as first release.
-- `update` / `validate` mode but `{connector_id}/` is absent: there is
+- `update` / `validate` mode but `connector_path` is absent: there is
   nothing to update or validate — for `update`, fall back to `build`
   semantics and tell the user; for `validate`, halt and tell the user.

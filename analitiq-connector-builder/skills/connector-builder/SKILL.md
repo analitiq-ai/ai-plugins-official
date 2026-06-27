@@ -23,20 +23,25 @@ writing files.
   the engine.)
 - `mode` (optional) — `build` (default), `update`, or `validate`. See
   **Modes** below.
+- `connector_path` (required for `update` / `validate`) — path to the
+  existing connector directory. Its directory name is the `connector_id`
+  and its `connector.json` carries the authoritative slug; read both up
+  front (this is the target artifact, not spec material). Unused in
+  `build` mode.
 - `previous_release_path` (optional) — path to the prior released version
   of this connector, read as the read-only baseline for the drift step.
-  In `update` mode it defaults to the existing on-disk `{connector_id}/`
-  when not supplied.
+  In `update` mode it defaults to `connector_path` when not supplied.
 
 If `provider` is missing in `build` / `update` mode, ask exactly one
 clarifying question and proceed. In `validate` mode the connector is
-identified by its on-disk directory, so `provider` is optional.
+identified by `connector_path`, so `provider` is optional.
 
 ## Modes
 
 The orchestrator runs in one of three modes (input `mode`, default
-`build`). Modes differ only at phases 0, 6, and 7 — phases 1–5 are
-identical.
+`build`). `build` and `update` share phases 1–5 and differ only at
+phases 0, 6, and 7; `validate` runs only phase 0 → phase 5 (report-only,
+no fix loop), skipping phases 1–4 and 6–7.
 
 - **`build`** (default) — author a fresh connector. Phase 0 halts if a
   `{connector_id}/` directory already exists.
@@ -82,12 +87,22 @@ sub-agents own those skills.
      command they can run to remove it (do NOT run it for them), and a
      note that re-running after removal will produce a fresh connector
      authored from scratch.
-   - **`update`** — the existing `{connector_id}/` is expected. Record
-     it as the read-only drift baseline (the default
-     `previous_release_path`) and proceed to phase 1. Do not edit it in
-     place; phase 7 regenerates the tree.
-   - **`validate`** — locate the on-disk connector documents and skip
-     directly to phase 5. No research, authoring, or writing.
+   - **`update`** — `connector_path` points at the existing connector.
+     Read its directory name and `connector.json` `connector_id` up front
+     (the target artifact, not spec material) and record it as the
+     read-only drift baseline (the default `previous_release_path`).
+     Proceed to phase 1; do not edit it in place — phase 7 regenerates
+     the tree. If research/authoring later yields a `connector_id` that
+     differs from `connector_path`'s, **halt** and surface the mismatch
+     rather than writing a divergent tree (a changed slug is a new
+     connector, not an update). If `connector_path` does not exist, fall
+     back to `build` semantics and tell the user.
+   - **`validate`** — read the on-disk documents under `connector_path`
+     (`definition/connector.json`, `definition/type-map-read.json`,
+     `definition/type-map-write.json` when present, and
+     `definition/endpoints/*.json`) and skip directly to phase 5. No
+     research, authoring, or writing. If `connector_path` does not exist,
+     halt and tell the user there is nothing to validate.
 
 1. **Research** — invoke `connector-provider-researcher`. Receive
    `ProviderFacts` (discriminated by kind). Pass `docs_url` when the
@@ -122,27 +137,43 @@ sub-agents own those skills.
    `pyproject.toml`) are NOT validated here — registry CI owns their
    enforcement (wheel build + entry-point checks).
 
-   The orchestrator should attempt at most 5 fix passes per artifact —
-   re-dispatch the matching creator with the validator's findings,
-   re-validate, repeat. The creator — not the orchestrator — decides
-   whether each finding is a real defect or a validator false positive;
-   it owns the spec. Pass `Diagnostics.findings` verbatim and do not
-   pre-filter, pre-diagnose, or read spec material to interpret them
-   yourself. If `error`-severity findings persist after 5
+   In `validate` mode, run the validator once over the on-disk
+   documents, report the resulting `Diagnostics`, and stop — there is no
+   fix loop and no creator re-dispatch (phases 1–4 were skipped, so there
+   is no `CreatorOutput` to revise). The fix loop below applies to
+   `build` and `update` only.
+
+   In `build` / `update` mode the orchestrator should attempt at most 5
+   fix passes per artifact — re-dispatch the matching creator with the
+   validator's findings and the artifacts it produced on the prior pass
+   (`CreatorOutput` / `EndpointCreatorOutput`), re-validate, repeat. The
+   creator — not the orchestrator — decides whether each finding is a
+   real defect or a validator false positive; it owns the spec. Pass
+   `Diagnostics.findings` verbatim and do not pre-filter, pre-diagnose,
+   or read spec material to interpret them yourself. If `error`-severity
+   findings persist after 5
    passes, halt and surface the diagnostics; do not write partial
    files. The validator script itself is single-shot — iteration
    discipline lives in the orchestrator's prose, not in the script.
    The cap is best-effort and not runtime-enforced; runtime
    enforcement is tracked at
    https://github.com/analitiq-ai/ai-plugins-official/issues/26.
-6. **Drift** — in `update` mode this step is **required**: stage the
-   freshly-authored draft to a temporary path and invoke
-   `connector-drift-classifier` with `previous_release_path` = the
-   existing connector and `current_path` = the staged draft, then apply
-   the returned bump to the prior release's `version` (never reset to
-   `1.0.0`). In `build` mode, if `previous_release_path` was supplied,
-   invoke `connector-drift-classifier` and apply the bump to top-level
-   `version`; otherwise this is a first release — set `version: "1.0.0"`.
+6. **Drift** — the classifier reads `previous_version` from
+   `previous_release_path` and returns the computed `next_version`; set
+   the connector's top-level `version` to that `next_version` directly
+   (do not recompute the semver yourself). This `version` is the
+   connector's own release semver, owned by `connector-drift-classifier`
+   — unrelated to the plugin package version, which this repo bumps via
+   PR labels. The classifier needs a `current_path` to diff, so stage the
+   freshly-authored draft to a temporary path first.
+   - **`update`** — required: invoke `connector-drift-classifier` with
+     `previous_release_path` = the existing connector and `current_path`
+     = the staged draft, and apply the returned `next_version` (never
+     reset to `1.0.0`).
+   - **`build`** — if `previous_release_path` was supplied, invoke
+     `connector-drift-classifier` the same way (staged draft as
+     `current_path`) and apply `next_version`; otherwise this is a first
+     release — set `version: "1.0.0"`.
 7. **Write** — write files to disk. In `update` mode the regenerated
    files replace the existing connector tree (its prior files were read
    as the drift baseline in phase 6, never edited in place); report that
@@ -193,8 +224,8 @@ Report to the user:
   reason about the schema yourself — re-dispatch the owning
   creator/endpoint agent with the findings verbatim and let it triage
   and fix. Your only specs are the orchestrator references
-  (`pipeline.md`, `io-contracts.md`, `enum-mappers.md`,
-  `value-expressions.md`).
+  (`pipeline.md`, `io-contracts.md`, `enum-mappers.md`, plus
+  `value-expressions.md` for scope lookups).
 - All cross-cutting context references (`secrets.*`, `connection.*`,
   `auth.*`, `runtime.*`, `stream.*`) must come from the documented
   scopes in `references/value-expressions.md`. Unknown scope = stop and

@@ -8,7 +8,8 @@ but the engine doesn't yet execute them — those are stubbed.
 
 ## What it does
 
-Given a provider name and an official documentation URL, the plugin:
+In the default `build` mode, given a provider name and an official
+documentation URL, the plugin:
 
 1. Researches the provider's auth model, transports, and endpoints.
 2. Classifies kind, auth type, and transport types.
