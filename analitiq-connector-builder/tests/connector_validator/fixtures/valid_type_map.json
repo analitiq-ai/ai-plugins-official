@@ -1,9 +1,0 @@
-[
-  { "match": "exact", "native": "BIGINT",  "canonical": "Int64" },
-  { "match": "exact", "native": "INTEGER", "canonical": "Int32" },
-  { "match": "exact", "native": "BOOLEAN", "canonical": "Boolean" },
-  { "match": "exact", "native": "TEXT",    "canonical": "Utf8" },
-  { "match": "exact", "native": "JSONB",   "canonical": "Json" },
-  { "match": "regex", "native": "^NUMERIC\\((?<precision>[0-9]+),\\s*(?<scale>[0-9]+)\\)$", "canonical": "Decimal128(${precision}, ${scale})" },
-  { "match": "regex", "native": "^TIMESTAMP\\((?<precision>[0-9]+)\\) WITH TIME ZONE$",     "canonical": "Timestamp(MICROSECOND, UTC)" }
-]

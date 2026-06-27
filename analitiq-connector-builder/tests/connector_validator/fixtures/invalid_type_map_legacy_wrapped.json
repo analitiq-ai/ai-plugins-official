@@ -1,7 +1,0 @@
-{
-  "native_to_arrow": {
-    "rules": [
-      { "method": "exact", "native": "BIGINT", "canonical": "Int64" }
-    ]
-  }
-}

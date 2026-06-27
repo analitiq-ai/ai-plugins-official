@@ -1,3 +1,0 @@
-[
-  { "match": "regex", "native": "^varchar([0-9", "canonical": "Utf8" }
-]

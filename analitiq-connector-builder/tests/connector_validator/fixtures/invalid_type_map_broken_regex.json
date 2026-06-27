@@ -1,4 +1,0 @@
-[
-  { "match": "regex", "native": "^varchar([0-9", "canonical": "Utf8" },
-  { "match": "exact", "native": "BIGINT",        "canonical": "Int64" }
-]

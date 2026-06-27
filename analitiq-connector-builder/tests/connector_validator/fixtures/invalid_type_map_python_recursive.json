@@ -1,3 +1,0 @@
-[
-  { "match": "regex", "native": "^a(?P>n)$", "canonical": "Utf8" }
-]
