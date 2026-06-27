@@ -20,6 +20,22 @@ all artifacts.
 - `auth_type` (always `"db"`), `transport_types` — already classified.
 - `previous_release_path` (optional) — for context only.
 
+## Fix pass
+
+When the orchestrator re-dispatches you with a `Diagnostics.findings`
+array (the validate→fix loop), you also receive the connector document,
+`type_map_read`, `type_map_write`, and package files you produced on the
+prior pass. Triage each finding — you own the spec:
+
+- **Real defect** → correct the affected artifact (connector body, read
+  map, write map, or a package file) and return a fresh `CreatorOutput`.
+- **Validator false positive** → leave the artifact unchanged and record
+  your reasoning in `notes`.
+
+The orchestrator passes findings verbatim and never pre-judges or
+pre-filters them — do not assume a finding is correct just because it
+was raised.
+
 ## Required reading
 
 The `connector-spec-db` skill is preloaded. Beyond that, read:

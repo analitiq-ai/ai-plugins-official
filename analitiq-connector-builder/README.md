@@ -8,7 +8,8 @@ but the engine doesn't yet execute them — those are stubbed.
 
 ## What it does
 
-Given a provider name and an official documentation URL, the plugin:
+In the default `build` mode, given a provider name and an official
+documentation URL, the plugin:
 
 1. Researches the provider's auth model, transports, and endpoints.
 2. Classifies kind, auth type, and transport types.
@@ -25,6 +26,22 @@ Given a provider name and an official documentation URL, the plugin:
 
 **Usage:** Launch Claude Code and say *"build a connector for &lt;provider&gt;"*
 or *"/connector-builder &lt;provider&gt;"*.
+
+### Modes
+
+The orchestrator runs in one of three modes (default `build`):
+
+- **`build`** — author a fresh connector. Halts if a `{connector_id}/`
+  directory already exists.
+- **`update`** — an existing connector's upstream system changed:
+  re-author from current docs and re-version by diffing the fresh draft
+  against the existing connector. The existing connector is read **only**
+  as the versioning baseline (never edited in place); the tree is
+  regenerated and the version bumps from the prior release. Run inside a
+  VCS checkout so the regeneration is reviewable via `git diff`.
+- **`validate`** — read-only: validate an existing on-disk connector and
+  report diagnostics, without researching, authoring, or writing. To fix
+  findings, re-run in `update` mode.
 
 ## Architecture
 
@@ -114,16 +131,21 @@ authors it into `connector.json` and uses the same value as the on-disk
 directory name. Registry-stamped fields (`created_at`, `updated_at`) are
 NEVER written to disk.
 
-### Existing directories are not overwritten
+### Existing directories (build vs. update)
 
-If a directory matching the connector's `{connector_id}` already exists in
-the current working directory, the orchestrator halts and asks the
-user to remove it manually before re-running. The plugin does not
-migrate legacy-shape connectors — pre-existing files (with
-`placeholders` arrays or an embedded `type_maps` block inside
-`connector.json`) must be deleted first so the rebuild can produce a
-clean schema-aligned connector from scratch. The orchestrator never
-deletes files on the user's behalf.
+In **`build` mode**, if a directory matching the connector's
+`{connector_id}` already exists in the current working directory, the
+orchestrator halts and asks the user to remove it manually before
+re-running. The plugin does not migrate legacy-shape connectors —
+pre-existing files (with `placeholders` arrays or an embedded
+`type_maps` block inside `connector.json`) must be deleted first so the
+rebuild can produce a clean schema-aligned connector from scratch. The
+orchestrator never deletes files on the user's behalf.
+
+To refresh an existing connector after its upstream system changes, use
+**`update` mode** instead: it reads the existing connector only as the
+drift baseline, re-authors from current docs, and regenerates the tree
+in place (review the result with `git diff`).
 
 ## Installation
 
