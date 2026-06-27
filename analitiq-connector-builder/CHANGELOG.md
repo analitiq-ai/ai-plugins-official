@@ -3,6 +3,20 @@
 ## [unreleased]
 
 ### Added
+- **`update` and `validate` orchestrator modes.** The `connector-builder`
+  orchestrator gained a `mode` input (`build` default / `update` /
+  `validate`). `update` re-authors an existing connector from *current*
+  docs and re-versions it by diffing the fresh draft against the prior
+  release — the existing connector is read **only** as the drift baseline
+  (never edited in place), phase 7 regenerates the tree, and the version
+  bumps from the prior release (never resets to `1.0.0`). `validate` runs
+  a read-only validation pass over an on-disk connector and reports
+  diagnostics without researching, authoring, or writing. Update treats
+  connector content as fully reproducible from `ProviderFacts` + creator
+  logic; non-reproducible hand edits are not preserved (documented
+  limitation, mitigated by running updates inside a VCS checkout).
+  `SKILL.md` and `references/pipeline.md` phases 0 / 6 / 7 branch on
+  `mode`; README documents the three modes.
 - **Definition-of-Done self-check for the connector creators.** New
   `connector-builder/references/definition-of-done.md` carries a shared-core
   checklist, and `api-connector-creator` / `db-connector-creator` each gained
@@ -44,6 +58,17 @@
   `_PLACEHOLDER_RE` (type maps), and `check_dsn_bindings`. Fixes #48.
 
 ### Changed
+- **Orchestrator boundary hardening: no self-diagnosis; creators own
+  finding-triage.** The orchestrator hard rule now forbids reading any
+  spec material to interpret a validator failure — not just loading the
+  kind-specific spec skills, but also their example/reference files and
+  the published JSON Schemas, and fetching a schema URL to diagnose a
+  finding. On the validate→fix loop the orchestrator passes
+  `Diagnostics.findings` verbatim; the owning creator/endpoint agent
+  decides real-defect vs. validator false positive (each gained a
+  `## Fix pass` section). This stops the orchestrator from drifting into
+  the creators' spec-owning work when a finding comes back — the gap that
+  let it freelance schema diagnosis on an existing connector.
 - **Type maps validate against their published direction-specific schemas.**
   The read map now validates against
   `https://schemas.analitiq.ai/type-map-read/latest.json` and the write map

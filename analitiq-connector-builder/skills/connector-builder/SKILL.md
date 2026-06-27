@@ -21,10 +21,40 @@ writing files.
 - `kind_hint` (optional) — `api` or `database`. (Storage kinds `file`,
   `s3`, `stdout` are recognized by the schema but not yet supported by
   the engine.)
+- `mode` (optional) — `build` (default), `update`, or `validate`. See
+  **Modes** below.
 - `previous_release_path` (optional) — path to the prior released version
-  of this connector. Required for the drift step.
+  of this connector, read as the read-only baseline for the drift step.
+  In `update` mode it defaults to the existing on-disk `{connector_id}/`
+  when not supplied.
 
-If `provider` is missing, ask exactly one clarifying question and proceed.
+If `provider` is missing in `build` / `update` mode, ask exactly one
+clarifying question and proceed. In `validate` mode the connector is
+identified by its on-disk directory, so `provider` is optional.
+
+## Modes
+
+The orchestrator runs in one of three modes (input `mode`, default
+`build`). Modes differ only at phases 0, 6, and 7 — phases 1–5 are
+identical.
+
+- **`build`** (default) — author a fresh connector. Phase 0 halts if a
+  `{connector_id}/` directory already exists.
+- **`update`** — the connector already exists and its upstream system
+  has changed. Re-author from *current* docs (phases 1–5 run normally),
+  then diff the fresh draft against the existing connector to set the
+  new version (phase 6 is required), and regenerate the tree (phase 7).
+  The existing connector is read **only** as the drift baseline — it is
+  never edited in place, and the version is bumped from the prior
+  release, never reset to `1.0.0`. Run inside a VCS checkout so the
+  regeneration is reviewable via `git diff`. Connector content is
+  treated as fully reproducible from `ProviderFacts` + creator logic;
+  non-reproducible hand edits to a connector are not preserved across an
+  update (known limitation).
+- **`validate`** — read-only. Skip phases 1–4 and 6–7; run phase 5
+  (validation) over the on-disk documents and report the diagnostics. Do
+  not research, author, fix, or write. To fix reported findings, re-run
+  in `update` mode.
 
 ## Required reading
 
@@ -39,21 +69,25 @@ sub-agents own those skills.
 
 ## Pipeline (full contract: `references/pipeline.md`)
 
-0. **Pre-flight: collision check** — before any research or authoring,
-   check whether a directory named `{connector_id}/` already exists in the
-   current working directory. If it does, **halt** and ask the user to
-   remove or rename it before re-running. Do not read the existing
-   directory's contents and do not attempt to migrate or merge — this
-   is a stopgap to prevent accidental overwrites and to keep the build
-   path simple. Migration of pre-existing connectors authored under
-   the legacy shape is intentionally out of scope.
-
-   The user-facing message must include:
-   - The full path of the existing directory.
-   - The exact `rm -rf {path}` command they can run to remove it (do
-     NOT run it for them).
-   - A note that re-running after removal will produce a fresh
-     connector authored from scratch.
+0. **Pre-flight** — branch on `mode` before any research or authoring:
+   - **`build`** — check whether a directory named `{connector_id}/`
+     already exists in the current working directory. If it does,
+     **halt** and ask the user to remove or rename it before re-running.
+     Do not read the existing directory's contents and do not attempt to
+     migrate or merge — this is a stopgap to prevent accidental
+     overwrites and to keep the build path simple. Migration of
+     pre-existing connectors authored under the legacy shape is
+     intentionally out of scope. The user-facing message must include
+     the full path of the existing directory, the exact `rm -rf {path}`
+     command they can run to remove it (do NOT run it for them), and a
+     note that re-running after removal will produce a fresh connector
+     authored from scratch.
+   - **`update`** — the existing `{connector_id}/` is expected. Record
+     it as the read-only drift baseline (the default
+     `previous_release_path`) and proceed to phase 1. Do not edit it in
+     place; phase 7 regenerates the tree.
+   - **`validate`** — locate the on-disk connector documents and skip
+     directly to phase 5. No research, authoring, or writing.
 
 1. **Research** — invoke `connector-provider-researcher`. Receive
    `ProviderFacts` (discriminated by kind). Pass `docs_url` when the
@@ -90,19 +124,32 @@ sub-agents own those skills.
 
    The orchestrator should attempt at most 5 fix passes per artifact —
    re-dispatch the matching creator with the validator's findings,
-   re-validate, repeat. If `error`-severity findings persist after 5
+   re-validate, repeat. The creator — not the orchestrator — decides
+   whether each finding is a real defect or a validator false positive;
+   it owns the spec. Pass `Diagnostics.findings` verbatim and do not
+   pre-filter, pre-diagnose, or read spec material to interpret them
+   yourself. If `error`-severity findings persist after 5
    passes, halt and surface the diagnostics; do not write partial
    files. The validator script itself is single-shot — iteration
    discipline lives in the orchestrator's prose, not in the script.
    The cap is best-effort and not runtime-enforced; runtime
    enforcement is tracked at
    https://github.com/analitiq-ai/ai-plugins-official/issues/26.
-6. **Drift** — if `previous_release_path` was supplied, invoke
-   `connector-drift-classifier` and apply the bump to top-level
-   `version`. Otherwise this is a first release; set `version: "1.0.0"`.
-7. **Write** — write files to disk. API connectors carry only the
-   definition; database connectors are installable Python packages, so
-   the creator's package files land at the connector root:
+6. **Drift** — in `update` mode this step is **required**: stage the
+   freshly-authored draft to a temporary path and invoke
+   `connector-drift-classifier` with `previous_release_path` = the
+   existing connector and `current_path` = the staged draft, then apply
+   the returned bump to the prior release's `version` (never reset to
+   `1.0.0`). In `build` mode, if `previous_release_path` was supplied,
+   invoke `connector-drift-classifier` and apply the bump to top-level
+   `version`; otherwise this is a first release — set `version: "1.0.0"`.
+7. **Write** — write files to disk. In `update` mode the regenerated
+   files replace the existing connector tree (its prior files were read
+   as the drift baseline in phase 6, never edited in place); report that
+   the tree was regenerated and recommend reviewing `git diff` before
+   committing. API connectors carry only the definition; database
+   connectors are installable Python packages, so the creator's package
+   files land at the connector root:
 
    ```
    {connector_id}/
@@ -138,8 +185,16 @@ Report to the user:
   set.
 - Do not author the connector body yourself. Always dispatch to the
   matching creator sub-agent.
-- Do not load kind-specific spec skills (`connector-spec-api` /
-  `connector-spec-db`). The creator agents load them.
+- **The orchestrator never diagnoses findings and never reads spec
+  material.** Do not load or read the kind-specific spec skills
+  (`connector-spec-api` / `connector-spec-db`), their example/reference
+  files, or the published JSON Schemas, and never fetch a schema URL to
+  interpret a failure. When the validator returns findings, do not
+  reason about the schema yourself — re-dispatch the owning
+  creator/endpoint agent with the findings verbatim and let it triage
+  and fix. Your only specs are the orchestrator references
+  (`pipeline.md`, `io-contracts.md`, `enum-mappers.md`,
+  `value-expressions.md`).
 - All cross-cutting context references (`secrets.*`, `connection.*`,
   `auth.*`, `runtime.*`, `stream.*`) must come from the documented
   scopes in `references/value-expressions.md`. Unknown scope = stop and
@@ -149,6 +204,10 @@ Report to the user:
   same host.
 - Storage kinds (`file`, `s3`, `stdout`) currently produce a structured
   refusal. If the user asks for one, surface the refusal note and stop.
-- Never overwrite an existing `{connector_id}/` directory. The pre-flight
-  check (phase 0) halts the run and asks the user to remove the
-  directory manually. Never delete files on the user's behalf.
+- In `build` mode, never overwrite an existing `{connector_id}/`
+  directory — the phase-0 check halts the run and asks the user to
+  remove it manually. In `update` mode, regeneration replaces the
+  existing tree by design (its prior files are read as the drift
+  baseline first, never edited in place); rely on the user's VCS
+  checkout for safety. Never delete files outside the connector
+  directory on the user's behalf.

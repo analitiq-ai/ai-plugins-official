@@ -3,11 +3,30 @@
 Phase-by-phase contract for the `connector-builder` orchestrator. Loaded
 on demand by the orchestrator skill.
 
+## Modes
+
+The orchestrator runs in one of three modes (input `mode`, default
+`build`); only phases 0, 6, and 7 branch on it.
+
+- **`build`** (default) — author a fresh connector; phase 0 halts if the
+  `{connector_id}/` directory already exists.
+- **`update`** — re-author an existing connector from *current* docs and
+  re-version it. Phases 1–5 run normally; the existing connector is read
+  **only** as the drift baseline (phase 0), drift is required (phase 6),
+  and phase 7 regenerates the tree in place. The prior files are the
+  versioning baseline, never the working copy — they are not edited.
+  Runs inside a VCS checkout so the regeneration is reviewable.
+- **`validate`** — read-only. Skip phases 1–4 and 6–7; run phase 5 over
+  the on-disk documents and report the diagnostics. To fix findings,
+  re-run in `update` mode.
+
 ## Phases
 
-### 0. Pre-flight: collision check
+### 0. Pre-flight
 
-Before any other work, check whether a directory named `{connector_id}/`
+Branch on `mode` before any other work.
+
+**`build`** — check whether a directory named `{connector_id}/`
 already exists in the current working directory.
 
 - If it does NOT exist → proceed to phase 1.
@@ -22,6 +41,16 @@ The warning must include:
   whatever's there.
 - A note that re-running after removal produces a fresh connector
   authored from scratch (no migration of legacy connector shapes).
+
+**`update`** — the `{connector_id}/` directory is expected. Record it as
+the read-only drift baseline (the default `previous_release_path`) and
+proceed to phase 1; do not edit it in place — phase 7 regenerates the
+tree. If the directory does NOT exist there is nothing to update: fall
+back to `build` semantics and tell the user.
+
+**`validate`** — locate the on-disk connector documents and skip directly
+to phase 5; do no research, authoring, or writing. If the directory does
+NOT exist, halt and tell the user there is nothing to validate.
 
 **Why this exists.** The plugin authors connectors against the
 published schema contract. Pre-existing connectors authored against
@@ -112,7 +141,11 @@ entry-point checks), not by this pipeline.
 
 The orchestrator should attempt at most 5 fix passes per artifact —
 re-dispatch the matching creator with the validator's findings,
-re-validate, repeat. If `error`-severity findings persist after 5
+re-validate, repeat. The creator — not the orchestrator — decides
+whether each finding is a real defect or a validator false positive; it
+owns the spec. Pass `Diagnostics.findings` verbatim; do not pre-filter,
+pre-diagnose, or read spec material to interpret them. If
+`error`-severity findings persist after 5
 passes, halt and surface the diagnostics; do not write partial files.
 The validator script is single-shot; iteration discipline lives in
 the orchestrator's prose, not in the script. The cap is best-effort
@@ -121,18 +154,26 @@ https://github.com/analitiq-ai/ai-plugins-official/issues/26.
 
 ### 6. Drift
 
-If `previous_release_path` was supplied, invoke
-`connector-drift-classifier`. Apply the returned bump to the top-level
-`version` of the assembled document.
+In `update` mode this step is **required**: stage the freshly-authored
+draft to a temporary path and invoke `connector-drift-classifier` with
+`previous_release_path` = the existing connector and `current_path` =
+the staged draft. Apply the returned bump to the prior release's
+`version` — never reset to `1.0.0` on an update.
 
-If `previous_release_path` was not supplied, this is a first release; set
-`version` to `1.0.0`.
+In `build` mode, if `previous_release_path` was supplied, invoke
+`connector-drift-classifier` and apply the returned bump to the
+top-level `version` of the assembled document. If it was not supplied,
+this is a first release; set `version` to `1.0.0`.
 
 ### 7. Write
 
-Write the connector document, type map(s), package files (database
-only), and any endpoint files to disk at predictable paths. The
-connector root IS the Python package for database connectors:
+In `update` mode the regenerated files replace the existing connector
+tree — the prior files were read as the drift baseline in phase 6 and
+are never edited in place. Report that the tree was regenerated and
+recommend the user review `git diff` before committing. Otherwise write
+the connector document, type map(s), package files (database only), and
+any endpoint files to disk at predictable paths. The connector root IS
+the Python package for database connectors:
 
 ```
 {connector_id}/
@@ -149,6 +190,14 @@ connector root IS the Python package for database connectors:
 └── README.md
 ```
 
+**Reproducibility (update mode).** An update fully regenerates the tree
+from `ProviderFacts` + creator logic; connector content is treated as
+reproducible, so non-reproducible hand edits to a connector are not
+preserved across an update. This is a deliberate limitation — running
+updates inside a VCS checkout keeps any regeneration reviewable and
+revertible. A preserve/merge step for genuinely bespoke connector code
+is out of scope for now.
+
 Never write a `type-map.json` — that pre-split filename is dead to the
 engine and the validator rejects it with a migration finding.
 
@@ -158,3 +207,6 @@ engine and the validator rejects it with a migration finding.
 - Classification ambiguity: fail closed; ask the user to confirm.
 - Validator stuck: surface findings; do not write incomplete files.
 - Drift classifier rolls back to `none`: treat as first release.
+- `update` / `validate` mode but `{connector_id}/` is absent: there is
+  nothing to update or validate — for `update`, fall back to `build`
+  semantics and tell the user; for `validate`, halt and tell the user.

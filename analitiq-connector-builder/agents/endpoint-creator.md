@@ -24,6 +24,21 @@ containing one endpoint document body.
 - `connector` — the assembled connector document (for `transports`, `auth`,
   and `connection_contract` reference paths).
 
+## Fix pass
+
+When the orchestrator re-dispatches you with a `Diagnostics.findings`
+array (the validate→fix loop), you also receive the endpoint document
+you produced on the prior pass. Triage each finding — you own the spec:
+
+- **Real defect** → correct the endpoint document and return a fresh
+  `EndpointCreatorOutput`.
+- **Validator false positive** → leave the document unchanged and note
+  your reasoning.
+
+The orchestrator passes findings verbatim and never pre-judges or
+pre-filters them — do not assume a finding is correct just because it
+was raised.
+
 ## Process
 
 1. Set `$schema` to `https://schemas.analitiq.ai/api-endpoint/latest.json`.

@@ -18,6 +18,22 @@ array (native → Arrow). You do not write to disk — the orchestrator does tha
 - `previous_release_path` (optional) — for context only; drift is owned by
   the drift-classifier sub-agent, not by you.
 
+## Fix pass
+
+When the orchestrator re-dispatches you with a `Diagnostics.findings`
+array (the validate→fix loop), you also receive the connector document
+and `type_map_read` you produced on the prior pass. Triage each finding
+— you own the spec:
+
+- **Real defect** → correct the connector body / read map and return a
+  fresh `CreatorOutput`.
+- **Validator false positive** → leave the artifact unchanged and record
+  your reasoning in `notes`.
+
+The orchestrator passes findings verbatim and never pre-judges or
+pre-filters them — do not assume a finding is correct just because it
+was raised.
+
 ## Required reading
 
 The `connector-spec-api` skill is preloaded. Beyond that, read:
