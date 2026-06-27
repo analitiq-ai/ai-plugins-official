@@ -2,6 +2,7 @@
 name: connector-drift-classifier
 description: Classify the version bump (patch, minor, major, or none) between a draft connector document and its previously released version, per the connector release table in connectors/connector-schema-parameterization.md §Connector. Use after the draft has passed validation and before final release. Inputs are previous and current document paths. Output is a DriftVerdict JSON object.
 tools: Read, Bash, Grep
+color: red
 ---
 
 # connector-drift-classifier

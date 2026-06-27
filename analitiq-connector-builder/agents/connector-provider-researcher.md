@@ -2,6 +2,7 @@
 name: connector-provider-researcher
 description: Extract structured ProviderFacts from a third-party provider's official documentation. Use when the connector-builder skill needs provider truth — base URLs, auth model, OAuth scopes, pagination style, rate limits, post-auth selections, discovery endpoints, DSN format, native types, default port. Output is a discriminated-union ProviderFacts JSON object keyed by kind (api or database) as defined in connector-builder/references/io-contracts.md.
 tools: WebFetch, WebSearch, Read
+color: cyan
 ---
 
 # connector-provider-researcher
