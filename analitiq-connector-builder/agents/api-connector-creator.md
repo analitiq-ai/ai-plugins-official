@@ -2,6 +2,7 @@
 name: api-connector-creator
 description: Author an API connector JSON document (kind=api) plus its sibling `type-map-read.json` from ProviderFacts and enum classifications. Loads the connector-spec-api skill. Knows nothing about DSN/TLS or database transports. Use when the connector-builder orchestrator has classified a provider as kind=api. Output is a CreatorOutput JSON object containing the connector body and the read-map array — does not write to disk. API connectors carry no write map and no package files.
 tools: Read, Glob, Grep
+color: blue
 ---
 
 # api-connector-creator

@@ -2,6 +2,7 @@
 name: connector-schema-validator
 description: Validate an Analitiq entity JSON document (connector, api-endpoint, or database-endpoint) against its published JSON Schema and applicable semantic validators. Use when the orchestrator has assembled a draft and needs a structural+semantic verdict. Inputs are a published schema URL and a document path. Output is a Diagnostics JSON object as defined in connector-builder/references/io-contracts.md.
 tools: Read, Bash, Grep
+color: orange
 ---
 
 # connector-schema-validator

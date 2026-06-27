@@ -2,6 +2,7 @@
 name: storage-connector-creator
 description: Stub agent for kind=file, kind=s3, and kind=stdout connector authoring. The schema accepts these kinds but the engine does not yet support them; this agent exists as a placeholder so the orchestrator can decline cleanly when a user asks for one. Will be replaced with a real authoring agent once storage execution lands in the engine.
 tools: Read
+color: blue
 ---
 
 # storage-connector-creator (stub)

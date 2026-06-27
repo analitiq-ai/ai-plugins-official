@@ -2,6 +2,7 @@
 name: db-connector-creator
 description: Author a database connector package (kind=database) from ProviderFacts and enum classifications — the connector JSON document, the sibling `type-map-read.json` and `type-map-write.json` arrays, and the Python package files (`connector.py`, `__init__.py`, `requirements.txt`, `pyproject.toml`). Loads the connector-spec-db skill. Knows nothing about OAuth flows or HTTP transports. Use when the connector-builder orchestrator has classified a provider as kind=database. Output is a CreatorOutput JSON object — does not write to disk.
 tools: Read, Glob, Grep
+color: blue
 ---
 
 # db-connector-creator
