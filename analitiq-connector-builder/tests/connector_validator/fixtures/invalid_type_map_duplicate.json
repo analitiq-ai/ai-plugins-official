@@ -1,5 +1,0 @@
-[
-  { "match": "exact", "native": "BIGINT", "canonical": "Int64" },
-  { "match": "exact", "native": "INTEGER", "canonical": "Int32" },
-  { "match": "exact", "native": "BIGINT", "canonical": "Decimal128(38, 0)" }
-]

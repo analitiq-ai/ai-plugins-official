@@ -1,3 +1,0 @@
-[
-  { "match": "regex", "native": "^numeric\\((?P<precision>[0-9]+),(?P<scale>[0-9]+)\\)$", "canonical": "Decimal128(${precision}, ${scale})" }
-]

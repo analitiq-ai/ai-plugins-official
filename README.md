@@ -22,9 +22,7 @@ Learn more at [analitiq.ai](https://analitiq.ai).
 
 ### analitiq-connector-builder
 
-Creates new connectors and endpoints for the [Analitiq DIP Registry](https://github.com/analitiq-dip-registry). Supports API (REST/HTTP), database (PostgreSQL, MySQL), and storage (S3, SFTP) integrations. The plugin interviews you about the target system, researches its API documentation, and generates the full connector definition — no coding required.
-
-**Usage:** Launch Claude Code and say *"I want to create a connector for [system name]"*
+Moved to its own repository: **[analitiq-ai/claude-plugin-connector-creator](https://github.com/analitiq-ai/claude-plugin-connector-creator)**. Creates new connectors and endpoints for the [Analitiq DIP Registry](https://github.com/analitiq-dip-registry).
 
 ### analitiq-pipeline-builder
 
@@ -64,7 +62,6 @@ These plugins are not yet available in the Claude Marketplace. To install manual
 
 2. Install the plugin you need by pointing Claude Code to the local directory:
    ```bash
-   claude plugin add ./ai-plugins-official/analitiq-connector-builder
    claude plugin add ./ai-plugins-official/analitiq-pipeline-builder
    ```
    or

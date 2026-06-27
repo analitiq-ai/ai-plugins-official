@@ -1,4 +1,0 @@
-[
-  { "match": "regex", "native": "^bad[regex", "canonical": null },
-  { "match": "regex", "native": "^also[bad",  "canonical": ["Utf8"] }
-]

@@ -4,23 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Repo Is
 
-This is the official directory of Analitiq Claude Code plugins for building data integration connectors and pipelines that comply with the Analitiq Data Integration Protocols (DIP). It contains two plugins, each installed independently via `.claude-plugin/plugin.json`.
+This is the official directory of Analitiq Claude Code plugins for building data integration pipelines that comply with the Analitiq Data Integration Protocols (DIP). It contains the `analitiq-pipeline-builder` plugin, installed via `.claude-plugin/plugin.json`. The connector-authoring plugin now lives in its own repository — [analitiq-ai/claude-plugin-connector-creator](https://github.com/analitiq-ai/claude-plugin-connector-creator).
 
 ## Plugins
 
-### `analitiq-connector-builder` (v2.0.0)
-Authors connector and endpoint JSON documents conforming to the published Analitiq schema contract at `schemas.analitiq.ai`. Connectors may be published to the `analitiq-dip-registry` GitHub org as individual repos named `{connector_id}`.
-
-**Agent chain:** `connector-builder` (skill, orchestrator) → `connector-provider-researcher` → `{api|db|storage}-connector-creator` → `endpoint-creator` (API only, parallel) → `connector-schema-validator` (loop) → `connector-drift-classifier` (optional) → write files
-
-- `connector-builder` (skill) — orchestrator. Classifies connector kind, dispatches to the matching creator, runs the validator loop, runs drift classification, writes files. Carries shared invariant references (value expressions, lifecycle phases, connection-contract outer shape, metadata/versioning, I/O contracts) under `skills/connector-builder/references/`.
-- `connector-provider-researcher` — extracts a discriminated `ProviderFacts` JSON object from official documentation. Prefers a user-supplied docs URL; when none is given it locates the provider's official docs via `WebSearch`. Facts are extracted only from first-party documentation pages fetched with `WebFetch`.
-- `api-connector-creator` — authors `kind: "api"` connector bodies. Loads the `connector-spec-api` skill (auth flows, HTTP transports, pagination, replication).
-- `db-connector-creator` — authors `kind: "database"` connector packages: the connector body, both type maps (read + write), and the Python package files (`connector.py` with `{Name}Dialect` + `{Name}Connector`, `__init__.py`, `requirements.txt`, `pyproject.toml` with `{connector_id}`-named entry points). Loads the `connector-spec-db` skill (driver selection, DSN URL templates with bindings + encoding, TLS, resource discovery, read/write type maps, package files).
-- `storage-connector-creator` — stub for `kind ∈ {file, s3, stdout}`. The schema accepts those kinds but the engine does not yet execute them, so this agent returns a structured refusal until support lands.
-- `endpoint-creator` — authors one API endpoint JSON document per invocation. Endpoint documents have no top-level `kind` field; the parent connector's `kind` selects the endpoint schema. Database endpoints are connection-scoped and produced by the connector's `resource_discovery` workflow at runtime, not authored here.
-- `connector-schema-validator` — runs Layer 1 (Draft 2020-12 JSON Schema) and Layer 2 (semantic validators: reserved-field, expression-resolver, phase-resolvability, transport-ref, dsn-binding, auth-shape, tls-consistency, type-map-coverage, type-map-rule, type-map-write-coverage, endpoint-annotations). JSON documents only — package files are registry CI's job. Backed by `scripts/validate_connector.py`.
-- `connector-drift-classifier` — diffs the assembled draft against `previous_release_path` and emits a `DriftVerdict` (patch/minor/major/none) so the orchestrator can bump `version` correctly.
+### `analitiq-connector-builder` — moved
+The connector-authoring plugin moved to its own repository: **[analitiq-ai/claude-plugin-connector-creator](https://github.com/analitiq-ai/claude-plugin-connector-creator)**. It is no longer part of this repo. The connector/endpoint/type-map concepts below remain as shared domain reference for `analitiq-pipeline-builder`, which consumes connectors from the DIP registry.
 
 ### `analitiq-pipeline-builder` (v2.0.0)
 Builds data integration pipelines using pre-defined connectors from the DIP registry (`analitiq-dip-registry` GitHub org). Does **not** create connectors — only downloads and wires them.
