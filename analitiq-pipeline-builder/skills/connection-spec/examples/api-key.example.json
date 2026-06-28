@@ -1,9 +1,0 @@
-{
-  "$schema": "https://schemas.analitiq.ai/connection/latest.json",
-  "connection_id": "01010101-0101-4101-8101-010101010101",
-  "connector_id": "wise",
-  "display_name": "Wise Production",
-  "values": {
-    "api_key": "<see .secrets/credentials.json>"
-  }
-}
