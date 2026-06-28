@@ -1,9 +1,0 @@
-{
-  "$schema": "https://schemas.analitiq.ai/connection/latest.json",
-  "connection_id": "07070707-0707-4707-8707-070707070707",
-  "connector_id": "public-status-api",
-  "display_name": "Public status API",
-  "values": {
-    "base_url": "https://status.example.com/api/v1"
-  }
-}

@@ -1,18 +1,8 @@
 {
   "name": "analitiq-plugins-official",
-  "description": "Analitiq-managed official directory of Claude plugins for creating data integration connectors and pipelines",
+  "description": "The Analitiq plugins have moved to their own repositories: analitiq-ai/claude-plugin-connector-creator and analitiq-ai/claude-plugin-pipeline.",
   "owner": {
     "name": "Analitiq"
   },
-  "plugins": [
-    {
-      "name": "analitiq-pipeline-builder",
-      "description": "AI-driven data integration pipelines using pre-defined connectors from the DIP registry",
-      "author": {
-        "name": "Analitiq"
-      },
-      "source": "./analitiq-pipeline-builder",
-      "category": "development"
-    }
-  ]
+  "plugins": []
 }
